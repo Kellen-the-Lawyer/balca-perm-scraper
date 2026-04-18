@@ -1,0 +1,2 @@
+[console_scripts]
+balca-perm = balca_perm_scraper.cli:cli

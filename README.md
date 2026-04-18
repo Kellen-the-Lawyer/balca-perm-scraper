@@ -1,2 +1,121 @@
 # balca-perm-scraper
-Download and sort BALCA cases
+
+Starter project for collecting BALCA PERM decisions from the U.S. Department of Labor OALJ site.
+
+This repository is a scaffold, not a finished scraper. The package structure, CLI, storage layer, and parser hooks are in place, but the live OALJ request format and HTML structure still need to be verified against real saved pages.
+
+## Current status
+
+What is already here:
+
+- package layout for a small scraper project
+- HTTP client with retries and a configurable user agent
+- parser and normalization helpers
+- SQLite storage plus CSV export
+- CLI commands for inspect, search, export, and PDF download
+- starter tests for parser and normalization behavior
+
+What is still placeholder work:
+
+- the exact query parameters used by the OALJ keyword search UI
+- the CSS selectors for real BALCA search results
+- how pagination is represented
+- whether PDF links appear directly in results or only on a follow-up case page
+
+## Recommended next step
+
+Save a few real OALJ search-result pages and add them under `tests/fixtures/`. That will let us replace the guessed selectors and request parameters with something testable.
+
+Good fixture targets:
+
+- one normal results page with multiple BALCA PERM records
+- one later page that includes a working next-page link or pager controls
+- one result set with no direct PDF links, if the site behaves that way
+- one no-results page, if you can trigger one easily
+
+## What needs to be in the saved search-result pages
+
+For each saved HTML page, the useful parts are:
+
+- the full HTML source after the results load
+- at least one visible result entry with the case title or case name
+- the docket number if it appears on the page
+- the decision date if it appears on the page
+- the link to the case/details page
+- the link to the PDF, if one is shown in the result
+- the pager or next-page link
+- any visible filter chips, labels, or metadata fields tied to each result
+
+What helps even more:
+
+- the exact search you ran, such as `PERM`, `2024-PER-`, or a date filter
+- the URL of the result page after the search executes
+- notes on whether the page required JavaScript to populate the results
+- one screenshot if the HTML structure is confusing
+
+If the site loads results dynamically, save either:
+
+- the final rendered HTML from your browser's "Save Page As" output, or
+- the raw network response body from the request that returned the results
+
+## Workflow
+
+1. Capture real result pages from the browser.
+2. Put them in `tests/fixtures/`.
+3. Update `balca_perm_scraper/selectors.py` to match the real markup.
+4. Update `balca_perm_scraper/pipeline.py` so the search request matches the real UI.
+5. Expand parser tests to use the saved fixtures.
+6. Run metadata collection first.
+7. Download PDFs only after the metadata output looks correct.
+
+## Project layout
+
+```text
+balca-perm-scraper/
+├── balca_perm_scraper/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── client.py
+│   ├── config.py
+│   ├── models.py
+│   ├── normalize.py
+│   ├── parser.py
+│   ├── pipeline.py
+│   ├── selectors.py
+│   ├── storage.py
+│   └── urls.py
+├── data/
+│   ├── processed/
+│   └── raw/
+├── scripts/
+│   └── smoke_test.py
+├── tests/
+│   ├── test_normalize.py
+│   └── test_parser.py
+├── pyproject.toml
+└── README.md
+```
+
+## Install
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+```
+
+## Example commands
+
+```bash
+balca-perm inspect-homepage
+balca-perm search --query 'PERM' --max-pages 3
+balca-perm search --docket-prefix 2024-PER- --max-pages 20
+balca-perm export-csv --db data/processed/balca_perm.sqlite --out data/processed/results.csv
+balca-perm download-pdfs --input data/processed/results.csv --limit 25
+```
+
+## Notes
+
+- Expect to revise both selectors and query parameters once real fixtures are available.
+- The current parser is intentionally conservative and should be treated as a starting point.
+- Tests are present, but `pytest` still needs to be installed in the active environment before they can be run here.
