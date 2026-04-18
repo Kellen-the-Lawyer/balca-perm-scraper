@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0e0e0f;
+  --bg2:       #141416;
+  --bg3:       #1c1c1f;
+  --bg4:       #242428;
+  --border:    #2a2a2e;
+  --border2:   #3a3a3f;
+  --text:      #e8e8ea;
+  --text2:     #9999a8;
+  --text3:     #5a5a68;
+  --amber:     #f59e0b;
+  --amber2:    #fbbf24;
+  --amber-dim: #f59e0b22;
+  --green:     #34d399;
+  --green-dim: #34d39918;
+  --red:       #f87171;
+  --red-dim:   #f8717118;
+  --blue:      #60a5fa;
+  --blue-dim:  #60a5fa18;
+  --yellow-dim:#fbbf2418;
+  --radius:    6px;
+  --radius-lg: 10px;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Inputs */
+input, select, textarea {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+input::placeholder { color: var(--text3); }
+input:focus, select:focus, textarea:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-dim);
+}
+select { cursor: pointer; }
+textarea { resize: vertical; min-height: 72px; }
+
+/* Buttons */
+button {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 14px;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  white-space: nowrap;
+}
+button:hover { background: var(--bg3); border-color: var(--border2); }
+button:active { transform: scale(0.98); }
+button.primary {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #0e0e0f;
+  font-weight: 600;
+}
+button.primary:hover { background: var(--amber2); border-color: var(--amber2); }
+
+/* Mono text */
+.mono { font-family: 'DM Mono', monospace; }
+
+/* Fade-in animation */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.2s ease forwards; }
+
+mark {
+  background: var(--amber-dim);
+  color: var(--amber2);
+  border-radius: 2px;
+  padding: 0 2px;
+}
