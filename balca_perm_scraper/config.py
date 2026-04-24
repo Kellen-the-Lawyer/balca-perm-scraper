@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -13,8 +14,11 @@ class Settings:
     user_agent: str = (
         "balca-perm-scraper/0.1 (+https://github.com/your-org/balca-perm-scraper)"
     )
-    # Read-only query key embedded in the public DOL search page JS
-    azure_query_key: str = os.environ.get("DOL_AZURE_QUERY_KEY", "")
+    # Read-only query key extracted from the public DOL OALJ search page JS.
+    # Set via environment variable or .env file — never commit the value directly.
+    azure_query_key: str = field(
+        default_factory=lambda: os.environ.get("DOL_AZURE_QUERY_KEY", "")
+    )
     timeout_seconds: float = 30.0
     max_connections: int = 5
     sleep_seconds: float = 1.0

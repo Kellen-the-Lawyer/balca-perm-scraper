@@ -74,3 +74,6 @@ perm-research/frontend/dist/
 .vscode/
 *.swp
 *.swo
+
+# Saved browser pages used during scraper development
+tests/OALJ*/
