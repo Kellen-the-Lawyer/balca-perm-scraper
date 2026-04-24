@@ -1,1 +1,76 @@
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ============================================================
+# Virtual environments
+# ============================================================
+.venv/
+venv/
+env/
+ENV/
+
+# ============================================================
+# pytest / coverage
+# ============================================================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ============================================================
+# macOS
+# ============================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ============================================================
+# Environment / secrets
+# ============================================================
+.env
+.env.*
+*.secret
+
+# ============================================================
+# Downloaded source documents  (large data files, not code)
+# ============================================================
+
+# DOL / OFLC spreadsheets (PERM, LCA, PW disclosure data)
+perm-research/oflc_data/
+
+# USCIS quarterly report spreadsheets
+USCIS Reports/
+
+# BALCA opinion PDFs and any other scraped PDFs
+data/raw/pdfs/
 *.pdf
+
+# Processed database and CSV exports
+data/processed/
+
+# O*NET database files
+perm-research/onet/db_*/
+
+# ============================================================
+# Frontend build artifacts
+# ============================================================
+perm-research/frontend/node_modules/
+perm-research/frontend/dist/
+
+# ============================================================
+# Misc editor / IDE
+# ============================================================
+.idea/
+.vscode/
+*.swp
+*.swo

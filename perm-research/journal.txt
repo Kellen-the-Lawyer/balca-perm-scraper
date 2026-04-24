@@ -1,0 +1,479 @@
+
+=== 2026-04-18 Session 2 ===
+
+## Completed this session
+
+### ETA-9141 PWD Extractor (pdfplumber, no API key)
+- Rewrote extract_pwd.py to use pdfplumber, detects old (2021 E/F) vs new (2025+ F/G) form layout
+- _CHECK must be regular string not r-string so unicode escapes resolve: "[\u2718\u2717\u2612\u2611\u2714\u2713x]"
+- Travel: check checkmark BEFORE "Yes" AND confirm "No" is not also checked
+- Degree: word-boundary anchored to prevent "GED" matching inside "High school/GED"
+- 18/18 assertions pass both form versions
+- FastAPI endpoint: POST /api/extract-pwd (multipart, requires python-multipart)
+
+### BALCA Inline Citation Hyperlinks — BUG FIXED
+- useState/useEffect for citeMap was after early returns → violated Rules of Hooks → blank page
+- Fixed: moved hook declarations above if(loading)/if(!data) guards in DecisionDetail
+
+### Precedent Decisions (new table: precedent_decisions)
+- Columns: volume, citation, party_name, year, body, decision_type, pm_number, adopted_num,
+           pdf_url, pdf_path, full_text, search_vector
+- 468 EOIR/I&N Dec. precedents ingested (vols 9-29); 284 with text (vols 12-29 complete)
+- 15 USCIS-adopted decisions from /Resources/AAO Adopted/ ingested
+- Total: 483 rows; decision_type = 'precedent' or 'adopted'
+- Scripts: scrape_precedents.py, ingest_supplemental_precedents.py, ingest_adopted.py
+
+### AAO Inline Citation Hyperlinks
+- GET /api/precedents/map → 588-key map {"25 I&N Dec. 369": {id, citation, party_name, type}, ...}
+  includes "l&N" OCR variant keys and "Adopted Decision YYYY-NN" keys
+- GET /api/precedents/{id} → detail; GET /api/precedents/{id}/pdf → serve PDF
+- AAODecisionDetail: splits on \d+ [Il]&N Dec\. \d+|Adopted Decision \d{4}-\d+
+  Linked: blue underlined clickable; unlinked: dimmed blue
+- PrecedentDetail modal component: amber=adopted, blue=precedent, shows full text + PDF link
+- precedentMap fetched once on AAO view mount
+
+## Still pending
+- Vol 9-11 PDFs blocked by DOJ rate limiting; download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), cross-corpus search, statutes module
+
+=== 2026-04-19 Session 3 ===
+
+## Completed this session
+
+### Cross-corpus Search All (new feature — was "coming soon")
+- GET /api/search-all?q=... — UNION ALL across decisions, aao_decisions, regulations_docs, policy_docs
+- Results ranked by ts_rank DESC, annotated with corpus field (balca|aao|regulation|policy)
+- Count query sums across all four tables
+- SearchAllView component: centered landing → collapsed UX, results grouped by corpus with color-coded headers
+- Clicking a result routes to the correct existing detail view via openFromSearchAll()
+- "Search All" nav tab added (rose accent #fb7185), landing card activated (available: true)
+- openFromSearchAll() helper in root App passes query through for BALCA/AAO highlight
+
+### PrecedentDetail modal — BUG FIXED
+- precId state existed in AAOSearchView but modal was never rendered → blank clicks
+- Fixed: added fixed-position right-side drawer overlay immediately after splitView panel
+- Dismissible by clicking the backdrop (outside the drawer)
+- Precedent citations in AAO opinion text now correctly open the PrecedentDetail panel
+
+## Still pending
+- Vol 9-11 PDFs: blocked by DOJ rate limiting; download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+
+=== 2026-04-19 Session 4 ===
+
+## Completed this session
+
+### Read Later feature
+- DB migration: ALTER TABLE project_cases ADD COLUMN section TEXT DEFAULT 'saved',
+  saved_from_case_number TEXT, saved_from_source TEXT
+- API: POST /api/projects/{id}/read-later, GET /api/projects/{id}/read-later,
+  DELETE /api/projects/{id}/read-later/{pc_id}
+- ReadLaterPopup component: hover over any linked case number in an opinion text
+  (BALCA inline citations + AAO precedent citations) → 350ms delay popup appears
+  showing project list; click to toggle save/unsave into that project's Read Later
+- Popup shows "while reading {fromCaseNumber}" context line before the project list
+- ProjectDetail: new "Read Later" tab between Cases and Notes
+  - Each card shows corpus badge (BALCA/AAO), case number, employer, date, outcome
+  - "saved while reading {case}" provenance line with correct accent color
+  - Click card to open the decision; ✕ to remove from Read Later
+- Popup uses 200ms hide delay so user can mouse from the linked text into the popup
+  without it closing
+
+## Still pending
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+
+=== 2026-04-19 Session 5 ===
+
+## Completed this session
+
+### Citation Graph (new feature)
+- GET /api/search/citation-graph?q=...&limit=40
+  - Step 1: top N matching BALCA decisions (primary nodes, ranked by ts_rank)
+  - Step 2: citation edges between primaries via citations table
+  - Step 3: secondary nodes — cases cited by primaries but not in search results
+  - Secondaries filtered to cited_by_count >= 2 (or 1 if fewer than 3 qualify)
+  - Returns {nodes, edges, primary_count, secondary_count, query}
+- CitationGraphView component:
+  - D3 v7 force simulation loaded from CDN (window.d3)
+  - Directed arrows on edges (SVG marker)
+  - Node size: primary scaled by ts_rank, secondary by cited_by_count
+  - Node color by outcome (Affirmed=green, Reversed=red, Remanded=yellow, Dismissed=gray)
+  - Primary nodes: full opacity + white stroke; secondary: dimmed fill
+  - Drag-to-reposition nodes, scroll-to-zoom, pan
+  - Hover tooltip (bottom-left): case number, employer, date, outcome, tier badge
+  - Click → selected node panel (top-right): full details + "Open decision →" button
+  - Opening a decision navigates to BALCA view with that decision pre-selected
+- "Graph" nav tab (green accent), landing card added
+
+## Still pending
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+
+=== 2026-04-19 Session 6 ===
+
+## Completed this session
+
+### In-document search (Find in document)
+- useDocSearch() hook: manages term, active term, match index, match count, ref array
+  for each match span, scroll-to-active-match on index change
+- InDocSearch component: collapses to "Find" button; expands to input + ↑↓ nav +
+  match counter (N/total, red when 0) + × close; keyboard: Enter=next,
+  Shift+Enter=prev, Escape=close; accent color matches each corpus
+- HighlightedText component: splits text on doc search term, renders dimmed marks
+  for all matches + solid amber + outline for the active match; useEffect inside
+  fixed to avoid conditional hook violation
+- Wired into DecisionDetail (amber), RegulationDetail (agency color),
+  PolicyDetail (source color)
+- DecisionDetail: in-doc search takes priority over citation links / query
+  highlights when active; normal rich render resumes on close
+- Find button appears in top-right of each document header alongside PDF button
+
+=== 2026-04-19 Session 7 ===
+
+## Completed this session
+
+### Search operators (websearch_to_tsquery)
+- Replaced plainto_tsquery with websearch_to_tsquery across all 30 occurrences
+  in api.py — covers BALCA search, AAO search, regulations search, policy search,
+  cross-corpus search-all, and citation graph
+- Supported operators now:
+    "exact phrase"       → phrase search
+    -excludeterm         → exclude a term
+    termA OR termB       → either term
+    "phrase" -exclude    → combinations
+- Placeholder text updated in all 4 search inputs to hint at operator syntax
+
+### Composite ranking (citation authority + text relevance)
+- BALCA search ORDER BY upgraded to:
+    ts_rank * 0.7 + log(1 + citation_count) * 0.3
+  where citation_count = number of times that decision is cited by other decisions
+- AAO search ORDER BY upgraded with the same formula
+- Citation graph seed query upgraded with the same formula
+- Regulations + Policy keep pure ts_rank (no citations table to join)
+- log() compression prevents highly-cited cases from dominating;
+  70/30 weight keeps text relevance primary
+
+## Still pending
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+
+=== 2026-04-19 Session 8 ===
+
+## Completed this session
+
+### Experience Verification Letter modal (PERM Comparer)
+
+New "Verify Experience" button added to the PERM Comparer toolbar. Opens a full-screen
+side-by-side modal with:
+
+Left panel — PWD Minimum Requirements text (from the Reference textarea), with keywords
+  auto-highlighted based on skills found in the letter and requirements text.
+
+Right panel — Experience verification letter, with:
+  - PDF upload → Anthropic API extracts employer name, job title, dates, duties, skills,
+    and full text entirely client-side (no backend changes needed)
+  - Metadata bar shows employer, job title, employment period, and computed months/years
+  - "Analyze vs PWD" button sends the letter text + requirements to Claude and returns
+    two lists: requirements addressed vs. requirements not found, plus a brief summary
+  - "Save Time" button marks the letter as saved; a running total of saved months across
+    all saved letters is displayed in the header
+  - Multiple letters supported via tab strip; letters can be removed individually
+  - Closing and reopening the modal preserves all uploaded letters (state lives in
+    PermComparer, not the modal)
+  - Clear All resets letters along with everything else
+
+## Future work — AUTOMATED EXPERIENCE COMPARISON (TODO)
+
+Implement automated total-time comparison against PWD requirements:
+  - Sum saved months across all letters and compare against the years required by the PWD
+  - This is non-trivial because PERM language often phrases requirements as "3 years of
+    experience in the field" but lists skills (Python, HTML, CSS) that appear to require
+    3 years each — when in practice only 3 total years in the field is required and the
+    skills just need to appear somewhere in the letters
+  - Any automated comparison must account for this language distinction to avoid false
+    flags; suggest a two-pass approach: (1) flag if total time is below threshold, (2)
+    separately verify each listed skill appears in at least one letter, without asserting
+    time-per-skill
+  - Consider adding a "time goal" input so users can set the target years manually rather
+    than trying to parse it from the PWD text
+
+## Still pending
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+- Recruitment document comparison (next after experience letters)
+
+=== 2026-04-19 Session 9 ===
+
+## Completed this session
+
+### Drag-and-drop PDF extraction for Job Description boxes
+
+Both Job Description textareas replaced with DropTextarea component:
+- Left (Reference): drag and drop a PWD PDF → extracts job duties section only
+- Right (Comparison): drag and drop an experience verification letter PDF → extracts
+  full body text including duties, responsibilities, skills, and technologies
+- Amber border glow + "Drop PDF to extract text" overlay while hovering
+- Spinner overlay with "Extracting text…" during API call; textarea disabled while
+  extracting so nothing gets clobbered mid-flight
+- Label text updated to tell users they can paste OR drag and drop
+- Placeholder text explains both options
+- Plain paste still works exactly as before
+
+### CORS fix — Anthropic API proxy
+
+All three direct client-side fetch calls to https://api.anthropic.com/v1/messages
+were blocked by CORS (intentional on Anthropic's end). Fixed by routing through the
+existing /api/claude proxy endpoint in api.py, which adds the API key server-side.
+
+Affected calls:
+  1. DropTextarea.extractPdf — PDF drag-drop extraction in Job Description boxes
+  2. ExperienceVerificationModal.uploadLetter — experience letter PDF upload
+  3. ExperienceVerificationModal.analyzeAgainstPwd — requirements comparison
+
+The /api/claude proxy (already in api.py) reads ANTHROPIC_API_KEY from .env.
+Action required: set ANTHROPIC_API_KEY in perm-research/.env to enable AI features.
+
+## Still pending
+- Set ANTHROPIC_API_KEY in .env
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+- Recruitment document comparison (next after experience letters)
+- Automated experience time comparison (see Session 8 TODO)
+
+=== 2026-04-19 Session 10 ===
+
+## Completed this session
+
+### Removed all AI/Anthropic API calls from the frontend
+
+Client consent and internal approval would be required before sending any data to
+a third-party AI API. All four AI-powered features have been replaced with
+server-side pdfplumber + regex processing. No data leaves the local backend.
+
+### New file: extract_experience_letter.py
+
+Rule-based pdfplumber extractor for experience verification letters. Extracts:
+  - employerName    — first letterhead line
+  - employerTitle   — signer's title from signature block
+  - beneficiaryName — name found in employment sentence
+  - jobTitle        — parsed from "employed as / position of / served as" triggers
+  - startDate / endDate — as written in the letter
+  - startParsed / endParsed — normalised to YYYY-MM-DD (ISO)
+  - months          — computed duration
+  - duties          — body paragraph(s) after duties/responsibilities heading
+  - skills          — tech/professional keywords matched against a curated list
+  - fullText        — raw extracted text
+
+Handles named months, MM/YYYY, MM/DD/YYYY, YYYY-MM formats.
+Recognises "Present" / "current" / "ongoing" as end date.
+
+### New API endpoints in api.py
+
+  POST /api/extract-text
+    Generic PDF → plain text via pdfplumber. Used by drag-drop boxes.
+
+  POST /api/extract-experience-letter
+    Structured letter parsing via extract_experience_letter.py.
+    Used by the Verify Experience modal upload.
+
+### Frontend changes
+
+  DropTextarea (Job Description boxes):
+    - Previously called /api/claude (Anthropic) with base64 PDF
+    - Now POSTs multipart form to /api/extract-text (pdfplumber, local)
+
+  ExperienceVerificationModal (letter upload):
+    - Previously called /api/claude with base64 PDF + AI prompt
+    - Now POSTs multipart form to /api/extract-experience-letter (pdfplumber, local)
+
+  "Analyze vs PWD" button removed entirely.
+    - This feature requires AI reasoning and cannot be replaced with rule-based logic
+    - Noted in Session 8 TODO for future implementation once AI use is approved
+
+  Removed unused client-side helpers: parseFlexDate, dateDiffMonths
+    (date math now done in Python backend and returned as ISO strings + integer months)
+
+  /api/claude proxy endpoint retained in api.py but no longer called from the frontend.
+
+## Still pending
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+- Recruitment document comparison
+- Automated experience time comparison (see Session 8 TODO)
+- "Analyze vs PWD" (requires AI approval — see Session 8 TODO)
+
+=== 2026-04-19 Session 11 ===
+
+## Completed this session
+
+### Restored smart drag-and-drop behavior
+
+**Left box (Job Description Reference) — drag a PWD PDF:**
+  Calls /api/extract-pwd (pdfplumber, same as Load PWD button).
+  Populates all fields: job title, city, state, telecommute, job description,
+  primary degree, minimum requirements, and PWD wage.
+  Identical result to using the Load PWD button.
+
+**Right box (Job Description Comparison) — drag an experience letter PDF:**
+  Calls /api/extract-experience-letter (pdfplumber + regex).
+  Puts duties/full text into the comparison textarea.
+  Stores the full parsed letter object (employer, dates, months, skills, fullText)
+  in droppedLetter state so the modal can use it immediately.
+
+**Verify Experience button:**
+  If a letter was dropped into the comparison box and not yet in the letters list,
+  it is automatically added when the modal opens — no separate upload step needed.
+  Button turns amber when a dropped letter is waiting.
+
+### Keyword matching panel in the modal (no AI)
+
+The modal now runs a pure client-side keyword check:
+  - Extracts all meaningful words (3+ chars, non-stop-words) from the Minimum
+    Requirements reference text (mrRef)
+  - For each keyword, checks case-insensitively whether it appears anywhere in
+    the letter's fullText
+  - Displays each keyword as a green ✓ pill (found) or red ✗ pill (missing)
+  - Shows a summary count: "X of Y requirement keywords found in this letter"
+
+Both the PWD panel and the letter text panel highlight those same keywords in amber
+so the reviewer can see exactly where each term appears in context.
+
+Success criterion: each requirement word from the PWD appears somewhere in the letter.
+This matches the stated requirement — not trying to verify years-per-skill, just
+confirming the terms are present.
+
+## Still pending
+- Vol 9-11 PDFs: download manually then run extract/ingest loop
+- Letter assistant (NIW/EB-1A RAG), statutes module
+- Recruitment document comparison
+- Automated experience time comparison (see Session 8 TODO)
+- "Analyze vs PWD" AI feature (requires approval — see Session 8 TODO)
+
+=== 2026-04-19 Session 12 ===
+
+## Notes for tomorrow
+
+### Wage Transparency Law Checker (TODO)
+Add a wage transparency law checker to the PERM Comparer based on the job location
+(city/state) extracted from the PWD. Many states and cities have wage range disclosure
+laws that require job postings to include a salary range. The checker should:
+  - Use the city/state already populated by the PWD extractor
+  - Flag whether that jurisdiction has a wage transparency law in effect
+  - Indicate what the law requires (e.g. range in posting, on request, etc.)
+  - Ideally note the effective date and any relevant thresholds (employer size, etc.)
+
+### Experience Verification Letter comparison (longer project)
+The current keyword-match approach in the Verify Experience modal is a starting point
+but needs a more thoughtful redesign. Defer to a future session.
+
+=== 2026-04-19 Session 13 ===
+
+## Completed this session
+
+### Equal Pay Transparency (EPT) card added to PERM Comparer
+
+New card appears between the PWD Wage Check and the Summary, auto-populating
+from the state already extracted from the PWD.
+
+Source data: AILA Practice Pointer — Guide to Equal Pay Transparency Laws
+(Updated October 2025), AILA Doc. No. 25110603.
+
+Covers 12 jurisdictions: CA, CO, HI, IL, MD, MA, MN, NJ, NY, VT, DC, WA.
+
+Card shows:
+  - Effective date and covered employer threshold for the jurisdiction
+  - Posting requirement (what must be in the ad)
+  - Wage range requirement, highlighted green if a range is already entered
+    in the wage fields, amber if no range has been entered yet
+  - Benefits description required flag (amber warning) for states that require
+    more than just a salary range: CO, IL, MD, MN, NJ, WA
+  - Long-arm reach warning (red) for CA and NJ
+  - Remote/WFH coverage note when telecommute is set to "yes"
+  - Source citation and reminder to verify with local employment counsel
+  - "No EPT law on record" message for states not in the guide
+  - Prompt to enter state if state field is empty
+
+States not covered by the guide: all other states — card shows no-law message.
+Note: laws change frequently; card includes explicit disclaimer.
+
+=== 2026-04-19 Session 14 ===
+
+## Completed this session
+
+### Fixed PWD extraction for new-layout ETA-9141 (P-100 series)
+
+Root cause: pdfplumber outputs form table cells differently depending on the PDF
+renderer. Three layouts were observed and are now handled:
+
+  Layout A (most common in new form): labels row + values row
+    "3. City *    4. State *    5. County *\nRichardson    TX    Dallas County"
+    Fixed by matching the label row pattern then splitting the value row on 2+ spaces.
+
+  Layout B: each label on its own line, value on next line
+    "3. City *\nRichardson\n4. State *\nTX"
+    Already worked; kept as fallback.
+
+  Layout C: label and value on same line (table cell)
+    "3. City *    Richardson"
+    Added as second fallback.
+
+Additional fixes in _extract_new:
+  - Job title: now handles same-line placement ("1. Job title *   Data Scientist II")
+    in addition to next-line placement
+  - All searches now use body = pages[1:7] instead of hard-coded page indices,
+    making extraction robust to cover pages that shift the page offset
+  - Wage search extended to pages[4:7] range instead of a single page index
+  - Duplicate _parse_unit block removed from _extract_new
+
+Same three-layout fix applied to _extract_old city/state extraction.
+Old form job title also updated to handle same-line placement.
+Old form education and special requirements now search body instead of p3.
+
+Verified with real PWD (P-100-25202-188629, Chewy Inc., Data Scientist II):
+  jobTitle: "Data Scientist II" ✓
+  city: "Richardson" ✓
+  stateVal: "TX" ✓
+  travel: "yes" (telecommuting) ✓
+  primDeg: "Master's" ✓
+  mrRef: full addendum text ✓
+  pwdWage: "$118,893 / Year" ✓
+
+
+## $(date '+%Y-%m-%d') — Scheduled scraping + search fixes
+
+### BALCA date-search bug fixed
+- asyncpg requires `datetime.date` objects for DATE columns, not raw strings.
+  Passing `"2026-01-01"` caused a 500 crash whenever date-only searches were used.
+  Fixed by adding `from datetime import date as _date` and calling `_date.fromisoformat()`
+  on `date_from` / `date_to` in both `/search` and `/aao/search` endpoints.
+- Added `try/catch/finally` to both frontend search functions so the spinner
+  always clears and errors surface in the UI instead of hanging forever.
+
+### Docketing notices filtered from search
+- 672 procedural "Notice of Docketing, Briefing Schedule, and Order Requiring
+  Electronic Filing" documents identified and tagged `doc_type = 'docketing_notice'`
+  in the decisions table.
+- API now excludes them by default; advanced filters panel has a checkbox to
+  include them when needed (e.g. to check when a recent case was filed).
+- 62 cases that contained the docketing header but also had a real outcome were
+  left as `doc_type = 'decision'` — these are consolidated PDFs with both.
+
+### Scheduled sync set up
+Two files created:
+- `sync_casebase.sh` (repo root) — the sync script. Runs in order:
+    1. BALCA scraper CLI (venv/bin/python) — fetches latest from DOL search
+    2. ingest_rag.py --corpus balca — pushes to Postgres
+    3. Inline Python — tags any newly ingested docketing notices
+    4. ingest_aao.py — re-indexes recent AAO decisions
+  Includes a lock file to prevent overlapping runs.
+  Logs to ~/Library/Logs/casebase_sync.log.
+
+- `~/Library/LaunchAgents/com.casebase.sync.plist` — launchd job.
+  Schedule: every Sunday at 2:00 AM.
+  Loaded and verified with `launchctl list | grep casebase`.
+
+To trigger a manual sync:   bash ~/Documents/GitHub/balca-perm-scraper/sync_casebase.sh
+To check the log:           tail -50 ~/Library/Logs/casebase_sync.log
+To unload the schedule:     launchctl unload ~/Library/LaunchAgents/com.casebase.sync.plist
+To reload after editing:    launchctl unload ... && launchctl load ...
