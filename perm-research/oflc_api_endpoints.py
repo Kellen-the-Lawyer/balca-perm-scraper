@@ -195,9 +195,14 @@ async def oflc_query(request: Request):
         for vm, ae in zip(value_metrics, agg_exprs):
             gt_selects.append(f"{ae} AS \"__row_total__{vm['label']}\"")
         gt_row = await database.fetch_one(text(f"SELECT {', '.join(gt_selects)} FROM {table} {where}"), no_limit_params)
+        cnt_row = await database.fetch_one(
+            text(f"SELECT COUNT(*) as cnt FROM (SELECT {group_by} FROM {table} {where} GROUP BY {group_by}) sub"),
+            no_limit_params,
+        )
+        total_rows = cnt_row["cnt"] if cnt_row else 0
 
         return {"mode": "pivot", "rows": [dict(r) for r in rows], "grand_total": dict(gt_row) if gt_row else None,
-                "col_values": col_values, "total_rows": len(rows), "limited": len(rows) >= limit}
+                "col_values": col_values, "total_rows": total_rows, "limited": total_rows > limit}
 
     else:
         # No column pivot — simple group by

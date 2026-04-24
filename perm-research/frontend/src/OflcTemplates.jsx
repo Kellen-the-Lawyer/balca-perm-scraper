@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-const API = "http://localhost:8001/api";
+import { API } from "./apiBase";
 
 // ── Template catalog ──────────────────────────────────────────────────────────
 export const TEMPLATES = [

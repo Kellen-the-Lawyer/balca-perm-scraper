@@ -3,19 +3,22 @@ PERM Appeal Decisions — Research API
 """
 import os
 import re
+import json
 from contextlib import asynccontextmanager
 from datetime import date as _date
+from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from extract_pwd import extract_pwd_from_bytes
 from extract_experience_letter import extract_letter_from_bytes
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import databases
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 DATABASE_URL = os.environ.get(
@@ -30,6 +33,7 @@ database = databases.Database(DATABASE_URL)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.connect()
+    await ensure_operational_schema()
     yield
     await database.disconnect()
 
@@ -40,10 +44,138 @@ def q(sql, **params):
     """Bind params to a SQLAlchemy text() clause."""
     return text(sql).bindparams(**params) if params else text(sql)
 
+
+async def ensure_operational_schema() -> None:
+    """Small additive migrations for operational metadata owned by this API."""
+    statements = [
+        """
+        CREATE TABLE IF NOT EXISTS search_events (
+            id BIGSERIAL PRIMARY KEY,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            corpus TEXT NOT NULL,
+            query TEXT NOT NULL,
+            filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+            result_count INTEGER NOT NULL DEFAULT 0,
+            clicked_result_id INTEGER,
+            clicked_corpus TEXT,
+            session_key TEXT,
+            user_label TEXT,
+            source_path TEXT,
+            admin_private BOOLEAN NOT NULL DEFAULT TRUE
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_search_events_corpus_query ON search_events(corpus, query)",
+        "CREATE INDEX IF NOT EXISTS idx_search_events_created_at ON search_events(created_at DESC)",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extraction_status TEXT NOT NULL DEFAULT 'unknown'",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extraction_error TEXT",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extraction_attempts INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMPTZ",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extraction_page_count INTEGER",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extraction_char_count INTEGER",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS extraction_quality TEXT",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS citation_quality_status TEXT",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS regulation_quality_status TEXT",
+        "ALTER TABLE IF EXISTS decisions ADD COLUMN IF NOT EXISTS search_quality_notes TEXT",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extraction_status TEXT NOT NULL DEFAULT 'unknown'",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extraction_error TEXT",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extraction_attempts INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMPTZ",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extraction_page_count INTEGER",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extraction_char_count INTEGER",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS extraction_quality TEXT",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS citation_quality_status TEXT",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS regulation_quality_status TEXT",
+        "ALTER TABLE IF EXISTS aao_decisions ADD COLUMN IF NOT EXISTS search_quality_notes TEXT",
+    ]
+    for statement in statements:
+        await database.execute(text(statement))
+
+
+def _clean_query(value: str) -> str:
+    return " ".join((value or "").split())
+
+
+def _like(value: str) -> str:
+    return f"%{value}%"
+
+
+def _search_filters(**values) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if value not in (None, "", False)}
+
+
+async def log_search_event(
+    request: Request,
+    *,
+    corpus: str,
+    query: str,
+    filters: dict[str, Any],
+    result_count: int,
+) -> None:
+    query = _clean_query(query)
+    if not query:
+        return
+    try:
+        await database.execute(
+            text("""
+                INSERT INTO search_events (
+                    corpus, query, filters, result_count, session_key, user_label, source_path
+                ) VALUES (
+                    :corpus, :query, CAST(:filters AS jsonb), :result_count,
+                    :session_key, :user_label, :source_path
+                )
+            """).bindparams(
+                corpus=corpus,
+                query=query,
+                filters=json.dumps(filters, sort_keys=True),
+                result_count=int(result_count or 0),
+                session_key=request.headers.get("x-session-id"),
+                user_label=request.headers.get("x-user-label"),
+                source_path=str(request.url.path),
+            )
+        )
+    except Exception:
+        return
+
+
+def require_search_analytics_access(request: Request) -> None:
+    expected = os.environ.get("SEARCH_ANALYTICS_TOKEN")
+    if expected and request.headers.get("x-search-analytics-token") != expected:
+        raise HTTPException(status_code=403, detail="Search analytics access denied")
+
+
+def _text_quality(text_value: str, page_count: int) -> str:
+    chars = len(text_value or "")
+    if chars == 0:
+        return "empty"
+    if page_count and chars / page_count < 250:
+        return "low_text"
+    if chars < 1000:
+        return "short"
+    return "ok"
+
+
+def _extract_pdf_text(path: str) -> dict[str, Any]:
+    import pdfplumber
+
+    with pdfplumber.open(path) as pdf:
+        pages = [page.extract_text() or "" for page in pdf.pages]
+    full_text = "\n\n".join(page for page in pages if page.strip())
+    return {
+        "full_text": full_text,
+        "page_count": len(pages),
+        "char_count": len(full_text),
+        "quality": _text_quality(full_text, len(pages)),
+    }
+
+
+def _balca_pdf_path(filename: str | None) -> str | None:
+    return os.path.join(PDF_BASE_PATH, filename) if filename else None
+
 # ── Search ────────────────────────────────────────────────────────────────────
 
 @app.get("/api/search")
 async def search_decisions(
+    request: Request,
     query: str = Query(default="", alias="q"),
     regulation: Optional[str] = Query(default=None),
     outcome: Optional[str] = Query(default=None),
@@ -60,15 +192,23 @@ async def search_decisions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
+    q_text = _clean_query(query)
     offset = (page - 1) * page_size
     conditions = ["1=1"]
     if not include_docketing_notices:
         conditions.append("d.doc_type != 'docketing_notice'")
     bind = {}
 
-    if query.strip():
-        conditions.append("d.search_vector @@ websearch_to_tsquery('english', :qtext)")
-        bind["qtext"] = query.strip()
+    if q_text:
+        conditions.append("""(
+            d.search_vector @@ websearch_to_tsquery('english', :qtext)
+            OR d.case_number ILIKE :q_like
+            OR d.employer_name ILIKE :q_like
+            OR d.job_title ILIKE :q_like
+        )""")
+        bind["qtext"] = q_text
+        bind["q_like"] = _like(q_text)
+        bind["q_exact"] = q_text
     if regulation:
         conditions.append("d.id IN (SELECT dr.decision_id FROM decision_regulations dr JOIN regulations r ON r.id = dr.regulation_id WHERE r.citation ILIKE :reg)")
         bind["reg"] = f"%{regulation}%"
@@ -105,17 +245,22 @@ async def search_decisions(
         order = "d.decision_date ASC NULLS LAST"
     elif sort_by == "date_desc":
         order = "d.decision_date DESC NULLS LAST"
-    elif query.strip():
+    elif q_text:
         order = (
-            "(ts_rank(d.search_vector, websearch_to_tsquery('english', :qtext)) * 0.7 "
-            "+ log(1 + COALESCE((SELECT COUNT(*) FROM citations c WHERE c.cited_id = d.id), 0)) * 0.3) "
+            "(ts_rank(d.search_vector, websearch_to_tsquery('english', :qtext)) * 0.55 "
+            "+ CASE WHEN d.case_number ILIKE :q_exact THEN 4.0 ELSE 0 END "
+            "+ CASE WHEN d.case_number ILIKE :q_like THEN 1.5 ELSE 0 END "
+            "+ CASE WHEN d.employer_name ILIKE :q_like THEN 0.8 ELSE 0 END "
+            "+ CASE WHEN d.job_title ILIKE :q_like THEN 0.5 ELSE 0 END "
+            "+ log(1 + COALESCE((SELECT COUNT(*) FROM citations c WHERE c.cited_id = d.id), 0)) * 0.25 "
+            "+ COALESCE((SELECT COUNT(*) FROM decision_regulations dr WHERE dr.decision_id = d.id), 0) * 0.05) "
             "DESC, d.decision_date DESC NULLS LAST"
         )
     else:
         order = "d.decision_date DESC NULLS LAST"
 
     snippet = ""
-    if query.strip():
+    if q_text:
         snippet = (", ts_headline('english', d.full_text, websearch_to_tsquery('english', :qtext),"
                    " 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') AS headline")
 
@@ -125,12 +270,96 @@ async def search_decisions(
     bind["offset"] = offset
     rows = await database.fetch_all(
         text(f"""SELECT d.id, d.case_number, d.decision_date::text, d.employer_name,
-               d.job_title, d.outcome, d.panel {snippet},
-               (SELECT COUNT(*) FROM decision_regulations dr WHERE dr.decision_id = d.id) AS regulation_count
+               d.job_title, d.outcome, d.panel, d.extraction_status,
+               d.citation_quality_status, d.regulation_quality_status {snippet},
+               (SELECT COUNT(*) FROM decision_regulations dr WHERE dr.decision_id = d.id) AS regulation_count,
+               (SELECT COUNT(*) FROM citations c WHERE c.citing_id = d.id) AS citation_count,
+               (SELECT COUNT(*) FROM citations c WHERE c.cited_id = d.id) AS cited_by_count,
+               (SELECT COUNT(*) FROM citations c WHERE c.citing_id = d.id AND c.cited_id IS NULL) AS unresolved_citation_count
         FROM decisions d WHERE {where} ORDER BY {order} LIMIT :limit OFFSET :offset"""
         ).bindparams(**bind)
     )
+    await log_search_event(
+        request,
+        corpus="balca",
+        query=q_text,
+        filters=_search_filters(
+            regulation=regulation,
+            outcome=outcome,
+            date_from=date_from,
+            date_to=date_to,
+            employer=employer,
+            case_number=case_number,
+            panel=panel,
+            has_citations=has_citations,
+            has_regulations=has_regulations,
+            include_docketing_notices=include_docketing_notices,
+            sort_by=sort_by,
+        ),
+        result_count=total,
+    )
     return {"total": total, "page": page, "page_size": page_size, "results": [dict(r) for r in rows]}
+
+
+@app.get("/api/search-analytics/common")
+async def common_searches(
+    request: Request,
+    corpus: Optional[str] = Query(default=None),
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=25, ge=1, le=100),
+):
+    """Private/admin view of common searches; not used by the public UI."""
+    require_search_analytics_access(request)
+    conditions = ["created_at >= NOW() - (:days * INTERVAL '1 day')"]
+    bind: dict[str, Any] = {"days": days, "limit": limit}
+    if corpus:
+        conditions.append("corpus = :corpus")
+        bind["corpus"] = corpus
+    where = " AND ".join(conditions)
+    rows = await database.fetch_all(
+        text(f"""
+            SELECT corpus, query, COUNT(*) AS search_count,
+                   AVG(result_count)::numeric(12, 2) AS avg_results,
+                   SUM(CASE WHEN result_count = 0 THEN 1 ELSE 0 END) AS zero_result_count,
+                   MAX(created_at)::text AS last_seen
+            FROM search_events
+            WHERE {where}
+            GROUP BY corpus, query
+            ORDER BY search_count DESC, last_seen DESC
+            LIMIT :limit
+        """).bindparams(**bind)
+    )
+    return {"days": days, "results": [dict(row) for row in rows]}
+
+
+@app.post("/api/search-analytics/click")
+async def record_search_click(request: Request, data: dict):
+    """Optional hook for later UI click tracking without exposing global analytics."""
+    query = _clean_query(data.get("query", ""))
+    corpus = data.get("corpus") or "unknown"
+    if not query:
+        return {"ok": False, "reason": "empty query"}
+    await database.execute(
+        text("""
+            INSERT INTO search_events (
+                corpus, query, filters, result_count, clicked_result_id, clicked_corpus,
+                session_key, user_label, source_path
+            ) VALUES (
+                :corpus, :query, CAST(:filters AS jsonb), 0, :clicked_result_id, :clicked_corpus,
+                :session_key, :user_label, :source_path
+            )
+        """).bindparams(
+            corpus=corpus,
+            query=query,
+            filters=json.dumps(data.get("filters") or {}, sort_keys=True),
+            clicked_result_id=data.get("result_id"),
+            clicked_corpus=data.get("result_corpus") or corpus,
+            session_key=request.headers.get("x-session-id"),
+            user_label=request.headers.get("x-user-label"),
+            source_path=str(request.url.path),
+        )
+    )
+    return {"ok": True}
 
 # ── Decision detail ───────────────────────────────────────────────────────────
 
@@ -469,6 +698,7 @@ async def decision_projects(decision_id: int):
 
 @app.get("/api/aao/search")
 async def aao_search(
+    request: Request,
     query: str = Query(default="", alias="q"),
     outcome: Optional[str] = Query(default=None),
     form_type: Optional[str] = Query(default=None),
@@ -479,13 +709,21 @@ async def aao_search(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
+    q_text = _clean_query(query)
     offset = (page - 1) * page_size
     conditions = ["1=1"]
     bind = {}
 
-    if query.strip():
-        conditions.append("d.search_vector @@ websearch_to_tsquery('english', :qtext)")
-        bind["qtext"] = query.strip()
+    if q_text:
+        conditions.append("""(
+            d.search_vector @@ websearch_to_tsquery('english', :qtext)
+            OR d.title ILIKE :q_like
+            OR d.filename ILIKE :q_like
+            OR d.form_type ILIKE :q_like
+            OR d.regulation ILIKE :q_like
+        )""")
+        bind["qtext"] = q_text
+        bind["q_like"] = _like(q_text)
     if outcome:
         conditions.append("d.outcome = :outcome")
         bind["outcome"] = outcome
@@ -508,17 +746,20 @@ async def aao_search(
         order = "d.decision_date ASC NULLS LAST"
     elif sort_by == "date_desc":
         order = "d.decision_date DESC NULLS LAST"
-    elif query.strip():
+    elif q_text:
         order = (
-            "(ts_rank(d.search_vector, websearch_to_tsquery('english', :qtext)) * 0.7 "
-            "+ log(1 + COALESCE((SELECT COUNT(*) FROM citations c WHERE c.cited_id = d.id).bindparams(**0))) * 0.3) "
+            "(ts_rank(d.search_vector, websearch_to_tsquery('english', :qtext)) * 0.65 "
+            "+ CASE WHEN d.title ILIKE :q_like THEN 1.5 ELSE 0 END "
+            "+ CASE WHEN d.filename ILIKE :q_like THEN 1.0 ELSE 0 END "
+            "+ CASE WHEN d.form_type ILIKE :q_like THEN 0.8 ELSE 0 END "
+            "+ CASE WHEN d.regulation ILIKE :q_like THEN 0.7 ELSE 0 END) "
             "DESC, d.decision_date DESC NULLS LAST"
         )
     else:
         order = "d.decision_date DESC NULLS LAST"
 
     snippet = ""
-    if query.strip():
+    if q_text:
         snippet = (", ts_headline('english', d.full_text, websearch_to_tsquery('english', :qtext),"
                    " 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') AS headline")
 
@@ -529,10 +770,25 @@ async def aao_search(
     bind["offset"] = offset
     rows = await database.fetch_all(
         text(f"""SELECT d.id, d.filename, d.title, d.decision_date::text,
-               d.form_type, d.regulation, d.outcome {snippet}
+               d.form_type, d.regulation, d.outcome, d.extraction_status,
+               d.citation_quality_status, d.regulation_quality_status {snippet}
         FROM aao_decisions d WHERE {where}
         ORDER BY {order} LIMIT :limit OFFSET :offset""").bindparams(**bind))
 
+    await log_search_event(
+        request,
+        corpus="aao",
+        query=q_text,
+        filters=_search_filters(
+            outcome=outcome,
+            form_type=form_type,
+            regulation=regulation,
+            date_from=date_from,
+            date_to=date_to,
+            sort_by=sort_by,
+        ),
+        result_count=total,
+    )
     return {"total": total, "page": page, "page_size": page_size,
             "results": [dict(r) for r in rows]}
 
@@ -817,6 +1073,7 @@ async def policy_stats():
 
 @app.get("/api/search-all")
 async def search_all(
+    request: Request,
     query: str = Query(alias="q"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=30, ge=1, le=100),
@@ -826,10 +1083,10 @@ async def search_all(
     Returns results sorted by ts_rank DESC, each annotated with 'corpus':
       balca | aao | regulation | policy
     """
-    if not query.strip():
+    q_text = _clean_query(query)
+    if not q_text:
         return {"total": 0, "page": page, "page_size": page_size, "results": []}
 
-    q_text = query.strip()
     offset = (page - 1) * page_size
 
     sql = text("""
@@ -838,17 +1095,25 @@ async def search_all(
             SELECT
                 'balca'::text                                              AS corpus,
                 d.id,
-                d.case_number                                              AS title,
-                d.employer_name                                            AS subtitle,
-                d.decision_date::text                                      AS date,
-                d.outcome,
-                ts_rank(d.search_vector, websearch_to_tsquery('english', :q))   AS rank,
-                ts_headline('english', d.full_text,
+	                d.case_number                                              AS title,
+	                d.employer_name                                            AS subtitle,
+	                d.decision_date::text                                      AS date,
+	                d.outcome,
+	                (ts_rank(d.search_vector, websearch_to_tsquery('english', :q)) * 0.55
+	                 + CASE WHEN d.case_number ILIKE :q_exact THEN 4.0 ELSE 0 END
+	                 + CASE WHEN d.case_number ILIKE :q_like THEN 1.5 ELSE 0 END
+	                 + CASE WHEN d.employer_name ILIKE :q_like THEN 0.8 ELSE 0 END
+	                 + log(1 + COALESCE((SELECT COUNT(*) FROM citations c WHERE c.cited_id = d.id), 0)) * 0.25)
+	                                                                           AS rank,
+	                ts_headline('english', d.full_text,
                     websearch_to_tsquery('english', :q),
-                    'MaxWords=25, MinWords=12, StartSel=<mark>, StopSel=</mark>')
-                                                                           AS headline
-            FROM decisions d
-            WHERE d.search_vector @@ websearch_to_tsquery('english', :q)
+	                    'MaxWords=25, MinWords=12, StartSel=<mark>, StopSel=</mark>')
+	                                                                           AS headline
+	            FROM decisions d
+	            WHERE d.search_vector @@ websearch_to_tsquery('english', :q)
+	               OR d.case_number ILIKE :q_like
+	               OR d.employer_name ILIKE :q_like
+	               OR d.job_title ILIKE :q_like
 
             UNION ALL
 
@@ -857,15 +1122,23 @@ async def search_all(
                 'aao'::text,
                 d.id,
                 COALESCE(d.title, d.form_type, 'AAO Decision'),
-                d.regulation,
-                d.decision_date::text,
-                d.outcome,
-                ts_rank(d.search_vector, websearch_to_tsquery('english', :q)),
-                ts_headline('english', d.full_text,
+	                d.regulation,
+	                d.decision_date::text,
+	                d.outcome,
+	                (ts_rank(d.search_vector, websearch_to_tsquery('english', :q)) * 0.65
+	                 + CASE WHEN d.title ILIKE :q_like THEN 1.5 ELSE 0 END
+	                 + CASE WHEN d.filename ILIKE :q_like THEN 1.0 ELSE 0 END
+	                 + CASE WHEN d.form_type ILIKE :q_like THEN 0.8 ELSE 0 END
+	                 + CASE WHEN d.regulation ILIKE :q_like THEN 0.7 ELSE 0 END),
+	                ts_headline('english', d.full_text,
                     websearch_to_tsquery('english', :q),
-                    'MaxWords=25, MinWords=12, StartSel=<mark>, StopSel=</mark>')
-            FROM aao_decisions d
-            WHERE d.search_vector @@ websearch_to_tsquery('english', :q)
+	                    'MaxWords=25, MinWords=12, StartSel=<mark>, StopSel=</mark>')
+	            FROM aao_decisions d
+	            WHERE d.search_vector @@ websearch_to_tsquery('english', :q)
+	               OR d.title ILIKE :q_like
+	               OR d.filename ILIKE :q_like
+	               OR d.form_type ILIKE :q_like
+	               OR d.regulation ILIKE :q_like
 
             UNION ALL
 
@@ -930,13 +1203,22 @@ async def search_all(
         FROM ranked
         ORDER BY rank DESC, date DESC NULLS LAST
         LIMIT :limit OFFSET :offset
-    """).bindparams(q=q_text, limit=page_size, offset=offset)
+    """).bindparams(q=q_text, q_like=_like(q_text), q_exact=q_text, limit=page_size, offset=offset)
 
     count_sql = text("""
         SELECT (
-            SELECT COUNT(*) FROM decisions WHERE search_vector @@ websearch_to_tsquery('english', :q)
-        ) + (
-            SELECT COUNT(*) FROM aao_decisions WHERE search_vector @@ websearch_to_tsquery('english', :q)
+	            SELECT COUNT(*) FROM decisions
+	            WHERE search_vector @@ websearch_to_tsquery('english', :q)
+	               OR case_number ILIKE :q_like
+	               OR employer_name ILIKE :q_like
+	               OR job_title ILIKE :q_like
+	        ) + (
+	            SELECT COUNT(*) FROM aao_decisions
+	            WHERE search_vector @@ websearch_to_tsquery('english', :q)
+	               OR title ILIKE :q_like
+	               OR filename ILIKE :q_like
+	               OR form_type ILIKE :q_like
+	               OR regulation ILIKE :q_like
         ) + (
             SELECT COUNT(*) FROM regulations_docs WHERE search_vector @@ websearch_to_tsquery('english', :q)
         ) + (
@@ -946,10 +1228,17 @@ async def search_all(
             WHERE corpus = 'ina'
               AND to_tsvector('english', chunk_text) @@ websearch_to_tsquery('english', :q)
         ) AS total
-    """).bindparams(q=q_text)
+    """).bindparams(q=q_text, q_like=_like(q_text))
 
     total = await database.fetch_val(count_sql)
     rows = await database.fetch_all(sql)
+    await log_search_event(
+        request,
+        corpus="all",
+        query=q_text,
+        filters={},
+        result_count=total,
+    )
     return {"total": total, "page": page, "page_size": page_size,
             "results": [dict(r) for r in rows]}
 
@@ -974,7 +1263,7 @@ async def citation_graph(
         SELECT id, case_number, decision_date::text AS date,
                employer_name, outcome,
                (ts_rank(search_vector, websearch_to_tsquery('english', :q)) * 0.7
-                + log(1 + COALESCE((SELECT COUNT(*) FROM citations ci WHERE ci.cited_id = decisions.id).bindparams(**0))) * 0.3) AS rank
+                + log(1 + COALESCE((SELECT COUNT(*) FROM citations ci WHERE ci.cited_id = decisions.id), 0)) * 0.3) AS rank
         FROM decisions
         WHERE search_vector @@ websearch_to_tsquery('english', :q)
         ORDER BY rank DESC
@@ -1087,7 +1376,7 @@ async def extract_pwd_debug(file: UploadFile = File(...)):
         return {
             "parsed": result,
             "page_count": len(pages),
-            "pages": {f"page_{i+1}": pages[i][:2000] for i in range(min(len(pages).bindparams(**8)))}
+            "pages": {f"page_{i+1}": pages[i][:2000] for i in range(min(len(pages), 8))}
         }
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Debug extraction failed: {e}")
@@ -1113,6 +1402,316 @@ async def extract_text_endpoint(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Extraction failed: {e}")
+
+
+async def _mark_extraction_failure(corpus: str, decision_id: int, error: str) -> None:
+    table = "decisions" if corpus == "balca" else "aao_decisions"
+    await database.execute(
+        text(f"""
+            UPDATE {table}
+            SET extraction_status = 'failed',
+                extraction_error = :error,
+                extraction_attempts = COALESCE(extraction_attempts, 0) + 1,
+                extracted_at = NOW(),
+                text_extracted = FALSE
+            WHERE id = :id
+        """).bindparams(id=decision_id, error=error[:2000])
+    )
+
+
+async def _update_extracted_text(corpus: str, decision_id: int, extracted: dict[str, Any]) -> None:
+    table = "decisions" if corpus == "balca" else "aao_decisions"
+    await database.execute(
+        text(f"""
+            UPDATE {table}
+            SET full_text = :full_text,
+                text_extracted = TRUE,
+                extraction_status = :status,
+                extraction_error = NULL,
+                extraction_attempts = COALESCE(extraction_attempts, 0) + 1,
+                extracted_at = NOW(),
+                extraction_page_count = :page_count,
+                extraction_char_count = :char_count,
+                extraction_quality = :quality
+            WHERE id = :id
+        """).bindparams(
+            id=decision_id,
+            full_text=extracted["full_text"],
+            status="extracted" if extracted["full_text"].strip() else "empty",
+            page_count=extracted["page_count"],
+            char_count=extracted["char_count"],
+            quality=extracted["quality"],
+        )
+    )
+
+
+async def _extraction_targets(corpus: str, status_filter: str, limit: int, ids: list[int] | None):
+    if corpus == "balca":
+        table = "decisions"
+        path_expr = "filename"
+    elif corpus == "aao":
+        table = "aao_decisions"
+        path_expr = "pdf_path"
+    else:
+        raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+
+    bind: dict[str, Any] = {"limit": limit}
+    conditions = []
+    if ids:
+        conditions.append("id = ANY(:ids)")
+        bind["ids"] = ids
+    elif status_filter == "repairable":
+        conditions.append("""(
+            extraction_status IN ('unknown', 'failed', 'empty', 'low_text', 'not_found')
+            OR text_extracted IS NOT TRUE
+            OR full_text IS NULL
+            OR full_text = ''
+        )""")
+    elif status_filter != "all":
+        conditions.append("extraction_status = :status")
+        bind["status"] = status_filter
+
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    return await database.fetch_all(
+        text(f"""
+            SELECT id, {path_expr} AS pdf_ref, extraction_status, extraction_attempts
+            FROM {table}
+            {where}
+            ORDER BY COALESCE(extraction_attempts, 0), id
+            LIMIT :limit
+        """).bindparams(**bind)
+    )
+
+
+@app.get("/api/extraction/status")
+async def extraction_status(corpus: str = Query(default="balca")):
+    if corpus == "balca":
+        table = "decisions"
+    elif corpus == "aao":
+        table = "aao_decisions"
+    else:
+        raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+    rows = await database.fetch_all(text(f"""
+        SELECT COALESCE(extraction_status, 'unknown') AS status,
+               COUNT(*) AS count,
+               SUM(CASE WHEN text_extracted IS TRUE THEN 1 ELSE 0 END) AS extracted_count,
+               SUM(CASE WHEN full_text IS NULL OR full_text = '' THEN 1 ELSE 0 END) AS empty_text_count
+        FROM {table}
+        GROUP BY COALESCE(extraction_status, 'unknown')
+        ORDER BY count DESC
+    """))
+    return {"corpus": corpus, "statuses": [dict(row) for row in rows]}
+
+
+@app.get("/api/extraction/failures")
+async def extraction_failures(
+    corpus: str = Query(default="balca"),
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    if corpus == "balca":
+        table = "decisions"
+        label = "case_number"
+    elif corpus == "aao":
+        table = "aao_decisions"
+        label = "COALESCE(title, filename)"
+    else:
+        raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+    rows = await database.fetch_all(text(f"""
+        SELECT id, {label} AS label, extraction_status, extraction_error,
+               extraction_attempts, extracted_at::text, extraction_char_count,
+               extraction_page_count, extraction_quality
+        FROM {table}
+        WHERE extraction_status IN ('failed', 'empty', 'low_text', 'not_found')
+           OR text_extracted IS NOT TRUE
+           OR full_text IS NULL
+           OR full_text = ''
+        ORDER BY extracted_at DESC NULLS LAST, id
+        LIMIT :limit
+    """).bindparams(limit=limit))
+    return {"corpus": corpus, "results": [dict(row) for row in rows]}
+
+
+@app.post("/api/extraction/retry")
+async def retry_extraction(data: dict):
+    corpus = data.get("corpus", "balca")
+    status_filter = data.get("status", "repairable")
+    limit = min(int(data.get("limit", 25)), 200)
+    ids = data.get("ids")
+    ids = [int(i) for i in ids] if isinstance(ids, list) else None
+    targets = await _extraction_targets(corpus, status_filter, limit, ids)
+    results = []
+    for row in targets:
+        decision_id = row["id"]
+        pdf_ref = row["pdf_ref"]
+        path = _balca_pdf_path(pdf_ref) if corpus == "balca" else pdf_ref
+        if not path or not os.path.exists(path):
+            error = f"PDF not found: {path or pdf_ref or 'missing path'}"
+            await _mark_extraction_failure(corpus, decision_id, error)
+            results.append({"id": decision_id, "status": "not_found", "error": error})
+            continue
+        try:
+            extracted = _extract_pdf_text(path)
+            await _update_extracted_text(corpus, decision_id, extracted)
+            results.append({
+                "id": decision_id,
+                "status": "extracted" if extracted["full_text"].strip() else "empty",
+                "char_count": extracted["char_count"],
+                "page_count": extracted["page_count"],
+                "quality": extracted["quality"],
+            })
+        except Exception as exc:
+            await _mark_extraction_failure(corpus, decision_id, str(exc))
+            results.append({"id": decision_id, "status": "failed", "error": str(exc)})
+    return {"corpus": corpus, "processed": len(results), "results": results}
+
+
+@app.post("/api/extraction/mark")
+async def mark_extraction_status(data: dict):
+    corpus = data.get("corpus", "balca")
+    decision_id = int(data["id"])
+    status = data.get("status")
+    note = data.get("note")
+    if status not in {"needs_manual_review", "ignored", "not_found", "failed", "extracted"}:
+        raise HTTPException(status_code=400, detail="Unsupported extraction status")
+    table = "decisions" if corpus == "balca" else "aao_decisions" if corpus == "aao" else None
+    if not table:
+        raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+    await database.execute(
+        text(f"""
+            UPDATE {table}
+            SET extraction_status = :status,
+                extraction_error = :note,
+                extracted_at = NOW()
+            WHERE id = :id
+        """).bindparams(id=decision_id, status=status, note=note)
+    )
+    return {"ok": True}
+
+
+@app.post("/api/quality/refresh")
+async def refresh_quality_signals(corpus: str = Query(default="balca")):
+    if corpus == "balca":
+        await database.execute(text("""
+            UPDATE decisions d
+            SET citation_quality_status = CASE
+                    WHEN d.text_extracted IS NOT TRUE OR COALESCE(d.full_text, '') = '' THEN 'not_ready'
+                    WHEN EXISTS (
+                        SELECT 1 FROM citations c
+                        WHERE c.citing_id = d.id AND c.cited_id IS NULL
+                    ) THEN 'needs_review'
+                    WHEN EXISTS (SELECT 1 FROM citations c WHERE c.citing_id = d.id) THEN 'ok'
+                    ELSE 'no_citations'
+                END,
+                regulation_quality_status = CASE
+                    WHEN d.text_extracted IS NOT TRUE OR COALESCE(d.full_text, '') = '' THEN 'not_ready'
+                    WHEN EXISTS (
+                        SELECT 1 FROM decision_regulations dr WHERE dr.decision_id = d.id
+                    ) THEN 'ok'
+                    ELSE 'no_regulations'
+                END,
+                search_quality_notes = CONCAT_WS('; ',
+                    CASE
+                        WHEN d.text_extracted IS NOT TRUE OR COALESCE(d.full_text, '') = ''
+                        THEN 'missing extracted text'
+                    END,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1 FROM citations c
+                            WHERE c.citing_id = d.id AND c.cited_id IS NULL
+                        )
+                        THEN 'has unresolved citations'
+                    END,
+                    CASE
+                        WHEN NOT EXISTS (
+                            SELECT 1 FROM decision_regulations dr WHERE dr.decision_id = d.id
+                        )
+                        THEN 'no linked regulations'
+                    END
+                )
+        """))
+        return await quality_summary(corpus=corpus)
+    if corpus == "aao":
+        await database.execute(text("""
+            UPDATE aao_decisions d
+            SET citation_quality_status = CASE
+                    WHEN d.text_extracted IS NOT TRUE OR COALESCE(d.full_text, '') = '' THEN 'not_ready'
+                    ELSE 'not_applicable'
+                END,
+                regulation_quality_status = CASE
+                    WHEN d.text_extracted IS NOT TRUE OR COALESCE(d.full_text, '') = '' THEN 'not_ready'
+                    WHEN COALESCE(d.regulation, '') != '' THEN 'ok'
+                    ELSE 'no_regulation'
+                END,
+                search_quality_notes = CONCAT_WS('; ',
+                    CASE
+                        WHEN d.text_extracted IS NOT TRUE OR COALESCE(d.full_text, '') = ''
+                        THEN 'missing extracted text'
+                    END,
+                    CASE WHEN COALESCE(d.regulation, '') = '' THEN 'no regulation label' END
+                )
+        """))
+        return await quality_summary(corpus=corpus)
+    raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+
+
+@app.get("/api/quality/summary")
+async def quality_summary(corpus: str = Query(default="balca")):
+    if corpus == "balca":
+        table = "decisions"
+    elif corpus == "aao":
+        table = "aao_decisions"
+    else:
+        raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+    citation_rows = await database.fetch_all(text(f"""
+        SELECT COALESCE(citation_quality_status, 'unknown') AS status, COUNT(*) AS count
+        FROM {table}
+        GROUP BY COALESCE(citation_quality_status, 'unknown')
+        ORDER BY count DESC
+    """))
+    regulation_rows = await database.fetch_all(text(f"""
+        SELECT COALESCE(regulation_quality_status, 'unknown') AS status, COUNT(*) AS count
+        FROM {table}
+        GROUP BY COALESCE(regulation_quality_status, 'unknown')
+        ORDER BY count DESC
+    """))
+    extraction_rows = await database.fetch_all(text(f"""
+        SELECT COALESCE(extraction_status, 'unknown') AS status, COUNT(*) AS count
+        FROM {table}
+        GROUP BY COALESCE(extraction_status, 'unknown')
+        ORDER BY count DESC
+    """))
+    return {
+        "corpus": corpus,
+        "citation_quality": [dict(row) for row in citation_rows],
+        "regulation_quality": [dict(row) for row in regulation_rows],
+        "extraction_quality": [dict(row) for row in extraction_rows],
+    }
+
+
+@app.get("/api/quality/issues")
+async def quality_issues(
+    corpus: str = Query(default="balca"),
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    if corpus == "balca":
+        table = "decisions"
+        label = "case_number"
+    elif corpus == "aao":
+        table = "aao_decisions"
+        label = "COALESCE(title, filename)"
+    else:
+        raise HTTPException(status_code=400, detail="corpus must be 'balca' or 'aao'")
+    rows = await database.fetch_all(text(f"""
+        SELECT id, {label} AS label, extraction_status, citation_quality_status,
+               regulation_quality_status, search_quality_notes
+        FROM {table}
+        WHERE COALESCE(extraction_status, 'unknown') NOT IN ('extracted', 'ignored')
+           OR COALESCE(citation_quality_status, 'unknown') IN ('unknown', 'not_ready', 'needs_review')
+           OR COALESCE(regulation_quality_status, 'unknown') IN ('unknown', 'not_ready')
+        ORDER BY id
+        LIMIT :limit
+    """).bindparams(limit=limit))
+    return {"corpus": corpus, "results": [dict(row) for row in rows]}
 
 
 # ── Experience verification letter extraction (no AI) ────────────────────────
@@ -2341,9 +2940,12 @@ async def oflc_query(request: Request):
             gt_selects.append(f"{ae} AS \"__row_total__{vm['label']}\"")
         gt_sql = f"SELECT {', '.join(gt_selects)} FROM {table} {where}"
         gt_row = await database.fetch_one(text(gt_sql).bindparams(**no_limit_params) if no_limit_params else text(gt_sql))
+        cnt_sql = f"SELECT COUNT(*) as cnt FROM (SELECT {group_by} FROM {table} {where} GROUP BY {group_by}) sub"
+        cnt_row = await database.fetch_one(text(cnt_sql).bindparams(**no_limit_params) if no_limit_params else text(cnt_sql))
+        total_rows = cnt_row["cnt"] if cnt_row else 0
 
         return {"mode": "pivot", "rows": [dict(r) for r in rows], "grand_total": dict(gt_row) if gt_row else None,
-                "col_values": col_values, "total_rows": len(rows), "limited": len(rows) >= limit}
+                "col_values": col_values, "total_rows": total_rows, "limited": total_rows > limit}
 
     else:
         # No column pivot — simple group by
@@ -2399,3 +3001,23 @@ async def oflc_landing_stats():
         "lca_total":      lca["total"]      if lca  else 0,
         "pw_total":       pw["total"]       if pw   else 0,
     }
+
+
+FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
+
+if FRONTEND_DIST.exists():
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        """Serve the Vite app in production while preserving API 404s."""
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        requested_file = FRONTEND_DIST / full_path
+        if full_path and requested_file.is_file():
+            return FileResponse(requested_file)
+
+        return FileResponse(FRONTEND_DIST / "index.html")

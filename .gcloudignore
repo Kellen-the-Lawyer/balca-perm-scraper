@@ -1,0 +1,26 @@
+.git
+.gitignore
+.DS_Store
+.env
+.env.*
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+
+.venv/
+venv/
+env/
+
+data/
+USCIS Reports/
+perm-research/oflc_data/
+perm-research/onet/db_*/
+
+perm-research/.env
+perm-research/frontend/node_modules/
+perm-research/frontend/dist/
+
+tests/
+balca_perm_scraper.egg-info/

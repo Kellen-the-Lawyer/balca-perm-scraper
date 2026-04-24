@@ -76,4 +76,4 @@ perm-research/frontend/dist/
 *.swo
 
 # Saved browser pages used during scraper development
-tests/OALJ*/
+tests/OALJ*

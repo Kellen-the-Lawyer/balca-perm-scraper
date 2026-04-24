@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-const API = "http://localhost:8001/api";
+import { API } from "./apiBase";
 
 const CARDS = [
   {

@@ -5,7 +5,7 @@ from typing import Any
 from bs4 import BeautifulSoup
 
 from .models import DecisionRecord
-from .normalize import clean_text, extract_docket, parse_decision_date
+from .normalize import DOCKET_RE, clean_text, extract_docket, parse_decision_date
 from .selectors import SELECTORS
 from .urls import absolute_url
 
@@ -25,10 +25,9 @@ def parse_azure_response(data: dict[str, Any]) -> list[DecisionRecord]:
         # Case name = everything in parsed_title before the docket token
         case_name = parsed_title
         if docket and parsed_title:
-            raw_docket = docket.replace("-", "")  # e.g. 2006PER00039
-            idx = parsed_title.upper().find(raw_docket)
-            if idx > 0:
-                case_name = clean_text(parsed_title[:idx])
+            match = DOCKET_RE.search(parsed_title)
+            if match and match.start() > 0:
+                case_name = clean_text(parsed_title[: match.start()].rstrip(" ,:-"))
 
         resolved = absolute_url(file_path) if file_path else None
         pdf_url = resolved if file_path.lower().endswith(".pdf") else None

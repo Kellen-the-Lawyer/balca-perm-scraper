@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { OflcLanding } from "./OflcLanding";
 import { OflcTemplates } from "./OflcTemplates";
 import { OflcDashboard } from "./OflcDashboard";
-
-const API = "http://localhost:8001/api";
+import { API } from "./apiBase";
 
 // ── Field catalogs per dataset ────────────────────────────────────────────────
 

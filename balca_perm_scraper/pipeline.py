@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -55,29 +56,92 @@ def collect_search_results(
     max_pages: int = 5,
     db_path: Path = SETTINGS.database_path,
 ):
+    azure_query_key = SETTINGS.require_azure_query_key()
     store = DecisionStore(db_path)
-    total = 0
+    total_records = 0
+    total_upserted = 0
+    total_pages = 0
+    run_id = store.start_run(
+        query=query,
+        docket_prefix=docket_prefix,
+        max_pages=max_pages,
+        page_size=SETTINGS.page_size,
+        fiscal_years=FISCAL_YEARS,
+        search_url=KEYWORD_SEARCH_URL,
+    )
+    console.print(f"[dim]Scrape run #{run_id}[/dim]")
 
-    with ScraperClient() as client:
-        for year in FISCAL_YEARS:
-            console.print(f"[bold]Scraping fiscal year {year}[/bold]")
-            for page_number in range(1, max_pages + 1):
-                body = build_search_body(
-                    query=query, docket_prefix=docket_prefix,
-                    fiscal_year=year, page=page_number,
-                )
-                response = client.post_json(KEYWORD_SEARCH_URL, body, SETTINGS.azure_query_key)
-                data = response.json()
-                records = parse_azure_response(data)
-                if not records:
-                    break
-                total += store.upsert_many(records)
-                console.print(f"  page {page_number}: {len(records)} records (total {total})")
+    try:
+        with ScraperClient() as client:
+            for year in FISCAL_YEARS:
+                console.print(f"[bold]Scraping fiscal year {year}[/bold]")
+                for page_number in range(1, max_pages + 1):
+                    body = build_search_body(
+                        query=query, docket_prefix=docket_prefix, fiscal_year=year, page=page_number
+                    )
+                    requested_at = datetime.now(UTC).isoformat()
+                    try:
+                        response = client.post_json(KEYWORD_SEARCH_URL, body, azure_query_key)
+                        data = response.json()
+                        records = parse_azure_response(data)
+                        result_count = len(records)
+                        upserted_count = store.upsert_many(records) if records else 0
+                        total_pages += 1
+                        total_records += result_count
+                        total_upserted += upserted_count
+                        store.record_run_page(
+                            run_id=run_id,
+                            fiscal_year=year,
+                            page_number=page_number,
+                            request_body=body,
+                            requested_at=requested_at,
+                            status="success" if records else "empty",
+                            result_count=result_count,
+                            upserted_count=upserted_count,
+                            azure_count=data.get("@odata.count"),
+                        )
+                    except Exception as exc:
+                        total_pages += 1
+                        store.record_run_page(
+                            run_id=run_id,
+                            fiscal_year=year,
+                            page_number=page_number,
+                            request_body=body,
+                            requested_at=requested_at,
+                            status="error",
+                            error=str(exc),
+                        )
+                        raise
 
-                if len(records) < SETTINGS.page_size:
-                    break
+                    if not records:
+                        break
+                    console.print(
+                        f"  page {page_number}: {result_count} records "
+                        f"(run total {total_upserted})"
+                    )
 
-    return total
+                    if result_count < SETTINGS.page_size:
+                        break
+    except Exception as exc:
+        store.finish_run(
+            run_id,
+            status="failed",
+            total_pages=total_pages,
+            total_records=total_records,
+            total_upserted=total_upserted,
+            error=str(exc),
+        )
+        raise
+    else:
+        store.finish_run(
+            run_id,
+            status="completed",
+            total_pages=total_pages,
+            total_records=total_records,
+            total_upserted=total_upserted,
+        )
+
+    return total_upserted
 
 
 def download_pdfs(csv_path: Path, output_dir: Path = SETTINGS.raw_dir / "pdfs", limit: int | None = None):

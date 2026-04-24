@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from datetime import UTC, date, datetime
 from typing import Optional
 
@@ -20,7 +21,21 @@ class DecisionRecord(BaseModel):
 
     @property
     def stable_id(self) -> str:
-        docket = self.docket_number or "unknown-docket"
-        doc_type = self.document_type or "unknown-doc"
-        date_part = self.decision_date.isoformat() if self.decision_date else "unknown-date"
-        return f"{docket}::{doc_type}::{date_part}"
+        if self.docket_number:
+            doc_type = self.document_type or "unknown-doc"
+            date_part = self.decision_date.isoformat() if self.decision_date else "unknown-date"
+            return f"{self.docket_number}::{doc_type}::{date_part}"
+
+        source = self.pdf_url or self.source_url
+        if source:
+            return f"url::{source}"
+
+        parts = [
+            self.case_name or "",
+            self.document_type or "",
+            self.program_area or "",
+            self.case_type or "",
+            self.snippet or "",
+        ]
+        digest = sha256("::".join(parts).encode("utf-8")).hexdigest()[:16]
+        return f"content::{digest}"

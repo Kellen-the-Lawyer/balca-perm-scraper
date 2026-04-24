@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 from rich.console import Console
+from rich.table import Table
 
 from .config import SETTINGS
 from .pipeline import collect_search_results, download_pdfs
@@ -51,6 +52,38 @@ def export_csv(db_path: str, out_path: str):
     store = DecisionStore(Path(db_path))
     destination = store.export_csv(Path(out_path))
     console.print(f"Wrote {destination}")
+
+
+@cli.command("runs")
+@click.option("--db", "db_path", default=str(SETTINGS.database_path), show_default=True)
+@click.option("--limit", default=10, type=int, show_default=True)
+def runs(db_path: str, limit: int):
+    """Show recent scrape runs."""
+    store = DecisionStore(Path(db_path))
+    table = Table(title="Recent scrape runs")
+    table.add_column("ID", justify="right")
+    table.add_column("Status")
+    table.add_column("Started")
+    table.add_column("Query")
+    table.add_column("Docket")
+    table.add_column("Pages", justify="right")
+    table.add_column("Records", justify="right")
+    table.add_column("Upserted", justify="right")
+    table.add_column("Error")
+
+    for run in store.recent_runs(limit=limit):
+        table.add_row(
+            str(run["id"]),
+            run["status"],
+            run["started_at"],
+            run["query"] or "",
+            run["docket_prefix"] or "",
+            str(run["total_pages"]),
+            str(run["total_records"]),
+            str(run["total_upserted"]),
+            (run["error"] or "")[:60],
+        )
+    console.print(table)
 
 
 @cli.command("download-pdfs")

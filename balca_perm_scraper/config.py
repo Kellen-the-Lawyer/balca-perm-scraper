@@ -15,7 +15,7 @@ class Settings:
         "balca-perm-scraper/0.1 (+https://github.com/your-org/balca-perm-scraper)"
     )
     # Read-only query key extracted from the public DOL OALJ search page JS.
-    # Set via environment variable or .env file — never commit the value directly.
+    # Set via environment variable; never commit the value directly.
     azure_query_key: str = field(
         default_factory=lambda: os.environ.get("DOL_AZURE_QUERY_KEY", "")
     )
@@ -25,6 +25,13 @@ class Settings:
     pdf_sleep_seconds: float = 2.0
     pdf_sleep_jitter: float = 2.0
     page_size: int = 50
+
+    def require_azure_query_key(self) -> str:
+        if not self.azure_query_key:
+            raise RuntimeError(
+                "DOL_AZURE_QUERY_KEY is required for live OALJ Azure Search requests."
+            )
+        return self.azure_query_key
 
 
 SETTINGS = Settings()

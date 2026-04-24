@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import "./index.css";
 import { VisaBulletinView } from "./VisaBulletinView";
 import { OflcView } from "./OflcView";
-
-const API = "/api";
+import { API } from "./apiBase";
 
 const OUTCOME = {
   Affirmed:  { bg: "var(--green-dim)",  text: "var(--green)",  dot: "#34d399" },
@@ -3563,9 +3562,9 @@ function LandingPage({ onNavigate }) {
     { id: "citation-graph", label: "Citation Graph", description: "Map how search results cite each other — see the most-cited cases and citation branches emerge visually", accent: "#34d399", accentDim: "#34d39922", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="12" x2="17" y2="6"/><line x1="7" y1="12" x2="17" y2="18"/></svg>, available: true },
     { id: "perm-comparer", label: "PERM Comparer", description: "Compare job description and requirements language, validate PWD wage positioning, and export reports.", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>, available: true },
     { id: "visa-bulletin", label: "Visa Bulletin", description: "Monthly DOS priority dates — track cutoffs, retrogression, and backlog estimates for EB and family categories", accent: "#34d399", accentDim: "#34d39922", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, available: true },
-    { id: "ask", label: "Ask AI", description: "Ask a research question — get a cited answer synthesized across cases, regulations, and policy", accent: "#f472b6", accentDim: "#f472b622", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, available: true },
-    { id: "letter-assistant", label: "Letter Assistant", description: "AI-powered drafting and review for NIW and EB-1A support letters — powered by AAO precedent", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, available: false, comingSoon: true },
     { id: "oflc", label: "DOL Performance Data", description: "PERM, LCA, and Prevailing Wage disclosure data — 1.4M+ records across FY2020–FY2026. Dashboards, templates, and pivot builder.", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>, available: true },
+    { id: "ask", label: "Ask AI", description: "Ask a research question — get a cited answer synthesized across cases, regulations, and policy", accent: "#f472b6", accentDim: "#f472b622", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, available: false, comingSoon: true },
+    { id: "letter-assistant", label: "Letter Assistant", description: "AI-powered drafting and review for NIW and EB-1A support letters — powered by AAO precedent", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, available: false, comingSoon: true },
   ];
 
   return (
