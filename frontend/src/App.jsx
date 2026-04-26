@@ -2690,6 +2690,7 @@ function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }) {
   const [activeQuery, setActiveQuery] = useState("");
   const [precId, setPrecId] = useState(null);
   const [precedentMap, setPrecedentMap] = useState({});
+  const [matchedPrecedents, setMatchedPrecedents] = useState([]);
   const inputRef = useRef(null);
   const FORM_TYPES = ["I-140","I-360","I-601","I-601A","I-129","I-290B","I-821","I-485","I-526","I-131"];
 
@@ -2717,6 +2718,13 @@ function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }) {
     if (dateFrom) p.set("date_from", dateFrom);
     if (dateTo) p.set("date_to", dateTo);
     if (sortBy !== "relevance") p.set("sort_by", sortBy);
+    // Fire precedent search in parallel — only on page 1, only for text queries
+    if (pg === 1 && q.trim()) {
+      fetch(`${API}/precedents/search?q=${encodeURIComponent(q.trim())}&limit=4`)
+        .then(r => r.json()).then(setMatchedPrecedents).catch(() => setMatchedPrecedents([]));
+    } else if (pg === 1) {
+      setMatchedPrecedents([]);
+    }
     try {
       const res = await fetch(`${API}/aao/search?${p}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -2789,6 +2797,33 @@ function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }) {
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {loading && <Spinner />}
+          {!loading && searched && matchedPrecedents.length > 0 && (
+            <div style={{ borderBottom: "1px solid var(--border)" }}>
+              <div style={{ padding: splitView ? "8px 12px 4px" : "10px 24px 4px", fontSize: 10, fontWeight: 600, color: "#f59e0b", fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                I&amp;N Dec. Precedents
+              </div>
+              {matchedPrecedents.map(p => (
+                <div key={p.id} onClick={() => setPrecId(p.id)}
+                  style={{ padding: splitView ? "8px 12px" : "10px 24px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 10, borderLeft: "2px solid #f59e0b44", transition: "background 0.1s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--bg3)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{p.party_name}</span>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#f59e0b", fontWeight: 500 }}>{p.citation}</span>
+                      {p.year && <span style={{ fontSize: 11, color: "var(--text3)" }}>{p.year}</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                      {p.decision_type === "adopted" ? "Adopted Decision" : "I&N Dec. Precedent"}
+                      {p.cited_by_count > 0 && <span style={{ marginLeft: 8, color: "#f59e0b88" }}>cited {p.cited_by_count.toLocaleString()}× in AAO decisions</span>}
+                    </div>
+                  </div>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.5" style={{ flexShrink: 0, marginTop: 2 }}><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              ))}
+            </div>
+          )}
           {!loading && searched && results && (<>
             <div style={{ padding: splitView ? "6px 12px" : "8px 24px", fontSize: 10, color: "var(--text3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }}>{results.total?.toLocaleString()} DECISIONS</div>
             {results.results?.map((r, i) => (<AAOResultRow key={r.id} row={r} selected={r.id === selectedId} compact={splitView} onSelect={() => setSelectedId(r.id)} index={i} activeQuery={activeQuery} />))}

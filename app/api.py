@@ -1072,6 +1072,39 @@ async def get_precedent_map():
     return result
 
 
+@app.get("/api/precedents/search")
+async def search_precedents(
+    query: str = Query(alias="q", default=""),
+    limit: int = Query(default=5, ge=1, le=20),
+):
+    """
+    Search I&N Dec. precedent decisions by party name, citation, or full text.
+    Returns up to `limit` results ranked by relevance + cited_by_count.
+    Used by AAO search to surface pinned precedent hits above regular results.
+    """
+    q_text = _clean_query(query)
+    if not q_text:
+        return []
+
+    rows = await database.fetch_all(text("""
+        SELECT id, citation, party_name, year, decision_type, adopted_num,
+               length(full_text) AS has_text,
+               COALESCE((SELECT COUNT(*) FROM aao_citations ac
+                          WHERE ac.cited_precedent_id = precedent_decisions.id), 0) AS cited_by_count,
+               (ts_rank(search_vector, websearch_to_tsquery('english', :q)) * 0.60
+                + log(1 + COALESCE((SELECT COUNT(*) FROM aao_citations ac
+                                     WHERE ac.cited_precedent_id = precedent_decisions.id), 0)) * 0.40) AS rank
+        FROM precedent_decisions
+        WHERE search_vector @@ websearch_to_tsquery('english', :q)
+           OR party_name ILIKE :like
+           OR citation ILIKE :like
+        ORDER BY rank DESC
+        LIMIT :lim
+    """).bindparams(q=q_text, like=f"%{q_text}%", lim=limit))
+
+    return [dict(r) for r in rows]
+
+
 @app.get("/api/precedents/{precedent_id}")
 async def get_precedent(precedent_id: int):
     row = await database.fetch_one(q("""
