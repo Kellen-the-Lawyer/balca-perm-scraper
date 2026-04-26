@@ -3573,7 +3573,7 @@ function CitationGraphView({ onNavigate, initialQuery }) {
 
 
 // ── AAO Citation Graph View ───────────────────────────────────────────────────
-function AAOCitationGraphView({ onNavigate, initialQuery }) {
+function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery }) {
   const [q, setQ] = useState(initialQuery || "");
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -3653,13 +3653,21 @@ function AAOCitationGraphView({ onNavigate, initialQuery }) {
     simRef.current = sim;
 
     const outcomeColor = (o) => ({ Dismissed: "#5a5a68", Sustained: "#34d399", Remanded: "#fbbf24", Withdrawn: "#a78bfa" }[o] || "#60a5fa");
+    const nodeColor = (n) => n.node_type === "precedent" ? "#f59e0b" : outcomeColor(n.outcome);
+    const nodeFill  = (n) => n.node_type === "precedent"
+      ? (n.tier === "primary" ? "#f59e0b" : "#f59e0b88")
+      : (n.tier === "primary" ? outcomeColor(n.outcome) : outcomeColor(n.outcome) + "66");
 
     const link = g.append("g").selectAll("line").data(edges).join("line")
-      .attr("stroke", d => outcomeColor(nodeById[d.target?.id ?? d.target]?.outcome))
+      .attr("stroke", d => {
+        const tgt = nodeById[d.target?.id ?? d.target];
+        return tgt?.node_type === "precedent" ? "#f59e0b" : outcomeColor(tgt?.outcome);
+      })
       .attr("stroke-opacity", 0.35).attr("stroke-width", 1.5)
       .attr("marker-end", d => {
-        const outcome = nodeById[d.target?.id ?? d.target]?.outcome;
-        const key = markerColors[outcome] ? outcome : "default";
+        const tgt = nodeById[d.target?.id ?? d.target];
+        if (tgt?.node_type === "precedent") return "url(#aao-arrow-default)";
+        const key = markerColors[tgt?.outcome] ? tgt?.outcome : "default";
         return `url(#aao-arrow-${key})`;
       });
 
@@ -3669,14 +3677,21 @@ function AAOCitationGraphView({ onNavigate, initialQuery }) {
         .on("start", (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on("drag",  (event, d) => { d.fx = event.x; d.fy = event.y; })
         .on("end",   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }))
-      .on("click", (event, d) => { event.stopPropagation(); setSelectedNode(d); })
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        if (d.node_type === "precedent" && onOpenPrecedent) {
+          onOpenPrecedent(d.prec_id);
+        } else {
+          setSelectedNode(d);
+        }
+      })
       .on("mouseover", (event, d) => setHovered(d))
       .on("mouseout",  () => setHovered(null));
 
     node.append("circle")
       .attr("r", nodeRadius)
-      .attr("fill", d => d.tier === "primary" ? outcomeColor(d.outcome) : outcomeColor(d.outcome) + "66")
-      .attr("stroke", d => d.tier === "primary" ? "#fff" : "none")
+      .attr("fill", nodeFill)
+      .attr("stroke", d => d.tier === "primary" ? (d.node_type === "precedent" ? "#fde68a" : "#fff") : "none")
       .attr("stroke-width", d => d.tier === "primary" ? 2 : 0)
       .attr("opacity", d => d.tier === "primary" ? 1 : 0.65);
 
@@ -3685,7 +3700,9 @@ function AAOCitationGraphView({ onNavigate, initialQuery }) {
       .attr("font-size", d => Math.max(9, Math.min(13, nodeRadius(d) * 0.55)))
       .attr("fill", "#fff").attr("pointer-events", "none")
       .text(d => {
-        const label = d.form_type || d.label || d.filename || "";
+        const label = d.node_type === "precedent"
+          ? (d.party_name || d.citation || "")
+          : (d.form_type || d.label || d.filename || "");
         return label.length > 14 ? label.slice(0, 13) + "…" : label;
       });
 
@@ -3749,9 +3766,19 @@ function AAOCitationGraphView({ onNavigate, initialQuery }) {
         {/* Hover tooltip */}
         {hovered && (
           <div style={{ position: "absolute", bottom: 16, left: 16, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", maxWidth: 300, pointerEvents: "none" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 3 }}>{hovered.form_type || hovered.label || hovered.filename}</div>
-            {hovered.label && hovered.label !== hovered.form_type && <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 3 }}>{hovered.label.slice(0, 80)}</div>}
-            <div style={{ fontSize: 11, color: "var(--text3)" }}>{hovered.date} · {hovered.outcome || "—"} · <span style={{ color: accent }}>{hovered.tier}</span></div>
+            {hovered.node_type === "precedent" ? (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#f59e0b", marginBottom: 3 }}>{hovered.party_name}</div>
+                <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 3 }}>{hovered.citation} · {hovered.year}</div>
+                <div style={{ fontSize: 11, color: "var(--text3)" }}>Cited by {hovered.cited_by_count} decisions in graph · I&N Dec. precedent</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 3 }}>{hovered.form_type || hovered.label || hovered.filename}</div>
+                {hovered.label && hovered.label !== hovered.form_type && <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 3 }}>{hovered.label.slice(0, 80)}</div>}
+                <div style={{ fontSize: 11, color: "var(--text3)" }}>{hovered.date} · {hovered.outcome || "—"} · <span style={{ color: accent }}>{hovered.tier}</span></div>
+              </>
+            )}
           </div>
         )}
 
@@ -3759,17 +3786,32 @@ function AAOCitationGraphView({ onNavigate, initialQuery }) {
         {selectedNode && (
           <div style={{ position: "absolute", top: 16, right: 16, width: 280, background: "var(--bg2)", border: `1px solid ${accent}44`, borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1, paddingRight: 8 }}>{selectedNode.form_type || selectedNode.filename}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: selectedNode.node_type === "precedent" ? "#f59e0b" : "var(--text)", flex: 1, paddingRight: 8 }}>
+                {selectedNode.node_type === "precedent" ? selectedNode.party_name : (selectedNode.form_type || selectedNode.filename)}
+              </div>
               <button onClick={() => setSelectedNode(null)} style={{ background: "none", border: "none", color: "var(--text3)", cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
             </div>
-            {selectedNode.label && selectedNode.label !== selectedNode.form_type && (
-              <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 8 }}>{selectedNode.label.slice(0, 120)}</div>
+            {selectedNode.node_type === "precedent" ? (
+              <>
+                <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 4 }}>{selectedNode.citation} · {selectedNode.year}</div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 12 }}>Cited by {selectedNode.cited_by_count} decisions in this graph</div>
+                {onOpenPrecedent && <button onClick={() => onOpenPrecedent(selectedNode.prec_id)}
+                  style={{ width: "100%", padding: "7px 0", background: "#f59e0b22", color: "#f59e0b", border: "1px solid #f59e0b44", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
+                  Open precedent →
+                </button>}
+              </>
+            ) : (
+              <>
+                {selectedNode.label && selectedNode.label !== selectedNode.form_type && (
+                  <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 8 }}>{selectedNode.label.slice(0, 120)}</div>
+                )}
+                <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 12 }}>{selectedNode.date} · {selectedNode.outcome || "—"} · {selectedNode.tier}</div>
+                <button onClick={() => onNavigate(selectedNode.id)}
+                  style={{ width: "100%", padding: "7px 0", background: accent + "22", color: accent, border: `1px solid ${accent}44`, borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
+                  Open decision →
+                </button>
+              </>
             )}
-            <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 12 }}>{selectedNode.date} · {selectedNode.outcome || "—"} · {selectedNode.tier}</div>
-            <button onClick={() => onNavigate(selectedNode.id)}
-              style={{ width: "100%", padding: "7px 0", background: accent + "22", color: accent, border: `1px solid ${accent}44`, borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
-              Open decision →
-            </button>
           </div>
         )}
       </div>
@@ -4347,7 +4389,7 @@ export default function App() {
         {view === "regulations" && <RegulationsView />}
         {view === "policy" && <PolicyView />}
         {view === "citation-graph" && <CitationGraphView key={`graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "balca" }); setView("balca"); }} initialQuery={graphSeed} />}
-        {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} initialQuery={graphSeed} />}
+        {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} onOpenPrecedent={(id) => { setView("aao"); setTimeout(() => window.dispatchEvent(new CustomEvent("openPrecedent", { detail: id })), 100); }} initialQuery={graphSeed} />}
         {view === "ask" && <AskView onNavigate={(corpus, id) => { if (corpus === "balca") { setExternalDecision({ id, query: "", source: "balca" }); setView("balca"); } else if (corpus === "aao") { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); } else if (corpus === "regulation") { setView("regulations"); } else if (corpus === "policy") { setView("policy"); } }} />}
         {view === "perm-comparer" && <PermComparer />}
         {view === "visa-bulletin" && <VisaBulletinView />}

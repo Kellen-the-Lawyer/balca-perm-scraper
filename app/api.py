@@ -1595,8 +1595,19 @@ async def aao_citation_graph(
     limit: int = Query(default=40, ge=5, le=80),
 ):
     """
-    Citation network for an AAO search query using aao_citations (AAO-to-AAO edges).
-    Nodes carry label/form_type/title instead of employer_name/case_number.
+    Citation network for an AAO search query.
+
+    Two kinds of nodes:
+      node_type="aao"       — primary AAO decisions (matched by search)
+      node_type="precedent" — I&N Dec. precedent decisions cited by the primaries
+                              (Chawathe, Dhanasar, Texperts, etc.)
+
+    Edges:
+      aao → aao via aao_citations.cited_aao_id
+      aao → precedent via aao_citations.cited_precedent_id
+
+    Precedent nodes are sized by how many primaries cite them, making landmark
+    cases like Chawathe or Dhanasar immediately visible as large hubs.
     """
     if not query.strip():
         return {"nodes": [], "edges": []}
@@ -1604,6 +1615,7 @@ async def aao_citation_graph(
     q_text = query.strip()
     is_form_query = bool(re.fullmatch(r"[A-Z]{1,3}-\d{2,5}[A-Z]?", q_text, re.IGNORECASE))
 
+    # ── Step 1: primary AAO nodes ──────────────────────────────────────────
     if is_form_query:
         primary_rows = await database.fetch_all(text("""
             SELECT id, filename, title, form_type, decision_date::text AS date, outcome,
@@ -1631,16 +1643,56 @@ async def aao_citation_graph(
 
     primary_ids = [r["id"] for r in primary_rows]
 
-    # Edges between primaries via AAO-to-AAO citations
-    edge_rows = await database.fetch_all(text("""
+    # ── Step 2: AAO-to-AAO edges between primaries ─────────────────────────
+    aao_edge_rows = await database.fetch_all(text("""
         SELECT citing_id AS source, cited_aao_id AS target
         FROM aao_citations
         WHERE citing_id = ANY(:ids) AND cited_aao_id = ANY(:ids)
           AND cited_aao_id IS NOT NULL
     """).bindparams(ids=primary_ids))
 
-    # Secondary nodes: cited by primaries but not in the primary set
-    secondary_cite_rows = await database.fetch_all(text("""
+    # ── Step 3: precedent nodes cited by primaries ─────────────────────────
+    prec_cite_rows = await database.fetch_all(text("""
+        SELECT ac.citing_id, ac.cited_precedent_id,
+               pd.id, pd.citation, pd.party_name, pd.year, pd.decision_type
+        FROM aao_citations ac
+        JOIN precedent_decisions pd ON pd.id = ac.cited_precedent_id
+        WHERE ac.citing_id = ANY(:ids)
+          AND ac.cited_precedent_id IS NOT NULL
+    """).bindparams(ids=primary_ids))
+
+    # Count how many primaries cite each precedent
+    prec_map = {}
+    prec_edges = []
+    for row in prec_cite_rows:
+        pid = row["cited_precedent_id"]
+        # Use a namespaced id so precedent and AAO ids don't collide
+        node_id = f"prec-{pid}"
+        if node_id not in prec_map:
+            prec_map[node_id] = {
+                "id": node_id,
+                "prec_id": pid,
+                "label": row["party_name"] or row["citation"],
+                "citation": row["citation"],
+                "party_name": row["party_name"],
+                "year": row["year"],
+                "decision_type": row["decision_type"],
+                "cited_by_count": 0,
+                "node_type": "precedent",
+            }
+        prec_map[node_id]["cited_by_count"] += 1
+        prec_edges.append({"source": row["citing_id"], "target": node_id})
+
+    # Keep only the top-cited precedents (cap at 20 to keep graph readable)
+    prec_nodes = sorted(prec_map.values(), key=lambda x: -x["cited_by_count"])
+    # Minimum: cited by at least 2 primaries unless very few qualify
+    min_cites = 2 if len([p for p in prec_nodes if p["cited_by_count"] >= 2]) >= 3 else 1
+    prec_nodes = [p for p in prec_nodes if p["cited_by_count"] >= min_cites][:20]
+    kept_prec_ids = {p["id"] for p in prec_nodes}
+    prec_edges = [e for e in prec_edges if e["target"] in kept_prec_ids]
+
+    # ── Step 4: AAO secondary nodes (cited by primaries, not in primaries) ──
+    aao_secondary_rows = await database.fetch_all(text("""
         SELECT ac.citing_id, ac.cited_aao_id,
                d.id, d.filename, d.title, d.form_type,
                d.decision_date::text AS date, d.outcome
@@ -1651,56 +1703,57 @@ async def aao_citation_graph(
           AND ac.cited_aao_id != ALL(:ids)
     """).bindparams(ids=primary_ids))
 
-    secondary_map = {}
-    secondary_edges = []
-    for row in secondary_cite_rows:
+    aao_sec_map = {}
+    aao_sec_edges = []
+    for row in aao_secondary_rows:
         sid = row["cited_aao_id"]
-        if sid not in secondary_map:
-            secondary_map[sid] = {
-                "id": sid,
-                "filename": row["filename"],
-                "title": row["title"],
-                "form_type": row["form_type"],
-                "date": row["date"],
-                "outcome": row["outcome"],
-                "cited_by_count": 0,
+        if sid not in aao_sec_map:
+            aao_sec_map[sid] = {
+                "id": sid, "filename": row["filename"], "title": row["title"],
+                "form_type": row["form_type"], "date": row["date"],
+                "outcome": row["outcome"], "cited_by_count": 0, "node_type": "aao",
             }
-        secondary_map[sid]["cited_by_count"] += 1
-        secondary_edges.append({"source": row["citing_id"], "target": sid})
+        aao_sec_map[sid]["cited_by_count"] += 1
+        aao_sec_edges.append({"source": row["citing_id"], "target": sid})
 
-    secondaries = sorted(secondary_map.values(), key=lambda x: -x["cited_by_count"])
-    min_citations = 2 if len([s for s in secondaries if s["cited_by_count"] >= 2]) >= 3 else 1
-    secondaries = [s for s in secondaries if s["cited_by_count"] >= min_citations][:30]
-    secondary_ids = {s["id"] for s in secondaries}
-    secondary_edges = [e for e in secondary_edges if e["target"] in secondary_ids]
+    aao_secondaries = sorted(aao_sec_map.values(), key=lambda x: -x["cited_by_count"])
+    min2 = 2 if len([s for s in aao_secondaries if s["cited_by_count"] >= 2]) >= 3 else 1
+    aao_secondaries = [s for s in aao_secondaries if s["cited_by_count"] >= min2][:15]
+    aao_sec_ids = {s["id"] for s in aao_secondaries}
+    aao_sec_edges = [e for e in aao_sec_edges if e["target"] in aao_sec_ids]
 
+    # ── Assemble final response ────────────────────────────────────────────
     nodes = []
     for r in primary_rows:
         nodes.append({
-            "id": r["id"],
+            "id": r["id"], "node_type": "aao", "tier": "primary",
             "label": r["title"] or r["form_type"] or r["filename"],
-            "filename": r["filename"],
-            "form_type": r["form_type"],
-            "date": r["date"],
-            "outcome": r["outcome"],
-            "tier": "primary",
+            "filename": r["filename"], "form_type": r["form_type"],
+            "date": r["date"], "outcome": r["outcome"],
             "rank": float(r["rank"] or 0),
         })
-    for s in secondaries:
+    for s in aao_secondaries:
         nodes.append({
             **s,
             "label": s["title"] or s["form_type"] or s["filename"],
-            "tier": "secondary",
-            "rank": 0.0,
+            "tier": "secondary", "rank": 0.0,
         })
+    for p in prec_nodes:
+        nodes.append({**p, "tier": "secondary", "rank": 0.0})
+
+    edges = (
+        [{"source": e["source"], "target": e["target"]} for e in aao_edge_rows]
+        + aao_sec_edges
+        + prec_edges
+    )
 
     return {
         "query": q_text,
         "nodes": nodes,
-        "edges": [{"source": e["source"], "target": e["target"]} for e in edge_rows]
-               + secondary_edges,
+        "edges": edges,
         "primary_count": len(primary_rows),
-        "secondary_count": len(secondaries),
+        "secondary_count": len(aao_secondaries) + len(prec_nodes),
+        "precedent_count": len(prec_nodes),
     }
 
 
