@@ -407,7 +407,7 @@ function SearchView({ externalDecisionId, externalQuery, onViewGraph }) {
     }
   }, [q, outcome, regulation, dateFrom, dateTo, employer, caseNumber, panel, hasCitations, hasRegulations, includeDocketing, sortBy]);
 
-  const splitView = selectedId && (searched || !!externalDecisionId);
+  const splitView = (selectedId || precId) && (searched || !!externalDecisionId);
 
   return (
     <div className="search-view-root" style={{ height: "100%", display: "flex", overflow: "hidden" }}>
@@ -2826,7 +2826,7 @@ function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }) {
           )}
           {!loading && searched && results && (<>
             <div style={{ padding: splitView ? "6px 12px" : "8px 24px", fontSize: 10, color: "var(--text3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.05em" }}>{results.total?.toLocaleString()} DECISIONS</div>
-            {results.results?.map((r, i) => (<AAOResultRow key={r.id} row={r} selected={r.id === selectedId} compact={splitView} onSelect={() => setSelectedId(r.id)} index={i} activeQuery={activeQuery} />))}
+            {results.results?.map((r, i) => (<AAOResultRow key={r.id} row={r} selected={r.id === selectedId} compact={splitView} onSelect={() => { setSelectedId(r.id); setPrecId(null); }} index={i} activeQuery={activeQuery} />))}
             {results.total > 20 && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: splitView ? "10px 12px" : "14px 24px", borderTop: "1px solid var(--border)" }}>
                 <button onClick={() => search(page - 1)} disabled={page <= 1} style={{ opacity: page <= 1 ? 0.3 : 1, fontSize: 12 }}>←</button>
@@ -2839,21 +2839,30 @@ function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }) {
         </div>
       </div>
       {splitView && (
-        <div className="search-detail-panel" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", animation: "fadeUp 0.18s ease" }}>
-          <AAODecisionDetail decisionId={selectedId} query={activeQuery} precedentMap={precedentMap} onNavigate={(id, type) => {
-            if (type === 'precedent' || type === 'adopted') setPrecId(id);
-            else setSelectedId(id);
-          }} onViewGraph={onViewGraph} />
-        </div>
-      )}
-
-      {/* Precedent detail modal overlay */}
-      {precId && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "stretch", justifyContent: "flex-end" }}
-          onClick={e => { if (e.target === e.currentTarget) setPrecId(null); }}>
-          <div style={{ width: "min(600px, 90vw)", background: "var(--bg)", borderLeft: "1px solid var(--border2)", boxShadow: "-8px 0 32px #00000066", display: "flex", flexDirection: "column", animation: "fadeUp 0.18s ease" }}>
-            <PrecedentDetail id={precId} onClose={() => setPrecId(null)} />
-          </div>
+        <div className="search-detail-panel" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "row" }}>
+          {/* Main detail: AAO decision when selectedId is set */}
+          {selectedId && (
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", animation: "fadeUp 0.18s ease", borderRight: precId ? "1px solid var(--border)" : "none" }}>
+              <AAODecisionDetail decisionId={selectedId} query={activeQuery} precedentMap={precedentMap} onNavigate={(id, type) => {
+                if (type === 'precedent' || type === 'adopted') setPrecId(id);
+                else setSelectedId(id);
+              }} onViewGraph={onViewGraph} />
+            </div>
+          )}
+          {/* Precedent panel: shown inline when no AAO decision is open (full width),
+              or as a side panel to the right of an open AAO decision */}
+          {precId && !selectedId && (
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", animation: "fadeUp 0.18s ease" }}>
+              <PrecedentDetail id={precId} onClose={() => setPrecId(null)}
+                onViewGraph={onViewGraph} showGraphButton />
+            </div>
+          )}
+          {precId && selectedId && (
+            <div style={{ width: "min(520px, 45%)", overflow: "hidden", display: "flex", flexDirection: "column", animation: "fadeUp 0.18s ease", flexShrink: 0 }}>
+              <PrecedentDetail id={precId} onClose={() => setPrecId(null)}
+                onViewGraph={onViewGraph} showGraphButton />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2878,7 +2887,7 @@ function AAOResultRow({ row, onSelect, selected, compact, index, activeQuery }) 
   );
 }
 
-function PrecedentDetail({ id, onClose }) {
+function PrecedentDetail({ id, onClose, onViewGraph, showGraphButton }) {
   const { data, loading } = useFetch(id ? `${API}/precedents/${id}` : null);
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}><Spinner /></div>;
   if (!data) return null;
@@ -2902,7 +2911,17 @@ function PrecedentDetail({ id, onClose }) {
           </div>
           <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: accentColor }}>{data.citation}</div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          {showGraphButton && onViewGraph && (
+            <button onClick={() => onViewGraph(data.party_name || data.citation)}
+              title="Citation graph"
+              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#34d399", background: "none", padding: "5px 10px", border: "1px solid #34d39944", borderRadius: "var(--radius)", cursor: "pointer", whiteSpace: "nowrap" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#34d39911"}
+              onMouseLeave={e => e.currentTarget.style.background = ""}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="12" x2="17" y2="6"/><line x1="7" y1="12" x2="17" y2="18"/></svg>
+              Graph
+            </button>
+          )}
           {data.pdf_path && (
             <a href={`${API}/precedents/${id}/pdf`} target="_blank" rel="noreferrer"
               style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: accentColor, textDecoration: "none", padding: "5px 10px", border: `1px solid ${accentColor}`, borderRadius: "var(--radius)", whiteSpace: "nowrap" }}
