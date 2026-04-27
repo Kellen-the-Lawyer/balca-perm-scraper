@@ -4243,6 +4243,7 @@ export default function App() {
   const [searchKey, setSearchKey] = useState(0);
   const [headerQuery, setHeaderQuery] = useState("");
   const [graphSeed, setGraphSeed] = useState("");
+  const [aaoGraphKey, setAaoGraphKey] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const goHome = () => { setView("landing"); setExternalDecision(null); setSearchKey(k => k + 1); };
@@ -4254,7 +4255,7 @@ export default function App() {
     else setView(corpus === "regulation" ? "regulations" : "policy");
   };
   const openGraph    = (seed) => { setGraphSeed(seed); setSearchKey(k => k + 1); setView("citation-graph"); };
-  const openGraphAAO = (seed) => { setGraphSeed(seed); setSearchKey(k => k + 1); setView("aao-citation-graph"); };
+  const openGraphAAO = (seed) => { setGraphSeed(seed); setAaoGraphKey(k => k + 1); setView("aao-citation-graph"); };
 
   const handleHeaderSearch = (e) => {
     e.preventDefault();
@@ -4423,7 +4424,7 @@ export default function App() {
         {view === "regulations" && <RegulationsView />}
         {view === "policy" && <PolicyView />}
         {view === "citation-graph" && <CitationGraphView key={`graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "balca" }); setView("balca"); }} initialQuery={graphSeed} />}
-        {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} onOpenPrecedent={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} initialQuery={graphSeed} />}
+        {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${aaoGraphKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} onOpenPrecedent={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} initialQuery={graphSeed} />}
         {view === "ask" && <AskView onNavigate={(corpus, id) => { if (corpus === "balca") { setExternalDecision({ id, query: "", source: "balca" }); setView("balca"); } else if (corpus === "aao") { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); } else if (corpus === "regulation") { setView("regulations"); } else if (corpus === "policy") { setView("policy"); } }} />}
         {view === "perm-comparer" && <PermComparer />}
         {view === "visa-bulletin" && <VisaBulletinView />}
