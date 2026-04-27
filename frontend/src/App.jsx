@@ -3016,7 +3016,7 @@ function AAODecisionDetail({ decisionId, query, onNavigate, precedentMap, onView
             {data.decision_date && <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "'DM Mono', monospace" }}>{data.decision_date}</span>}
           </div>
           {onViewGraph && (
-            <button onClick={() => onViewGraph(data.title || data.form_type || String(decisionId))}
+            <button onClick={() => onViewGraph(data.is_precedent && data.party_name ? data.party_name : (data.title || data.form_type || String(decisionId)))}
               style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--green)", padding: "5px 10px", border: "1px solid var(--green)", borderRadius: "var(--radius)", whiteSpace: "nowrap", flexShrink: 0, background: "none" }}
               onMouseEnter={e => e.currentTarget.style.background = "var(--green-dim)"}
               onMouseLeave={e => e.currentTarget.style.background = ""}>

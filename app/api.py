@@ -1648,6 +1648,121 @@ async def aao_citation_graph(
     q_text = query.strip()
     is_form_query = bool(re.fullmatch(r"[A-Z]{1,3}-\d{2,5}[A-Z]?", q_text, re.IGNORECASE))
 
+    # ── Precedent-seed mode ────────────────────────────────────────────────
+    # When the query exactly matches a precedent's party_name (e.g. "Chawathe",
+    # "Dhanasar"), build the graph centred on decisions that CITE that precedent
+    # rather than doing a full-text search. The precedent becomes a forced hub.
+    prec_seed = await database.fetch_one(text("""
+        SELECT id, party_name, citation, decision_type
+        FROM aao_decisions
+        WHERE is_precedent = TRUE
+          AND (party_name ILIKE :q OR citation ILIKE :q)
+        ORDER BY CASE WHEN party_name ILIKE :q THEN 0 ELSE 1 END
+        LIMIT 1
+    """).bindparams(q=q_text))
+
+    if prec_seed:
+        prec_id   = prec_seed["id"]
+        prec_dict = dict(prec_seed)
+
+        # Top citing decisions, ranked by how many OTHER precedents they also cite
+        citing_rows = await database.fetch_all(text("""
+            SELECT d.id, d.filename, d.title, d.form_type,
+                   d.decision_date::text AS date, d.outcome,
+                   d.is_precedent, d.party_name, d.citation,
+                   (SELECT COUNT(*) FROM aao_citations ac2
+                    WHERE ac2.citing_id = d.id
+                      AND ac2.cited_aao_id IN (SELECT id FROM aao_decisions WHERE is_precedent = TRUE)
+                   ) AS prec_cite_count
+            FROM aao_citations ac
+            JOIN aao_decisions d ON d.id = ac.citing_id
+            WHERE ac.cited_aao_id = :pid
+              AND d.is_precedent = FALSE
+            ORDER BY prec_cite_count DESC, d.decision_date DESC NULLS LAST
+            LIMIT :lim
+        """).bindparams(pid=prec_id, lim=limit))
+
+        if not citing_rows:
+            return {"nodes": [], "edges": []}
+
+        citing_ids = [r["id"] for r in citing_rows]
+
+        # Edges between the citing decisions themselves
+        inter_edges = await database.fetch_all(text("""
+            SELECT citing_id AS source, cited_aao_id AS target
+            FROM aao_citations
+            WHERE citing_id = ANY(:ids) AND cited_aao_id = ANY(:ids)
+        """).bindparams(ids=citing_ids))
+
+        # Other precedents these decisions also cite (sibling precedents)
+        sibling_rows = await database.fetch_all(text("""
+            SELECT ac.citing_id, ac.cited_aao_id,
+                   d.id, d.party_name, d.citation, d.decision_type,
+                   d.decision_date::text AS date
+            FROM aao_citations ac
+            JOIN aao_decisions d ON d.id = ac.cited_aao_id
+            WHERE ac.citing_id = ANY(:ids)
+              AND d.is_precedent = TRUE
+              AND d.id != :pid
+        """).bindparams(ids=citing_ids, pid=prec_id))
+
+        sib_map = {}
+        sib_edges = []
+        for row in sibling_rows:
+            sid = row["cited_aao_id"]
+            if sid not in sib_map:
+                sib_map[sid] = {
+                    "id": sid, "node_type": "precedent", "tier": "secondary",
+                    "label": row["party_name"] or row["citation"],
+                    "party_name": row["party_name"], "citation": row["citation"],
+                    "date": row["date"], "is_precedent": True,
+                    "outcome": None, "form_type": None, "filename": None,
+                    "cited_by_count": 0, "rank": 0.0,
+                }
+            sib_map[sid]["cited_by_count"] += 1
+            sib_edges.append({"source": row["citing_id"], "target": sid})
+
+        # Keep top sibling precedents
+        siblings = sorted(sib_map.values(), key=lambda x: -x["cited_by_count"])[:15]
+        kept_sib = {s["id"] for s in siblings}
+        sib_edges = [e for e in sib_edges if e["target"] in kept_sib]
+
+        # Build node list — hub precedent first (primary tier), then citing decisions
+        nodes = [{
+            "id": prec_id, "node_type": "precedent", "tier": "primary",
+            "label": prec_dict["party_name"],
+            "party_name": prec_dict["party_name"], "citation": prec_dict["citation"],
+            "is_precedent": True, "filename": None, "form_type": None,
+            "date": None, "outcome": None,
+            "cited_by_count": len(citing_ids), "rank": float(len(citing_ids)),
+        }]
+        for r in citing_rows:
+            nodes.append({
+                "id": r["id"], "node_type": "aao", "tier": "secondary",
+                "label": r["title"] or r["form_type"] or r["filename"] or "",
+                "filename": r["filename"], "form_type": r["form_type"],
+                "date": r["date"], "outcome": r["outcome"],
+                "is_precedent": False, "party_name": None, "citation": None,
+                "cited_by_count": int(r["prec_cite_count"]), "rank": 0.0,
+            })
+        for s in siblings:
+            nodes.append(s)
+
+        edges = (
+            [{"source": row["id"], "target": prec_id} for row in citing_rows]
+            + [{"source": e["source"], "target": e["target"]} for e in inter_edges]
+            + sib_edges
+        )
+
+        return {
+            "query": q_text,
+            "nodes": nodes,
+            "edges": edges,
+            "primary_count": 1,
+            "secondary_count": len(citing_rows) + len(siblings),
+            "precedent_count": 1 + len(siblings),
+        }
+
     # ── Step 1: primary nodes (exclude is_precedent rows from primary set) ─
     if is_form_query:
         primary_rows = await database.fetch_all(text("""
