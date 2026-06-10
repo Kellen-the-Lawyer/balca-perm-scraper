@@ -94,3 +94,4 @@ tests/OALJ*
 # Scratch / one-off eval scripts
 eval_mistral.py
 reorganize.sh
+Antigravity/
