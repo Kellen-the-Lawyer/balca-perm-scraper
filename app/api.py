@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from extract_pwd import extract_pwd_from_bytes
 from extract_experience_letter import extract_letter_from_bytes
+import kanban as kanban_module
 from typing import Any, Optional
 
 import httpx
@@ -50,11 +51,13 @@ database = databases.Database(DATABASE_URL)
 async def lifespan(app: FastAPI):
     await database.connect()
     await ensure_operational_schema()
+    await kanban_module.ensure_kanban_schema(database)
     yield
     await database.disconnect()
 
 app = FastAPI(title="PERM Decisions Research API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.include_router(kanban_module.register_routes(database))
 
 def q(sql, **params):
     """Bind params to a SQLAlchemy text() clause."""
@@ -2002,19 +2005,40 @@ async def extract_pwd_debug(file: UploadFile = File(...)):
 
 # ── Generic PDF text extraction (no AI) ──────────────────────────────────────
 
+def _docx_to_text(data: bytes) -> str:
+    """Extract plain text from a .docx (Office Open XML) using only the stdlib.
+    Preserves paragraph and table-row breaks and tab stops. No AI involved."""
+    import zipfile, io, re, html
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        xml = z.read("word/document.xml").decode("utf-8", "ignore")
+    # Paragraph and table-row ends become newlines; tabs become tabs.
+    xml = xml.replace("</w:p>", "\n").replace("</w:tr>", "\n")
+    xml = re.sub(r"<w:tab[^>]*/>", "\t", xml)
+    text = re.sub(r"<[^>]+>", "", xml)
+    text = html.unescape(text)
+    # Collapse runs of blank lines.
+    return re.sub(r"\n[ \t]*\n[ \t]*\n+", "\n\n", text).strip()
+
+
 @app.post("/api/extract-text")
 async def extract_text_endpoint(file: UploadFile = File(...)):
-    """Extract all text from a PDF using pdfplumber. No AI involved."""
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="File must be a PDF")
-    pdf_bytes = await file.read()
+    """Extract all text from a PDF or Word (.docx) document. No AI involved."""
+    name = (file.filename or "").lower()
+    data = await file.read()
     try:
-        import pdfplumber, io
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            pages = [p.extract_text() or "" for p in pdf.pages]
-        text = "\n\n".join(p for p in pages if p.strip())
+        if name.endswith(".docx"):
+            text = _docx_to_text(data)
+        elif name.endswith(".pdf"):
+            import pdfplumber, io
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                pages = [p.extract_text() or "" for p in pdf.pages]
+            text = "\n\n".join(p for p in pages if p.strip())
+        elif name.endswith(".doc"):
+            raise HTTPException(status_code=400, detail="Legacy .doc files are not supported — please save as .docx or PDF.")
+        else:
+            raise HTTPException(status_code=400, detail="File must be a PDF or Word (.docx) document.")
         if not text.strip():
-            raise HTTPException(status_code=422, detail="No text could be extracted from this PDF.")
+            raise HTTPException(status_code=422, detail="No text could be extracted from this document.")
         return {"text": text}
     except HTTPException:
         raise
@@ -2607,7 +2631,7 @@ async def ask(request: Request):
     body       = await request.json()
     question   = body.get("question", "").strip()
     corpus_filter = body.get("corpus_filter", [])  # empty = all corpora
-    top_k      = min(int(body.get("top_k", 12)).bindparams(**20))
+    top_k      = min(int(body.get("top_k", 12)), 20)
     do_stream  = body.get("stream", True)
 
     if not question:
@@ -2622,7 +2646,7 @@ async def ask(request: Request):
 
     # 2. Retrieve top-k chunks by cosine similarity
     corpus_where = ""
-    bind = {"vec": q_vec_str, "k": top_k}
+    bind = {"k": top_k}
     if corpus_filter:
         placeholders = ", ".join(f":c{i}" for i in range(len(corpus_filter)))
         corpus_where = f"WHERE corpus IN ({placeholders})"
@@ -2633,10 +2657,10 @@ async def ask(request: Request):
         text(f"""
             SELECT id, corpus, source_id, source_label, source_date,
                    source_outcome, chunk_index, chunk_text, cfr_citation, form_type,
-                   1 - (embedding <=> :vec::vector) AS similarity
+                   1 - (embedding <=> '{q_vec_str}'::vector) AS similarity
             FROM rag_chunks
             {corpus_where}
-            ORDER BY embedding <=> :vec::vector
+            ORDER BY embedding <=> '{q_vec_str}'::vector
             LIMIT :k
         """).bindparams(**bind)
     )

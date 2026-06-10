@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import "./index.css";
 import { VisaBulletinView } from "./VisaBulletinView";
 import { OflcView } from "./OflcView";
+import { KanbanView } from "./KanbanView";
 import { API } from "./apiBase";
+import { auditRecruitmentPiece, RECRUITMENT_TYPES } from "./permCompliance";
 
 const OUTCOME = {
   Affirmed:  { bg: "var(--green-dim)",  text: "var(--green)",  dot: "#34d399" },
@@ -1827,7 +1829,7 @@ function pDiffTok(a,b,s,ci){const at=permTok(a,s),bt=permTok(b,s),m=pLcs(at,bt,c
 function pDiffLines(a,b,s,ci){const al=permSplitLines(a),bl=permSplitLines(b);const eqLine=(x,y)=>ci?x.toLowerCase()===y.toLowerCase():x===y;const m=pLcs(al,bl,ci),ops=[];let ai=0,bi=0;while(ai<al.length&&bi<bl.length){if(eqLine(al[ai],bl[bi])){ops.push({t:'eq',s:al[ai]});ai++;bi++;}else if(m[ai+1][bi]>=m[ai][bi+1])ops.push({t:'rm',s:al[ai++]});else ops.push({t:'add',s:bl[bi++]});}while(ai<al.length)ops.push({t:'rm',s:al[ai++]});while(bi<bl.length)ops.push({t:'add',s:bl[bi++]});const lines=[];let oi=0,rn=1,cn=1;while(oi<ops.length){const cur=ops[oi];if(cur.t==='eq'){lines.push({rn,cn,rt:[{t:cur.s,c:false}],ct:[{t:cur.s,c:false}],ch:false});rn++;cn++;oi++;continue;}const rm=[],add=[];while(oi<ops.length&&ops[oi].t!=='eq'){const p=ops[oi++];(p.t==='rm'?rm:add).push(p.s);}const sz=Math.max(rm.length,add.length);for(let k=0;k<sz;k++){const{ar,br}=pDiffTok(rm[k]??'',add[k]??'',s,ci);lines.push({rn:k<rm.length?rn:null,cn:k<add.length?cn:null,rt:ar,ct:br,ch:true});if(k<rm.length)rn++;if(k<add.length)cn++;}}return lines;}
 function pSummarize(field,ref,cmp,strict,igFmt){const r=igFmt?permNorm(ref):ref,c=igFmt?permNorm(cmp):cmp,lines=pDiffLines(r,c,strict,igFmt),changed=lines.filter(l=>l.ch).length,exact=igFmt?r.toLowerCase()===c.toLowerCase():r===c;return{field,exact,status:exact?'Exact Match':'Differences Found',detail:exact?(igFmt?'Match when formatting ignored.':'Texts are identical.'):`${changed} differing line${changed===1?'':'s'}.`,lines};}
 function PTokens({tokens,kind}){if(!tokens.length)return <span style={{color:'var(--text3)',fontStyle:'italic'}}>(no text)</span>;return tokens.map((tk,i)=><span key={i} style={tk.c?{display:'inline',borderRadius:4,padding:'0 1px',background:kind==='reference'?'var(--red-dim)':'var(--green-dim)',color:kind==='reference'?'var(--red)':'var(--green)'}:{}}>{tk.t}</span>);}
-function pParseCur(v){const n=Number((v||'').replace(/[$,\s]/g,''));return isFinite(n)?n:null;}
+function pParseCur(v){const m=(v||'').replace(/,/g,'').match(/-?\d+(?:\.\d+)?/);return m?Number(m[0]):null;}
 function pFmt(v){const n=pParseCur(v);if(n===null)return v||'(empty)';return n.toLocaleString('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2});}
 
 const PS={
@@ -1872,15 +1874,20 @@ function PermDiffPanel({res,title}){
 // onPwdDrop(file)    — called when a PDF is dropped and this box handles PWD parsing
 // onLetterDrop(file) — called when a PDF is dropped and this box handles letter parsing
 // If neither is provided, falls back to generic /api/extract-text plain text dump.
-function DropTextarea({ value, onChange, minHeight=260, borderColor, background, placeholder, onPwdDrop, onLetterDrop }){
+function DropTextarea({ value, onChange, minHeight=260, borderColor, background, placeholder, onPwdDrop, onLetterDrop, acceptDocx=false }){
   const [dragging, setDragging] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractErr, setExtractErr] = useState('');
   const fileRef = useRef(null);
 
+  const isDocx = (f) => /\.docx$/i.test(f.name || '') ||
+    f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const handleFile = async (file) => {
-    if (!file || file.type !== 'application/pdf') {
-      setExtractErr('Only PDF files are supported for drag-and-drop.');
+    // PWD/letter drops are PDF-only; the generic recruitment path also takes .docx.
+    const okPdf = file && file.type === 'application/pdf';
+    const okDocx = acceptDocx && file && isDocx(file);
+    if (!okPdf && !okDocx) {
+      setExtractErr(acceptDocx ? 'Only PDF or Word (.docx) files are supported.' : 'Only PDF files are supported for drag-and-drop.');
       return;
     }
     setExtracting(true);
@@ -1955,11 +1962,11 @@ function DropTextarea({ value, onChange, minHeight=260, borderColor, background,
       {dragging && (
         <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'var(--radius)',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}>
           <div style={{padding:'10px 20px',background:'var(--bg2)',borderRadius:20,border:'1px solid var(--amber)',fontSize:13,color:'var(--amber)',fontWeight:600}}>
-            Drop PDF to extract
+            {acceptDocx ? 'Drop document to extract' : 'Drop PDF to extract'}
           </div>
         </div>
       )}
-      <input ref={fileRef} type="file" accept="application/pdf" style={{display:'none'}} onChange={e => handleFile(e.target.files[0])}/>
+      <input ref={fileRef} type="file" accept={acceptDocx ? 'application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'} style={{display:'none'}} onChange={e => handleFile(e.target.files[0])}/>
       {extractErr && <div style={{marginTop:6,fontSize:11,color:'var(--red)'}}>{extractErr}</div>}
     </div>
   );
@@ -2419,11 +2426,169 @@ function cardHeaderStatic(kicker, title, match) {
   );
 }
 
+// ── Recruitment Compliance Audit (mode 2 of the PERM Comparer) ───────────────
+// Tests each recruitment piece against the PWD using the deterministic engine in
+// permCompliance.js (grounded in 20 CFR 656 + BALCA). See
+// docs/perm-recruitment-comparer-analysis.json.
+const AUDIT_STATUS = {
+  pass:   { bg:'var(--green-dim)', fg:'var(--green)', label:'Pass'   },
+  fail:   { bg:'var(--red-dim)',   fg:'var(--red)',   label:'Fail'   },
+  flag:   { bg:'var(--amber-dim)', fg:'var(--amber)', label:'Flag'   },
+  review: { bg:'var(--bg4)',       fg:'var(--text2)', label:'Review' },
+  na:     { bg:'var(--bg4)',       fg:'var(--text3)', label:'N/A'    },
+};
+const VERDICT = {
+  compliant:            { bg:'var(--green-dim)', fg:'var(--green)', label:'Compliant' },
+  compliant_with_flags: { bg:'var(--amber-dim)', fg:'var(--amber)', label:'Compliant — items to verify' },
+  defective:            { bg:'var(--red-dim)',   fg:'var(--red)',   label:'Defective' },
+};
+
+function AuditStatusPill({status}){
+  const s=AUDIT_STATUS[status]||AUDIT_STATUS.review;
+  return <span style={{display:'inline-flex',alignItems:'center',borderRadius:999,padding:'2px 9px',fontSize:10,fontWeight:600,background:s.bg,color:s.fg,whiteSpace:'nowrap'}}>{s.label}</span>;
+}
+
+// Drag-and-drop zone for the reference PWD (ETA-9141) in Recruitment Review mode.
+function PwdDropZone({onPwdDrop,loading,pwd}){
+  const [dragging,setDragging]=useState(false);
+  const [err,setErr]=useState('');
+  const fileRef=useRef(null);
+  const handle=async(file)=>{
+    if(!file)return;
+    if(file.type!=='application/pdf'){setErr('Please drop a PDF of the ETA-9141.');return;}
+    setErr('');
+    try{ await onPwdDrop(file); }catch(e){ setErr('Extraction failed: '+e.message); }
+    if(fileRef.current)fileRef.current.value='';
+  };
+  const havePwd=!!(pwd.jobTitle||pwd.city||pwd.pwdWage);
+  return (
+    <div
+      onClick={()=>fileRef.current?.click()}
+      onDragOver={e=>{e.preventDefault();setDragging(true);}}
+      onDragLeave={()=>setDragging(false)}
+      onDrop={e=>{e.preventDefault();setDragging(false);handle(e.dataTransfer.files[0]);}}
+      style={{cursor:'pointer',borderRadius:'var(--radius-lg)',border:`1.5px dashed ${dragging?'var(--amber)':'var(--border2)'}`,background:dragging?'var(--amber-dim)':'var(--bg)',padding:'18px 16px',textAlign:'center',transition:'all .15s'}}>
+      {loading?(
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,color:'var(--text2)',fontSize:12}}>
+          <div style={{width:12,height:12,border:'2px solid var(--amber)',borderTopColor:'transparent',borderRadius:'50%',animation:'spin .7s linear infinite'}}/> Extracting PWD…
+        </div>
+      ):havePwd?(
+        <div style={{fontSize:12,color:'var(--text2)'}}>
+          <div style={{fontWeight:600,color:'var(--text)',marginBottom:3}}>{pwd.jobTitle||'(no title)'}</div>
+          {pwd.city}{pwd.stateVal?`, ${pwd.stateVal}`:''} · {pwd.pwdWage||'(no wage)'}{pwd.socCode?` · SOC ${pwd.socCode}`:''}{pwd.pwdExpirationDate?` · valid to ${pwd.pwdExpirationDate}`:''}
+          <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>Drop a different ETA-9141 PDF to replace</div>
+        </div>
+      ):(
+        <div style={{fontSize:12.5,color:'var(--text3)'}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" style={{marginBottom:6,opacity:.7}}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div style={{fontWeight:600,color:'var(--text2)'}}>Drag &amp; drop the Prevailing Wage Determination (ETA-9141 PDF)</div>
+          <div style={{marginTop:3}}>or click to browse — fields populate automatically</div>
+        </div>
+      )}
+      {err&&<div style={{marginTop:8,fontSize:11,color:'var(--red)'}}>{err}</div>}
+      <input ref={fileRef} type="file" accept="application/pdf" style={{display:'none'}} onChange={e=>handle(e.target.files[0])}/>
+    </div>
+  );
+}
+
+function RecruitmentPieceCard({piece,pwd,refText,onChange,onRemove}){
+  const [showDiff,setShowDiff]=useState(false);
+  const meta=RECRUITMENT_TYPES[piece.type]||RECRUITMENT_TYPES.newspaper_general;
+  const audit=piece.rawText.trim()?auditRecruitmentPiece(pwd,piece):null;
+  const v=audit?VERDICT[audit.overallVerdict]:null;
+  // Visual comparison: recruitment text vs the PWD job description + minimum
+  // requirements (formatting ignored, to focus on substantive differences).
+  const diffRes=(piece.rawText.trim()&&(refText||'').trim())
+    ? pSummarize('Recruitment vs PWD',refText,piece.rawText,false,true) : null;
+  const dateInput=(label,key)=>(
+    <div><label style={{...PS.label,fontSize:10}}>{label}</label>
+      <input type="date" style={{...PS.input,fontSize:11,padding:'6px 8px'}} value={piece[key]||''} onChange={e=>onChange({[key]:e.target.value})}/></div>
+  );
+  return (
+    <div style={{...PS.card,marginBottom:16}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,marginBottom:12}}>
+        <select value={piece.type} onChange={e=>onChange({type:e.target.value})}
+          style={{...PS.input,width:'auto',flex:'0 1 460px',fontSize:12,fontWeight:600}}>
+          {[...new Set(Object.values(RECRUITMENT_TYPES).map(m=>m.group))].map(group=>(
+            <optgroup key={group} label={group}>
+              {Object.entries(RECRUITMENT_TYPES).filter(([,m])=>m.group===group).map(([k,m])=>(
+                <option key={k} value={k}>{m.label}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          {v&&<span style={{display:'inline-flex',alignItems:'center',borderRadius:999,padding:'4px 12px',fontSize:11,fontWeight:600,background:v.bg,color:v.fg}}>{v.label}</span>}
+          <button onClick={onRemove} title="Remove" style={{fontSize:11,padding:'4px 10px',background:'var(--bg3)',color:'var(--text3)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer'}}>Remove</button>
+        </div>
+      </div>
+      <DropTextarea value={piece.rawText} onChange={e=>onChange({rawText:e.target.value})} minHeight={120} acceptDocx
+        placeholder="Paste the recruitment text (ad, notice, posting), or drag a document (Word .docx or PDF) to extract…"/>
+      {/* Date / wage inputs that feed the deterministic checks */}
+      <div style={{display:'grid',gridTemplateColumns:meta.isNof?'1fr 1fr 1fr 1fr':'1fr 1fr',gap:10,marginTop:12}}>
+        {meta.isNof
+          ? <>{dateInput('Date posted','postedDate')}{dateInput('Date removed','removedDate')}{dateInput('9089 filing date','filingDate')}{dateInput('Offered wage ($)','offeredWage')}</>
+          : <>{dateInput('Publication date','pubDate')}
+              <div><label style={{...PS.label,fontSize:10}}>Offered wage to alien ($, optional)</label>
+                <input style={{...PS.input,fontSize:11,padding:'6px 8px'}} placeholder="$0" value={piece.offeredWage||''} onChange={e=>onChange({offeredWage:e.target.value})}/></div></>}
+      </div>
+      {audit&&(
+        <div style={{marginTop:14,display:'grid',gap:6}}>
+          {audit.findings.map((f,i)=>(
+            <div key={i} style={{display:'grid',gridTemplateColumns:'80px 1fr',gap:10,alignItems:'start',padding:'8px 10px',borderRadius:8,background:'var(--bg3)'}}>
+              <AuditStatusPill status={f.status}/>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:12,color:'var(--text)',fontWeight:600}}>{f.title}</div>
+                <div style={{fontSize:11.5,color:'var(--text2)',lineHeight:1.5,marginTop:2}}>{f.detail}</div>
+                {f.citation&&<div style={{fontSize:10,color:'var(--text3)',marginTop:3,fontFamily:"'DM Mono',monospace"}}>{f.citation}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {diffRes&&(
+        <div style={{marginTop:14}}>
+          <button onClick={()=>setShowDiff(s=>!s)}
+            style={{fontSize:11,padding:'5px 12px',background:'var(--bg3)',color:'var(--text2)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:6}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{transform:showDiff?'rotate(90deg)':'none',transition:'transform .15s'}}><polyline points="9 18 15 12 9 6"/></svg>
+            {showDiff?'Hide':'Show'} visual comparison vs PWD
+            {!diffRes.exact&&<span style={{color:'var(--amber)'}}>· {diffRes.detail}</span>}
+          </button>
+          {showDiff&&<div style={{marginTop:12}}><PermDiffPanel res={diffRes} title="Recruitment vs PWD (Job Description + Minimum Requirements)"/></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecruitmentAuditPanel({pwd,refText}){
+  const [pieces,setPieces]=useState([
+    {id:1,type:'newspaper_general',rawText:'',pubDate:'',postedDate:'',removedDate:'',filingDate:'',offeredWage:''},
+  ]);
+  const upd=(id,patch)=>setPieces(p=>p.map(x=>x.id===id?{...x,...patch}:x));
+  const add=()=>setPieces(p=>[...p,{id:(p.reduce((m,x)=>Math.max(m,x.id),0)+1),type:'job_search_website',rawText:'',pubDate:'',postedDate:'',removedDate:'',filingDate:'',offeredWage:''}]);
+  const rm=(id)=>setPieces(p=>p.length>1?p.filter(x=>x.id!==id):p);
+  return (
+    <div style={{display:'grid',gap:16,marginBottom:20}}>
+      <div style={{fontSize:14,fontFamily:"'DM Serif Display',serif",color:'var(--text)'}}>Recruitment Pieces</div>
+      {pieces.map(pc=>(
+        <RecruitmentPieceCard key={pc.id} piece={pc} pwd={pwd} refText={refText}
+          onChange={patch=>upd(pc.id,patch)} onRemove={()=>rm(pc.id)}/>
+      ))}
+      <button onClick={add} className="primary" style={{fontSize:12,padding:'9px 16px',justifySelf:'start'}}>+ Add recruitment piece</button>
+    </div>
+  );
+}
+
 function PermComparer(){
+  const [mode,setMode]=useState('diff'); // 'diff' | 'audit'
+  const [auditKey,setAuditKey]=useState(0); // bump to reset the recruitment-pieces panel
+  const [pwdData,setPwdData]=useState({}); // full extracted ETA-9141 dict (for the audit engine)
   const [jobTitle,setJobTitle]=useState('');
   const [city,setCity]=useState('');
   const [stateVal,setStateVal]=useState('');
   const [telecommute,setTelecommute]=useState('no');
+  const [telecommuteText,setTelecommuteText]=useState('');
   const [jdRef,setJdRef]=useState('');
   const [jdCmp,setJdCmp]=useState('');
   const [mrRef,setMrRef]=useState('');
@@ -2471,10 +2636,13 @@ function PermComparer(){
         throw new Error(err.detail || 'Extraction failed');
       }
       const d = await resp.json();
+      setPwdData(d);
       if (d.jobTitle) setJobTitle(d.jobTitle);
       if (d.city)     setCity(d.city);
       if (d.stateVal) setStateVal(d.stateVal);
-      setTelecommute(d.travel === 'yes' ? 'yes' : 'no');
+      setTelecommute(d.telecommuteDetail ? 'yes' : (d.travel === 'yes' ? 'yes' : 'no'));
+      setTelecommuteText(d.telecommuteDetail || '');
+      setTravel(d.travelDetail || '');
       if (d.jdRef)   setJdRef(d.jdRef);
       if (d.primDeg) setPrimDeg(d.primDeg);
       if (d.mrRef)   setMrRef(d.mrRef);
@@ -2507,7 +2675,7 @@ function PermComparer(){
     }
   };
 
-  const clearAll=()=>{setJobTitle('');setCity('');setStateVal('');setTelecommute('no');setJdRef('');setJdCmp('');setMrRef('');setMrCmp('');setPrimDeg('');setSecDeg('');setTravel('');setPwdWage('');setWageFrom('');setWageTo('');setResults(null);setPwdError('');setExpLetters([]);setShowExpModal(false);setDroppedLetter(null);};
+  const clearAll=()=>{setJobTitle('');setCity('');setStateVal('');setTelecommute('no');setTelecommuteText('');setJdRef('');setJdCmp('');setMrRef('');setMrCmp('');setPrimDeg('');setSecDeg('');setTravel('');setPwdWage('');setWageFrom('');setWageTo('');setResults(null);setPwdError('');setExpLetters([]);setShowExpModal(false);setDroppedLetter(null);setPwdData({});setAuditKey(k=>k+1);};
 
   const loadPwd=async(file)=>{
     if(!file)return;
@@ -2521,10 +2689,13 @@ function PermComparer(){
         throw new Error(err.detail||'Extraction failed');
       }
       const d=await resp.json();
+      setPwdData(d);
       if(d.jobTitle)setJobTitle(d.jobTitle);
       if(d.city)setCity(d.city);
       if(d.stateVal)setStateVal(d.stateVal);
-      setTelecommute(d.travel==='yes'?'yes':'no');
+      setTelecommute(d.telecommuteDetail?'yes':(d.travel==='yes'?'yes':'no'));
+      setTelecommuteText(d.telecommuteDetail||'');
+      setTravel(d.travelDetail||'');
       if(d.jdRef)setJdRef(d.jdRef);
       if(d.primDeg)setPrimDeg(d.primDeg);
       if(d.mrRef)setMrRef(d.mrRef);
@@ -2540,8 +2711,12 @@ function PermComparer(){
   const wageStatus=(()=>{
     const pwd=pParseCur(pwdWage),from=pParseCur(wageFrom),to=pParseCur(wageTo);
     if(pwd===null||from===null||!wageFrom.trim())return{status:'Needs Input',detail:'Enter PWD wage and From wage to validate.',pass:false};
-    if(from>pwd)return{status:'Pass',detail:to!==null?`Range ${pFmt(wageFrom)}–${pFmt(wageTo)} starts above PWD ${pFmt(pwdWage)}.`:`From wage ${pFmt(wageFrom)} exceeds PWD ${pFmt(pwdWage)}.`,pass:true};
-    return{status:'Flag',detail:`From wage ${pFmt(wageFrom)} must exceed PWD ${pFmt(pwdWage)}.`,pass:false};
+    // A wage (or the bottom of an advertised range) that is AT OR ABOVE the prevailing
+    // wage is compliant: the offered wage must "equal or exceed" the PWD (20 CFR 656.10(c)(1)),
+    // and an advertised range whose floor is no less than the PWD is permissible
+    // (20 CFR 656.17(f)(5); Credit Suisse Securities (USA) LLC, 2010-PER-00103).
+    if(from>=pwd)return{status:'Pass',detail:to!==null?`Range ${pFmt(wageFrom)}–${pFmt(wageTo)} starts at or above PWD ${pFmt(pwdWage)}.`:`From wage ${pFmt(wageFrom)} is at or above PWD ${pFmt(pwdWage)}.`,pass:true};
+    return{status:'Flag',detail:`From wage ${pFmt(wageFrom)} is below PWD ${pFmt(pwdWage)} — must be at or above it.`,pass:false};
   })();
 
   const pillBtn=(label,active,onClick)=>(
@@ -2557,6 +2732,22 @@ function PermComparer(){
     </div>
   );
 
+  // PWD reference for the audit engine: the full extracted dict, with the
+  // user-editable fields (which may have been corrected on screen) taking
+  // precedence over the raw extraction.
+  const pwdForAudit={
+    ...pwdData,
+    jobTitle, city, stateVal,
+    pwdWage, pwdWageNum:pParseCur(pwdWage),
+    travel: (travel&&travel.trim())?'yes':(pwdData.travel||'no'),
+    travelDetail: travel, telecommuteDetail: telecommuteText,
+    employerName: pwdData.employerName||'',
+    jdRef, mrRef,
+    primDegLevel: primDeg||pwdData.primDegLevel||'',
+  };
+  // Reference text shown/diffed in Recruitment Review (PWD job description + minimum requirements).
+  const auditRefText=[jdRef,mrRef].filter(s=>s&&s.trim()).join('\n\n');
+
   return(
     <>
     <div style={{height:'100%',overflowY:'auto',padding:'32px 28px 48px',background:'var(--bg)'}}>
@@ -2566,17 +2757,22 @@ function PermComparer(){
         <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:24}}>
           <div>
             <div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:6}}>PERM Labor Certification</div>
-            <div style={{fontFamily:"'DM Serif Display',serif",fontSize:'clamp(1.6rem,3vw,2.4rem)',color:'var(--text)',lineHeight:1.1}}>Text Comparison Workspace</div>
-            <div style={{fontSize:13,color:'var(--text3)',marginTop:8,maxWidth:600,lineHeight:1.6}}>Compare job description and requirements language, validate PWD wage positioning.</div>
+            <div style={{fontFamily:"'DM Serif Display',serif",fontSize:'clamp(1.6rem,3vw,2.4rem)',color:'var(--text)',lineHeight:1.1}}>{mode==='audit'?'Recruitment Compliance Review':'Text Comparison Workspace'}</div>
+            <div style={{fontSize:13,color:'var(--text3)',marginTop:8,maxWidth:600,lineHeight:1.6}}>{mode==='audit'?'Test each recruitment piece against the PWD under 20 CFR 656 and BALCA — wage floor, geographic area, requirements-not-exceeding-9089, and Notice-of-Filing content.':'Compare job description and requirements language, validate PWD wage positioning.'}</div>
           </div>
           <div style={{display:'flex',flexWrap:'wrap',justifyContent:'flex-end',gap:10,alignItems:'center',flexShrink:0}}>
-            {pillBtn('Ignore Formatting',ignoreFmt,()=>setIgnoreFmt(v=>!v))}
-            {pillBtn('Strict Mode',strict,()=>setStrict(v=>!v))}
+            <div style={{display:'flex',gap:0,border:'1px solid var(--border)',borderRadius:20,overflow:'hidden'}}>
+              {[['diff','Text Diff'],['audit','Recruitment Review']].map(([m,lbl])=>(
+                <button key={m} onClick={()=>setMode(m)} style={{fontSize:11,padding:'5px 14px',border:'none',cursor:'pointer',background:mode===m?'var(--amber-dim)':'transparent',color:mode===m?'var(--amber)':'var(--text3)',fontWeight:mode===m?600:400}}>{lbl}</button>
+              ))}
+            </div>
+            {mode==='diff'&&pillBtn('Ignore Formatting',ignoreFmt,()=>setIgnoreFmt(v=>!v))}
+            {mode==='diff'&&pillBtn('Strict Mode',strict,()=>setStrict(v=>!v))}
             <input ref={pwdInputRef} type="file" accept="application/pdf" style={{display:'none'}} onChange={e=>loadPwd(e.target.files[0])}/>
           <button onClick={()=>pwdInputRef.current?.click()} disabled={pwdLoading} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:pwdLoading?'var(--bg3)':'var(--green-dim)',color:pwdLoading?'var(--text3)':'var(--green)',border:pwdLoading?'1px solid var(--border)':'1px solid #34d39944',borderRadius:20,cursor:pwdLoading?'default':'pointer',opacity:pwdLoading?0.6:1}}>
             {pwdLoading?<><div style={{width:10,height:10,border:'1.5px solid currentColor',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.7s linear infinite'}}/>{' Extracting…'}</>:<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>{' Load PWD'}</>}
           </button>
-          <button onClick={()=>{
+          {mode==='diff'&&<button onClick={()=>{
             if(droppedLetter&&!expLetters.find(l=>l.fileName===droppedLetter.fileName)){
               setExpLetters(prev=>[...prev,droppedLetter]);
             }
@@ -2584,9 +2780,9 @@ function PermComparer(){
           }} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:'var(--bg3)',color:(expLetters.length>0||droppedLetter)?'var(--amber)':'var(--text2)',border:(expLetters.length>0||droppedLetter)?'1px solid #f59e0b44':'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             {' Verify Experience'}{expLetters.length>0&&<span style={{marginLeft:4,padding:'1px 6px',background:'var(--amber)',color:'var(--bg)',borderRadius:10,fontSize:10,fontWeight:700}}>{expLetters.length}</span>}
-          </button>
+          </button>}
           <button onClick={clearAll} style={{fontSize:11,padding:'5px 14px',height:'auto',background:'var(--bg3)',color:'var(--text3)',border:'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>Clear All</button>
-            <button onClick={compare} className="primary" style={{fontSize:12,padding:'7px 18px'}}>Compare Text</button>
+            {mode==='diff'&&<button onClick={compare} className="primary" style={{fontSize:12,padding:'7px 18px'}}>Compare Text</button>}
           </div>
         </div>
         {pwdError&&<div style={{margin:'0 0 16px',padding:'10px 14px',background:'var(--red-dim)',color:'var(--red)',borderRadius:'var(--radius)',fontSize:12}}>{pwdError}</div>}
@@ -2595,22 +2791,39 @@ function PermComparer(){
         <div style={{...PS.card,marginBottom:20}}>
           {cardHeader('Case Inputs','Location & Telecommute',null)}
           <div style={{marginBottom:14}}><label style={PS.label}>Job Title</label><input style={PS.input} value={jobTitle} onChange={e=>setJobTitle(e.target.value)}/></div>
-          <div style={{...grid3,marginBottom:14}}>
+          <div style={{...grid2,marginBottom:14}}>
             <div><label style={PS.label}>City</label><input style={PS.input} value={city} onChange={e=>setCity(e.target.value)}/></div>
             <div><label style={PS.label}>State</label><input style={PS.input} value={stateVal} onChange={e=>setStateVal(e.target.value)}/></div>
-            <div><label style={PS.label}>Telecommute Language</label>
-              <div style={{display:'flex',gap:8}}>
-                {['yes','no'].map(v=>(
-                  <label key={v} style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',fontSize:12,color:'var(--text2)',cursor:'pointer'}}>
-                    <input type="radio" name="tc" checked={telecommute===v} onChange={()=>setTelecommute(v)} style={{accentColor:'var(--amber)'}}/>{v==='yes'?'Yes':'No'}
-                  </label>
-                ))}
-              </div>
-            </div>
           </div>
-          <div><label style={PS.label}>Travel Requirement</label><textarea style={{...PS.textarea,minHeight:60}} value={travel} onChange={e=>setTravel(e.target.value)}/></div>
+          <div style={{...grid2}}>
+            <div><label style={PS.label}>Telecommute Language</label><textarea style={{...PS.textarea,minHeight:60}} value={telecommuteText} placeholder="Populated from the PWD…" onChange={e=>{setTelecommuteText(e.target.value);setTelecommute(e.target.value.trim()?'yes':'no');}}/></div>
+            <div><label style={PS.label}>Travel Requirement</label><textarea style={{...PS.textarea,minHeight:60}} value={travel} placeholder="Populated from the PWD…" onChange={e=>setTravel(e.target.value)}/></div>
+          </div>
         </div>
 
+        {mode==='audit' && <>
+          <div style={{...PS.card,marginBottom:20}}>
+            {cardHeader('Reference PWD','What we pulled from the ETA-9141',null)}
+            <PwdDropZone onPwdDrop={handlePwdDrop} loading={pwdLoading} pwd={pwdForAudit}/>
+            <div style={{...grid3,margin:'16px 0 14px'}}>
+              <div><label style={PS.label}>PWD Wage</label><input style={PS.input} placeholder="$0.00 / Year" value={pwdWage} onChange={e=>setPwdWage(e.target.value)}/></div>
+              <div><label style={PS.label}>Primary Degree</label><input style={PS.input} placeholder="e.g. Bachelor's" value={primDeg} onChange={e=>setPrimDeg(e.target.value)}/></div>
+              <div><label style={PS.label}>Min Experience (months)</label><input style={PS.input} placeholder="e.g. 72" value={pwdData.primExpMonths??''} onChange={e=>{const n=e.target.value.replace(/[^\d]/g,'');setPwdData(d=>({...d,primExpMonths:n===''?null:Number(n)}));}}/></div>
+            </div>
+            {pwdData.pwdWageMin!=null && pwdData.pwdWageAlt!=null && pwdData.pwdWageMin!==pwdData.pwdWageAlt && (
+              <div style={{margin:'-4px 0 14px',padding:'10px 12px',borderRadius:'var(--radius)',background:'var(--amber-dim)',color:'var(--amber)',fontSize:11.5,lineHeight:1.5}}>
+                This PWD lists two prevailing wages — minimum requirements <strong>{pFmt(pwdData.pwdWageMin)}</strong> and alternative requirements <strong>{pFmt(pwdData.pwdWageAlt)}</strong>. Using the higher (<strong>{pFmt(Math.max(pwdData.pwdWageMin,pwdData.pwdWageAlt))}</strong>) as the wage floor.
+              </div>
+            )}
+            <div style={{marginBottom:14}}><label style={PS.label}>Job Description (from PWD — editable)</label>
+              <textarea style={{...PS.textarea,minHeight:120}} value={jdRef} placeholder="Drop the PWD above to populate, or paste the job duties…" onChange={e=>setJdRef(e.target.value)}/></div>
+            <div><label style={PS.label}>Minimum Requirements (from PWD — editable)</label>
+              <textarea style={{...PS.textarea,minHeight:160}} value={mrRef} placeholder="Drop the PWD above to populate, or paste the minimum requirements…" onChange={e=>setMrRef(e.target.value)}/></div>
+          </div>
+          <RecruitmentAuditPanel key={auditKey} pwd={pwdForAudit} refText={auditRefText}/>
+        </>}
+
+        {mode==='diff' && <>
         {/* Job Description pair */}
         <div style={{display:'grid',gap:16,marginBottom:20}}>
           <div style={grid2}>
@@ -2671,12 +2884,13 @@ function PermComparer(){
           </div>
           <div style={{marginTop:14,padding:'12px 14px',borderRadius:'var(--radius)',background:wageStatus.pass?'var(--green-dim)':'var(--red-dim)',color:wageStatus.pass?'var(--green)':'var(--red)',fontSize:12,fontWeight:500}}>{wageStatus.detail}</div>
         </div>
+        </>}
 
         {/* EPT checker */}
         <EptCard stateVal={stateVal} city={city} telecommute={telecommute} wageFrom={wageFrom} wageTo={wageTo}/>
 
         {/* Summary */}
-        {results&&(
+        {mode==='diff'&&results&&(
           <div style={{...PS.card}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
               <div><div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:4}}>Summary</div><div style={{fontSize:14,fontFamily:"'DM Serif Display',serif",color:'var(--text)'}}>Comparison Results</div></div>
@@ -4453,6 +4667,11 @@ export default function App() {
             onClick={() => navigate("projects")} title="Projects" aria-label="Projects">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </button>
+          {/* Kanban board */}
+          <button className={`header-icon-btn${view === "kanban" ? " active" : ""}`}
+            onClick={() => navigate("kanban")} title="Kanban" aria-label="Kanban board">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="11" rx="1"/></svg>
+          </button>
           {/* Ask AI — commented out until built
           <button className={`header-icon-btn${view === "ask" ? " active" : ""}`}
             onClick={() => navigate("ask")} title="Ask AI" aria-label="Ask AI">
@@ -4506,6 +4725,7 @@ export default function App() {
         {view === "visa-bulletin" && <VisaBulletinView />}
         {view === "projects" && <ProjectsView onOpenDecision={openDecision} />}
         {view === "oflc" && <OflcView />}
+        {view === "kanban" && <KanbanView />}
       </div>
     </div>
   );
