@@ -1012,12 +1012,18 @@ function StatsDashboard() {
 }
 
 // ── Save to Project button ────────────────────────────────────────────────────
+const PROJECT_COLORS_INLINE = ["#f59e0b","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];
+
 function SaveToProject({ decisionId, searchQuery, small }) {
   const [projects, setProjects] = useState(null);
-  const [saved, setSaved] = useState([]); // project ids that already contain this case
+  const [saved, setSaved] = useState([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(PROJECT_COLORS_INLINE[0]);
   const ref = useRef(null);
+  const newNameRef = useRef(null);
 
   const load = async () => {
     const [all, mine] = await Promise.all([
@@ -1028,17 +1034,16 @@ function SaveToProject({ decisionId, searchQuery, small }) {
     setSaved(mine.map(p => p.id));
   };
 
-  useEffect(() => {
-    if (open) load();
-  }, [open, decisionId]);
+  useEffect(() => { if (open) load(); }, [open, decisionId]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setCreating(false); setNewName(""); } };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
+
+  useEffect(() => { if (creating) setTimeout(() => newNameRef.current?.focus(), 40); }, [creating]);
 
   const toggle = async (projectId) => {
     setSaving(projectId);
@@ -1052,6 +1057,25 @@ function SaveToProject({ decisionId, searchQuery, small }) {
       });
       setSaved(s => [...s, projectId]);
     }
+    setSaving(null);
+  };
+
+  const createAndAdd = async () => {
+    if (!newName.trim()) return;
+    setSaving("new");
+    const p = await fetch(`${API}/projects`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim(), description: "", color: newColor }),
+    }).then(r => r.json());
+    await fetch(`${API}/projects/${p.id}/cases`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision_id: decisionId, search_query: searchQuery || "" }),
+    });
+    setProjects(prev => [...(prev || []), p]);
+    setSaved(s => [...s, p.id]);
+    setCreating(false);
+    setNewName("");
+    setNewColor(PROJECT_COLORS_INLINE[0]);
     setSaving(null);
   };
 
@@ -1078,16 +1102,13 @@ function SaveToProject({ decisionId, searchQuery, small }) {
         <div style={{
           position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
           background: "var(--bg2)", border: "1px solid var(--border2)",
-          borderRadius: "var(--radius-lg)", minWidth: 220, boxShadow: "0 8px 24px #00000044",
+          borderRadius: "var(--radius-lg)", minWidth: 230, boxShadow: "0 8px 24px #00000044",
           animation: "fadeUp 0.12s ease",
         }}>
           <div style={{ padding: "10px 14px 6px", fontSize: 11, color: "var(--text3)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
             Save to project
           </div>
           {projects === null && <div style={{ padding: "8px 14px" }}><Spinner /></div>}
-          {projects?.length === 0 && (
-            <div style={{ padding: "8px 14px 12px", fontSize: 12, color: "var(--text3)" }}>No projects yet. Create one first.</div>
-          )}
           {projects?.map(p => {
             const inProject = saved.includes(p.id);
             return (
@@ -1108,8 +1129,47 @@ function SaveToProject({ decisionId, searchQuery, small }) {
               </div>
             );
           })}
-          <div style={{ borderTop: "1px solid var(--border)", padding: "8px 14px" }}>
-            <span style={{ fontSize: 11, color: "var(--text3)" }}>Go to Projects tab to create new</span>
+          <div style={{ borderTop: "1px solid var(--border)", padding: "8px 14px 10px" }}>
+            {!creating ? (
+              <button onClick={() => setCreating(true)} style={{
+                display: "flex", alignItems: "center", gap: 6, fontSize: 12,
+                color: "var(--text3)", background: "none", border: "none", padding: 0, cursor: "pointer",
+              }}
+                onMouseEnter={e => e.currentTarget.style.color = "var(--amber)"}
+                onMouseLeave={e => e.currentTarget.style.color = "var(--text3)"}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+                </svg>
+                New project
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, animation: "fadeUp 0.1s ease" }}>
+                <input
+                  ref={newNameRef}
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") createAndAdd(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
+                  placeholder="Project name"
+                  style={{ fontSize: 12, height: 30 }}
+                />
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {PROJECT_COLORS_INLINE.map(c => (
+                    <div key={c} onClick={() => setNewColor(c)} style={{
+                      width: 14, height: 14, borderRadius: "50%", background: c, cursor: "pointer",
+                      outline: newColor === c ? `2px solid ${c}` : "none", outlineOffset: 2,
+                    }} />
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={createAndAdd} disabled={!newName.trim() || saving === "new"}
+                    className="primary" style={{ fontSize: 11, padding: "4px 12px", opacity: saving === "new" ? 0.6 : 1 }}>
+                    {saving === "new" ? "Creating…" : "Create & add"}
+                  </button>
+                  <button onClick={() => { setCreating(false); setNewName(""); }}
+                    style={{ fontSize: 11, padding: "4px 8px" }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

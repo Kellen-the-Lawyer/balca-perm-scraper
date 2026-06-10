@@ -1,0 +1,18 @@
+[
+  {
+    "form": "I-130",
+    "classification": "I-130 Required Evidence",
+    "requirement_type": "initial_evidence",
+    "content": "If: | You should:\nYour Form I-130 is still pending with USCIS | Contact the USCIS office listed on your receipt notice or the USCIS Contact Center , or submit a statement of this change along with your relative\u2019s updated address to your USCIS online account.\nWe approved your\u00a0Form I-130, and\u00a0we notified you that USCIS\u00a0will keep your petition, but\u00a0your relative\u00a0seeks consular processing. | File Form I-824, Application for Action on an Approved Application or Petition , to\u00a0ask us to send your petition to the\u00a0Department of State\u00a0(DOS)\u00a0National Visa Center\u00a0(NVC)\u00a0for consular processing.\nWe approved your Form I-130, and we notified you\u00a0that we forwarded your petition\u00a0to\u00a0DOS for consular processing, but\u00a0DOS has not contacted your relative yet, and your relative\u00a0is now in the United States and wishes to apply for\u00a0adjustment\u00a0of\u00a0status. | Contact the USCIS Contact Center .\u00a0USCIS will request your Form I-130 from DOS.\nWe approved your Form I-130\u00a0and notified you that we forwarded your petition to DOS\u00a0for consular processing, and DOS contacted your relative with a visa case or your\u00a0Consular Electronic Application Center (CEAC)\u00a0account says your case is\u00a0at the\u00a0NVC, but your relative is now in the United States and wishes to apply for adjustment of status. | Your relative should contact the NVC via their Public Inquiry Form at NVC Contact Information (state.gov) .\nWe approved your Form I-130\u00a0and notified you that\u00a0we forwarded your petition to DOS\u00a0for consular processing, and DOS contacted\u00a0your relative with a visa interview\u00a0appointment or your CEAC account says your case is the U.S.\u00a0embassy or\u00a0consulate, but your relative is now in the United States and wishes to apply for adjustment of status. | Your relative should contact the U.S.\u00a0embassy or\u00a0consulate. Find their website at usembassy.gov.",
+    "source_url": "https://www.uscis.gov/i-130",
+    "scraped_date": "2026-04-27"
+  },
+  {
+    "form": "I-130",
+    "classification": "I-130 Required Evidence",
+    "requirement_type": "initial_evidence",
+    "content": "If you become a U.S. citizen | You should notify: | Send your notification to: | And include:\nBefore we make a decision on your Form I-130 | The USCIS office that is processing your case. | The office address printed on your Form I-130 receipt notice. This infographic shows where to find the address on your receipt notice. | A short letter explaining you are now a U.S. citizen Photocopies of your: Naturalization certificate; and Form I-130 receipt notice \u201cI-130 Update\u201d on the outside of the envelope.\nAfter we approve your Form I-130 | the National Visa Center (NVC) | National Visa Center's Public Inquiry Form | A scanned copy (PDF or JPG file) of: The biodata page of your U.S passport; or Your naturalization certificate. \u201cI-130 Update\u201d in the description of the inquiry.",
+    "source_url": "https://www.uscis.gov/i-130",
+    "scraped_date": "2026-04-27"
+  }
+]

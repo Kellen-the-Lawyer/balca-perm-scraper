@@ -16,7 +16,7 @@ console = Console()
 
 @click.group()
 def cli():
-    """BALCA PERM scraper CLI."""
+    """BALCA PERM / INA scraper CLI."""
 
 
 @cli.command("inspect-homepage")
@@ -30,27 +30,26 @@ def inspect_homepage():
 @click.option("--docket-prefix", default=None, help="Docket prefix, e.g. 2024-PER-")
 @click.option("--max-pages", default=5, type=int, show_default=True)
 @click.option("--db", "db_path", default=str(SETTINGS.database_path), show_default=True)
-def search(query: str | None, docket_prefix: str | None, max_pages: int, db_path: str):
+@click.option("--ina", is_flag=True, default=False,
+              help="Scrape pre-PERM INA cases (case_type eq 'INA') instead of PERM cases")
+def search(query: str | None, docket_prefix: str | None, max_pages: int, db_path: str, ina: bool):
     total = collect_search_results(
         query=query,
         docket_prefix=docket_prefix,
         max_pages=max_pages,
         db_path=Path(db_path),
+        ina=ina,
     )
     console.print(f"Finished. Upserted {total} records.")
 
 
 @cli.command("export-csv")
 @click.option("--db", "db_path", default=str(SETTINGS.database_path), show_default=True)
-@click.option(
-    "--out",
-    "out_path",
-    default=str(SETTINGS.processed_dir / "results.csv"),
-    show_default=True,
-)
-def export_csv(db_path: str, out_path: str):
+@click.option("--out", "out_path", default=str(SETTINGS.processed_dir / "results.csv"), show_default=True)
+@click.option("--ina", is_flag=True, default=False, help="Export only INA cases")
+def export_csv(db_path: str, out_path: str, ina: bool):
     store = DecisionStore(Path(db_path))
-    destination = store.export_csv(Path(out_path))
+    destination = store.export_csv(Path(out_path), ina=ina)
     console.print(f"Wrote {destination}")
 
 

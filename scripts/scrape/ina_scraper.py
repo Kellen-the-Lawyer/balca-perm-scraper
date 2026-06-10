@@ -88,10 +88,36 @@ def parse_subchapter_index(subchapter_roman: str) -> list[dict]:
     """
     Fetch a subchapter index page and return a list of
     {'section': '1101', 'title': 'Definitions', 'url': '...'} dicts.
+
+    Handles both flat subchapters (I, IV, V) and multi-part subchapters
+    (II, III) where an intermediate Part level sits between the subchapter
+    and the individual section pages.
     """
     url = SUBCHAPTERS[subchapter_roman][1]
     soup = fetch(url)
 
+    sections = _extract_section_links(soup)
+    if sections:
+        return sections  # flat subchapter — done
+
+    # Multi-part subchapter: find part links and recurse into each
+    part_links = []
+    content = soup.find("div", id="content") or soup.find("main") or soup
+    for a in content.find_all("a", href=re.compile(r"subchapter-[IVX]+/part-")):
+        href = a["href"]
+        part_url = BASE_URL + href if href.startswith("/") else href
+        if part_url not in part_links:
+            part_links.append(part_url)
+
+    for part_url in part_links:
+        part_soup = fetch(part_url)
+        sections.extend(_extract_section_links(part_soup))
+
+    return sections
+
+
+def _extract_section_links(soup) -> list[dict]:
+    """Extract direct section links from a soup object."""
     sections = []
     content = soup.find("div", id="content") or soup.find("main") or soup
     for li in content.find_all("li"):

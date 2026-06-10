@@ -230,9 +230,13 @@ class DecisionStore:
             conn.commit()
         return rows
 
-    def export_csv(self, out_path: Path):
+    def export_csv(self, out_path: Path, ina: bool = False):
+        query = "SELECT * FROM decisions"
+        if ina:
+            query += " WHERE case_type = 'INA'"
+        query += " ORDER BY decision_date DESC"
         with sqlite3.connect(self.db_path) as conn:
-            df = pd.read_sql_query("SELECT * FROM decisions ORDER BY decision_date DESC", conn)
+            df = pd.read_sql_query(query, conn)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(out_path, index=False)
         return out_path

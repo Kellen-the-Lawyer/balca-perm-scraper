@@ -477,3 +477,187 @@ To trigger a manual sync:   bash ~/Documents/GitHub/balca-perm-scraper/sync_case
 To check the log:           tail -50 ~/Library/Logs/casebase_sync.log
 To unload the schedule:     launchctl unload ~/Library/LaunchAgents/com.casebase.sync.plist
 To reload after editing:    launchctl unload ... && launchctl load ...
+
+=== 2026-04-27 Session ===
+
+## Completed this session
+
+### USCIS Evidence Checklist Scraper + Ingest Pipeline (new corpus: uscis_checklists)
+
+**Scraper** — `perm-research/scrape_uscis_checklists.py`
+- Targets 10 USCIS checklist pages: I-129, I-765, N-400, I-140, I-485, I-539, I-130, I-131, I-290B, N-600
+- Cascade fetch: httpx (3 user-agents) → wget subprocess → Playwright fallback
+- Two page-format parsers:
+  - Accordion (USWDS usa-accordion__button, details/summary, heading+sibling) — for I-129, I-765, etc.
+  - Table format — for N-400, N-600-style static pages
+  - Plain-text fallback on main content area
+- JSON output: form, classification, requirement_type="initial_evidence", content, source_url, scraped_date
+- Saves combined `data/uscis_checklists.json` + per-form files for inspection
+- Usage: `python3 perm-research/scrape_uscis_checklists.py [--form I-129] [--dry-run]`
+
+**Ingest script** — `perm-research/ingest_uscis_checklists.py`
+- Follows same pattern as ingest_uscis.py (psycopg2, dotenv, --ingest/--embed/--status/--reset)
+- `ensure_corpus_allowed()` patches rag_chunks_corpus_check to add 'uscis_checklists'
+- Each form+classification = one source document; chunked at 800 tokens / 80-token overlap
+- source_id: slug of form__classification; form_type: form number; cfr_citation: source_url
+- Header prepended to first chunk for standalone retrieval context
+- Usage: `python3 perm-research/ingest_uscis_checklists.py --ingest --embed`
+
+**API endpoints** — `app/api.py`
+- GET /api/checklists               — list all form/classification pairs
+- GET /api/checklists/search?q=...  — full-text search (optional &form= filter)
+- GET /api/checklists/{form}        — all classifications for a form, reassembled text
+  Note: /search defined before /{form} to avoid FastAPI route shadowing
+- /api/search-all UNION extended: uscis_checklists corpus now included in global search
+  (both the ranked results UNION and the count subquery)
+
+**DB change required before first ingest:**
+  Run `python3 ingest_uscis_checklists.py --ingest` — the script auto-patches the
+  rag_chunks_corpus_check constraint to add 'uscis_checklists'.
+
+**Run order:**
+  1. `python3 perm-research/scrape_uscis_checklists.py`
+  2. `python3 perm-research/ingest_uscis_checklists.py --ingest`
+  3. `python3 perm-research/ingest_uscis_checklists.py --embed`
+
+
+---
+
+## Session: 2026-05-04
+
+### Kurzban's Gap Analysis
+
+Systematically read all 13 chapters + appendices of Kurzban's Immigration Law Sourcebook 19th Ed. (2024) from OneDrive to identify publicly available legal sources not yet in Casebase. Full gap analysis saved to `/mnt/user-data/outputs/kurzban_gap_analysis.md` and updated to reflect that FAM, Visa Bulletins, and BLS OEWS are already ingested.
+
+Top remaining gaps (priority order):
+1. BIA Practice Manual
+2. USCIS Policy Memos/Alerts (standalone PA-/PM- series)
+3. Circuit court opinions (CourtListener)
+4. EOIR Policy Memos
+5. CFR Title 29 (immigration-relevant parts)
+
+---
+
+### CourtListener Pipeline — `scripts/scrape/scrape_courtlistener.py` + `scripts/ingest/ingest_courtlistener.py`
+
+**Exploration:** Wrote and ran `scripts/scrape/explore_courtlistener.py` to characterize the CourtListener API v4. Key findings:
+- Auth token works; uses `Token` header
+- `/search/?type=o` endpoint is fast (0.6s); `/clusters/` endpoint times out (>60s) — use search
+- `plain_text` often empty; `html_with_citations` has full text — strip HTML tags
+- Opinions filterable by cluster ID via `/opinions/?cluster=<id>` (fast, avoids extra cluster fetch)
+- No explicit rate-limit headers; 429s enforced silently; 502s are transient and retry-safe
+- `count` field quirk: returns URL string when `fields=` param is passed — don't use for counts
+- ~57,977 total immigration-related opinions across 13 circuits from 2000-present
+
+**Scraper design decisions:**
+- Pagination: `/search/` endpoint with cursor (not `/clusters/` — too slow)
+- Text fetch: `/opinions/?cluster=<id>` directly (2 API calls per opinion, no extra cluster hop)
+- Text field priority: `plain_text` → `html_with_citations` → `xml_harvard` → `html`
+- Rate limiting: 0.5s sleep between requests, 65s backoff on 429, retry on 502/timeout
+- Storage: one JSON file per cluster at `~/courtlistener_opinions/<court_id>/<cluster_id>.json`
+- Idempotent: skips files already on disk
+
+**Ingest design:**
+- Corpus: `court_opinions`
+- source_id: cluster_id (TEXT)
+- source_label: "Case Name (Citation) [COURT]"
+- source_date: date_filed
+- Standard 800-token / 80-token overlap paragraph chunking
+- `ensure_corpus_allowed()` uses `NOT VALID` constraint to avoid scanning existing rows
+- `--ingest` / `--embed` / `--status` / `--reset` / `--court` / `--limit` flags
+
+**Status:** Scrape running as of 2026-05-01, currently mid-ca2 after completing scotus (~13,500 opinions). All 13 circuits queued from 2000-present. Ingest + embed deferred until scrape completes. Note: broad court+date filter (not keyword filter) — will capture all published opinions, not just immigration-specific. Consider adding keyword filter at ingest time to reduce non-immigration noise.
+
+**Files:**
+- `scripts/scrape/scrape_courtlistener.py`
+- `scripts/scrape/explore_courtlistener.py`
+- `scripts/ingest/ingest_courtlistener.py`
+- Data dir: `~/courtlistener_opinions/<court_id>/`
+- Token: `177d15d21ae11462542b0029637d457c9cb229eb` (also in .env as COURTLISTENER_TOKEN)
+
+**Run commands:**
+```
+venv/bin/python3 scripts/scrape/scrape_courtlistener.py --scrape --since 2000-01-01
+venv/bin/python3 scripts/scrape/scrape_courtlistener.py --status
+venv/bin/python3 scripts/ingest/ingest_courtlistener.py --ingest
+venv/bin/python3 scripts/ingest/ingest_courtlistener.py --embed --batch-size 8
+```
+
+---
+
+### CFR Title 29 — `scripts/scrape/download_cfr_title29.py`
+
+Downloaded 6 immigration-relevant Title 29 CFR parts missing from Casebase. Note: eCFR no longer serves PDFs via API — switched to XML versioner endpoint and convert to plain text.
+
+**Parts downloaded** (saved as .txt to OneDrive Regulations folder):
+- Part 1   — Davis-Bacon wage predeterminations (53,662 chars)
+- Part 18  — OALJ rules of practice (H-1B/H-2 enforcement hearings) (356,379 chars)
+- Part 516 — FLSA recordkeeping (53,949 chars)
+- Part 541 — White-collar exemptions / specialty occupation context (116,930 chars)
+- Part 778 — FLSA overtime compensation (298,846 chars)
+- Part 810 — USMCA high-wage labor value content (70,366 chars)
+
+Parts 500–508 (H-2A/H-2B) were already present as PDFs.
+
+**ingest_regulations.py changes:**
+- Added `.txt` file support alongside existing `.pdf` handling
+- Added all 29 CFR part names to `PART_NAMES` dict
+- `AGENCY_MAP[29]` was already present
+
+**Ingest result:** 126 files processed, 0 errors (includes all new Title 29 parts).
+The new parts are now in `regulations_docs` but not yet RAG-chunked into `rag_chunks`.
+Run the regulations RAG ingest script to chunk + embed when ready.
+
+**Files:**
+- `scripts/scrape/download_cfr_title29.py` — download script
+- `scripts/ingest/ingest_regulations.py` — updated with txt support + part names
+
+=== 2026-05-08 Session ===
+
+## Completed this session
+
+### INA (pre-PERM) scraper support
+
+`balca_perm_scraper/pipeline.py`:
+- Added `INA_FILTER = "case_type eq 'INA'"` alongside existing `PERM_FILTER`
+- Added `INA_FISCAL_YEARS` list spanning 1985–2008 (INA cases predate PERM
+  transition; also covers 2006–2008 for any stragglers)
+- `build_search_body()` now accepts `case_filter` param (defaults to PERM_FILTER)
+- `collect_search_results()` now accepts `ina: bool` flag — when True, uses
+  INA_FILTER and INA_FISCAL_YEARS; run logged as "INA" in console output
+
+`balca_perm_scraper/cli.py`:
+- `search` command gets `--ina` flag: `balca-perm-scraper search --ina --max-pages 50`
+  will scrape all INA case_type records from OALJ Azure Search
+
+normalize.py DOCKET_RE already handles INA: `\b(\d{4})-?(PER|INA|TLN)-?(\d{3,6})\b`
+
+Run INA scrape:
+  cd /Users/Dad/Documents/GitHub/Casebase
+  DOL_AZURE_QUERY_KEY=<key> venv/bin/python3 -m balca_perm_scraper search --ina --max-pages 50
+
+### PDF button fix
+
+Root cause: `PDF_BASE_PATH` env var was not set, so the API used its default
+`/Users/Dad/Documents/GitHub/balca-perm-scraper/data/raw/pdfs` — that repo only
+has a monitoring folder. Actual PDFs are at
+`/Users/Dad/Documents/GitHub/Casebase/data/raw/pdfs`.
+
+Fix: added `PDF_BASE_PATH=/Users/Dad/Documents/GitHub/Casebase/data/raw/pdfs`
+to `/Users/Dad/Documents/GitHub/Casebase/.env`.
+API server restarted to pick up the change.
+
+### Inline "New project" in SaveToProject dropdown
+
+`SaveToProject` component in `frontend/src/App.jsx`:
+- Added `creating`, `newName`, `newColor`, `newNameRef` state/refs
+- Replaced "Go to Projects tab to create new" hint with a "+ New project" button
+- Clicking it expands an inline form: name input + 8-color swatch + "Create & add"
+  / "Cancel" buttons
+- `createAndAdd()` POSTs to /api/projects, then immediately POSTs the case to
+  the new project's /cases endpoint, and updates local `projects`/`saved` state
+  so the new project appears checked immediately without a reload
+- Enter key submits the form; Escape cancels it; focus goes to the name input
+- Added `PROJECT_COLORS_INLINE` const (same palette as ProjectsView's
+  PROJECT_COLORS) to avoid circular reference with that const
+

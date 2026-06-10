@@ -303,6 +303,7 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
     payload = json.dumps({
         "model": OLLAMA_MODEL,
         "input": cleaned,
+        "keep_alive": "30m",
         "options": {"num_ctx": 32768},
     }).encode()
 

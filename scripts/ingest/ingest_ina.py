@@ -248,8 +248,9 @@ def embed_batch(texts: list) -> list:
     cleaned = [(DOC_INSTRUCT + t.strip()[:32000]) if t.strip() else " " for t in texts]
     payload = json.dumps({
         "model":   OLLAMA_MODEL,
-        "input":   cleaned,
-        "options": {"num_ctx": 32768},
+        "input":    cleaned,
+        "keep_alive": "30m",
+        "options":  {"num_ctx": 32768},
     }).encode()
     req = urllib.request.Request(
         f"{OLLAMA_URL}/api/embed",

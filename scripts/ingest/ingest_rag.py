@@ -29,7 +29,7 @@ OLLAMA_MODEL   = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:4b")
 EMBED_DIM      = 1024  # MRL truncation — Qwen3 4B native is 2560 but 1024 stays under pgvector's 2000-dim index limit at ~95% quality
 CHUNK_TOKENS   = 800
 OVERLAP_TOKENS = 80
-BATCH_SIZE     = 5     # 4B model has more memory headroom — batch of 5 is safe and ~5x faster
+BATCH_SIZE     = 50    # overnight runs — bump back to 20 for daytime use
 # Instruction prefix — improves retrieval quality 1-5% per Qwen3 docs
 QUERY_INSTRUCT = "Instruct: Given a legal research query, retrieve relevant passages that answer the query\nQuery: "
 DOC_INSTRUCT   = ""    # no prefix on document side per Qwen3 recommendation
@@ -130,7 +130,7 @@ def embed_batch(texts: list) -> list:
     payload = json.dumps({
         "model": OLLAMA_MODEL,
         "input": cleaned,
-        "options": {"num_ctx": 32768},
+        "keep_alive": "30m",
     }).encode()
 
     for attempt in range(5):
@@ -141,7 +141,7 @@ def embed_batch(texts: list) -> list:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=300) as resp:
+            with urllib.request.urlopen(req, timeout=600) as resp:
                 data = json.loads(resp.read())
             return [vec[:EMBED_DIM] for vec in data["embeddings"]]
         except Exception as e:
@@ -275,44 +275,65 @@ def ingest_aao(conn, limit=None, date_from=None, date_to=None):
     if date_to:
         conditions.append(f"decision_date <= '{date_to}'")
     where = " AND ".join(conditions)
-    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(f"""
-            SELECT id, COALESCE(title, form_type, filename) AS label,
-                   decision_date::text, outcome, form_type, full_text
-            FROM aao_decisions WHERE {where}
-            ORDER BY decision_date DESC NULLS LAST {lim}
-        """)
-        rows = cur.fetchall()
-    print(f"  {len(rows)} decisions to chunk")
 
-    # Skip docs already fully embedded so we can resume after a crash
+    # Get total count and already-done set
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM aao_decisions WHERE {where}")
+        total_count = cur.fetchone()[0]
     with conn.cursor() as cur:
         cur.execute("SELECT DISTINCT source_id FROM rag_chunks WHERE corpus = 'aao'")
         already_done = {r[0] for r in cur.fetchall()}
-    if already_done:
-        before = len(rows)
-        rows = [r for r in rows if r["id"] not in already_done]
-        print(f"  Skipping {before - len(rows)} already-embedded docs, {len(rows)} remaining")
 
-    all_pending, total = [], 0
-    for doc in rows:
-        chunks = chunk_by_paragraphs(doc["full_text"])
-        if not chunks:
+    remaining = total_count - len(already_done)
+    print(f"  {total_count} decisions total, {len(already_done)} already embedded, {remaining} remaining")
+
+    # Process in batches of 500 decisions to avoid loading all into RAM
+    DECISION_BATCH = 500
+    offset = 0
+    total = 0
+
+    while True:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(f"""
+                SELECT id, COALESCE(title, form_type, filename) AS label,
+                       decision_date::text, outcome, form_type, full_text
+                FROM aao_decisions WHERE {where}
+                ORDER BY decision_date DESC NULLS LAST
+                LIMIT {DECISION_BATCH} OFFSET {offset}
+            """)
+            rows = cur.fetchall()
+
+        if not rows:
+            break
+
+        # Skip already embedded
+        rows = [r for r in rows if str(r["id"]) not in already_done and r["id"] not in already_done]
+        if not rows:
+            offset += DECISION_BATCH
             continue
-        for i, text in enumerate(chunks):
-            all_pending.append({
-                "corpus": "aao", "source_id": doc["id"],
-                "source_label": doc["label"] or f"AAO-{doc['id']}",
-                "source_date": doc["decision_date"], "source_outcome": doc["outcome"],
-                "chunk_index": i, "chunk_text": text,
-                "chunk_tokens": approx_tokens(text),
-                "cfr_citation": None, "form_type": doc.get("form_type"),
-            })
-        if len(all_pending) >= BATCH_SIZE * 5:
-            total += _embed_and_save(conn, all_pending)
-            all_pending = []
-    if all_pending:
-        total += _embed_and_save(conn, all_pending)
+
+        all_pending = []
+        for doc in rows:
+            chunks = chunk_by_paragraphs(doc["full_text"])
+            if not chunks:
+                continue
+            for i, text in enumerate(chunks):
+                all_pending.append({
+                    "corpus": "aao", "source_id": doc["id"],
+                    "source_label": doc["label"] or f"AAO-{doc['id']}",
+                    "source_date": doc["decision_date"], "source_outcome": doc["outcome"],
+                    "chunk_index": i, "chunk_text": text,
+                    "chunk_tokens": approx_tokens(text),
+                    "cfr_citation": None, "form_type": doc.get("form_type"),
+                })
+
+        if all_pending:
+            batch_total = _embed_and_save(conn, all_pending)
+            total += batch_total
+            print(f"  [{offset + DECISION_BATCH}/{total_count}] {total} chunks embedded so far")
+
+        offset += DECISION_BATCH
+
     print(f"  Done — {total} chunks ingested")
 
 def ingest_regulations(conn, limit=None):
@@ -402,7 +423,7 @@ def main():
     # Verify Ollama is running and model is available
     try:
         req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             tags = json.loads(resp.read())
         models = [m["name"] for m in tags.get("models", [])]
         if not any(OLLAMA_MODEL.split(":")[0] in m for m in models):

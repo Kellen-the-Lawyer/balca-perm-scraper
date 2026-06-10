@@ -66,6 +66,21 @@ PART_NAMES = {
     "41":  "Visas: Nonimmigrant Visas",
     "42":  "Visas: Immigrant Visas",
     "62":  "Exchange Visitor Program",
+    # 29 CFR
+    "1":   "Procedures for Predetermination of Wage Rates (Davis-Bacon)",
+    "18":  "Rules of Practice and Procedure — OALJ (H-1B / H-2 Hearings)",
+    "500": "Migrant and Seasonal Agricultural Worker Protection",
+    "501": "H-2A Agricultural Worker Contractual Obligations",
+    "502": "H-2A Alien Agricultural Workers — Enforcement",
+    "503": "H-2B Nonimmigrant Non-Agricultural Workers — Enforcement",
+    "504": "Nonimmigrant Nurses — Attestations (H-1C)",
+    "506": "Alien Crewmembers — Longshore Attestations",
+    "507": "H-1B Labor Condition Applications",
+    "508": "F-1 Students — Off-Campus Work Attestations",
+    "516": "FLSA Recordkeeping — Records to Be Kept by Employers",
+    "541": "FLSA White-Collar Exemptions (Specialty Occupation Context)",
+    "778": "FLSA Overtime Compensation",
+    "810": "USMCA High-Wage Labor Value Content Requirements",
 }
 
 def parse_date(s):
@@ -102,14 +117,18 @@ def extract_regulation(pdf_path: str) -> dict:
         result["title"] = f"{m.group(1)} CFR Part {m.group(2)}"
 
     try:
-        pages = []
-        with pdfplumber.open(pdf_path) as pdf:
-            result["page_count"] = len(pdf.pages)
-            for page in pdf.pages:
-                t = page.extract_text()
-                if t:
-                    pages.append(t)
-        result["full_text"] = "\n\n".join(pages)
+        if path.suffix.lower() == ".txt":
+            result["full_text"] = path.read_text(encoding="utf-8", errors="replace")
+            result["page_count"] = max(1, len(result["full_text"]) // 3000)
+        else:
+            pages = []
+            with pdfplumber.open(pdf_path) as pdf:
+                result["page_count"] = len(pdf.pages)
+                for page in pdf.pages:
+                    t = page.extract_text()
+                    if t:
+                        pages.append(t)
+            result["full_text"] = "\n\n".join(pages)
     except Exception as e:
         log.error(f"PDF error {path.name}: {e}")
         return result
@@ -129,8 +148,8 @@ def extract_regulation(pdf_path: str) -> dict:
 
 async def main(pdf_dir, db_url):
     conn = await asyncpg.connect(db_url)
-    pdfs = sorted(Path(pdf_dir).glob("*.pdf"))
-    log.info(f"Found {len(pdfs)} regulation PDFs")
+    pdfs = sorted(Path(pdf_dir).glob("*.pdf")) + sorted(Path(pdf_dir).glob("*.txt"))
+    log.info(f"Found {len(pdfs)} regulation files")
 
     processed = errors = 0
     for path in pdfs:

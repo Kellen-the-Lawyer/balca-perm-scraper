@@ -18,6 +18,7 @@ console = Console()
 
 
 PERM_FILTER = "case_type eq 'PER'"
+INA_FILTER  = "case_type eq 'INA'"
 FACET_FIELDS = ["agency", "document_category", "program_area", "case_type", "document_type", "file_type"]
 
 # All fiscal years with PERM decisions, largest first
@@ -27,15 +28,25 @@ FISCAL_YEARS = [
     "2017", "2008", "2021", "2007", "2006",
 ]
 
+# INA (pre-PERM) cases go back much further — most pre-date 2006
+INA_FISCAL_YEARS = [
+    "2005", "2004", "2003", "2002", "2001", "2000",
+    "1999", "1998", "1997", "1996", "1995", "1994", "1993", "1992", "1991", "1990",
+    "1989", "1988", "1987", "1986", "1985",
+    # also include some early 2000s in case any INA stragglers exist after PERM transition
+    "2006", "2007", "2008",
+]
+
 
 def build_search_body(
     query: str | None = None,
     docket_prefix: str | None = None,
     fiscal_year: str | None = None,
     page: int = 1,
+    case_filter: str = PERM_FILTER,
 ):
     search_term = " ".join(filter(None, [query, docket_prefix])) or "*"
-    filters = [PERM_FILTER]
+    filters = [case_filter]
     if fiscal_year:
         filters.append(f"fiscal_year eq '{fiscal_year}'")
     return {
@@ -55,29 +66,35 @@ def collect_search_results(
     docket_prefix: str | None = None,
     max_pages: int = 5,
     db_path: Path = SETTINGS.database_path,
+    ina: bool = False,
 ):
+    """Scrape PERM (default) or pre-PERM INA decisions from the OALJ Azure Search index."""
     azure_query_key = SETTINGS.require_azure_query_key()
     store = DecisionStore(db_path)
     total_records = 0
     total_upserted = 0
     total_pages = 0
+    fiscal_years = INA_FISCAL_YEARS if ina else FISCAL_YEARS
+    case_filter  = INA_FILTER if ina else PERM_FILTER
     run_id = store.start_run(
         query=query,
         docket_prefix=docket_prefix,
         max_pages=max_pages,
         page_size=SETTINGS.page_size,
-        fiscal_years=FISCAL_YEARS,
+        fiscal_years=fiscal_years,
         search_url=KEYWORD_SEARCH_URL,
     )
-    console.print(f"[dim]Scrape run #{run_id}[/dim]")
+    console.print(f"[dim]Scrape run #{run_id} ({'INA' if ina else 'PERM'})[/dim]")
 
     try:
         with ScraperClient() as client:
-            for year in FISCAL_YEARS:
+            for year in fiscal_years:
                 console.print(f"[bold]Scraping fiscal year {year}[/bold]")
                 for page_number in range(1, max_pages + 1):
                     body = build_search_body(
-                        query=query, docket_prefix=docket_prefix, fiscal_year=year, page=page_number
+                        query=query, docket_prefix=docket_prefix,
+                        fiscal_year=year, page=page_number,
+                        case_filter=case_filter,
                     )
                     requested_at = datetime.now(UTC).isoformat()
                     try:
