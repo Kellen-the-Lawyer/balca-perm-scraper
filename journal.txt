@@ -661,3 +661,53 @@ API server restarted to pick up the change.
 - Added `PROJECT_COLORS_INLINE` const (same palette as ProjectsView's
   PROJECT_COLORS) to avoid circular reference with that const
 
+
+
+════════════════════════════════════════════════════════════════════
+2026-06-10 — MODULARIZATION REFACTOR (api.py + App.jsx) — Claude session
+════════════════════════════════════════════════════════════════════
+
+PRE-REFACTOR DISCOVERY: dev and deploy repos had silently diverged.
+Deploy (casebase-app) had features built directly in it that dev lacked:
+kanban system (api/kanban.py + KanbanView.jsx), docx extraction
+(_docx_to_text), permCompliance.js recruitment audit, /api/ask tuning.
+Dev had newer work deploy lacked (uscis_checklists/form_instructions/
+dol_faqs corpora in search-all, SaveToProject inline project creation).
+DANGER that was defused: sync-from-dev.sh rsyncs app/→api/ with --delete
+and would have DELETED kanban.py and clobbered all deploy-only work on
+next run.
+
+RESOLUTION: three-way merge using git history. Found last-sync base
+commits (1061bcf for api.py, 6adeae8 for App.jsx), ran git merge-file —
+ZERO conflicts both files. Backported kanban.py, KanbanView.jsx,
+permCompliance.js into dev. Commit c46f8d9. Dev is now the superset and
+single source of truth again. RULE GOING FORWARD: never edit casebase-app
+directly; always edit Casebase and sync.
+
+BACKEND SPLIT (commit 3e48600): app/api.py (3,804 lines) →
+  - app/core.py (389): env config, database, q(), ensure_operational_schema,
+    search logging, auth helper, PDF/GCS helpers, embed_query. Defines
+    __all__ so routers do `from core import *`.
+  - app/routers/: balca, projects, aao, regulations, policy, search_all,
+    extraction, ina, checklists, rag, oflc, visa_bulletin (12 routers,
+    93 routes moved).
+  - app/api.py (56 lines): assembly only — lifespan, CORS, kanban wiring,
+    include_router loop, static serving. sys.path shim makes both
+    `uvicorn api:app` (Docker) and `uvicorn app.api:app` (dev) work.
+  VERIFIED: route set before/after byte-identical (110 routes).
+
+FRONTEND SPLIT (commit ebec238): frontend/src/App.jsx (4,732 lines) →
+  common.jsx (shared: Badge, Spinner, ReadLaterPopup, InDocSearch,
+  HighlightedText, SaveToProject, hooks), BalcaViews, ProjectsViews,
+  RegulationPolicyViews, PermComparer, AaoViews, SearchAllView,
+  CitationGraphs, AskView + 328-line App.jsx shell. All cross-module
+  imports auto-generated and verified acyclic (views import only from
+  common). Vite build passes. LESSON: lowercase helper functions cluster
+  just above the component that uses them — module boundaries must be
+  set at the helper block start, not the component start.
+
+VENV NOTE (this machine, MacBook Pro): venv lacked API deps; installed
+app/requirements.txt into Casebase/venv so import tests run locally.
+
+NOT YET DONE: sync-from-dev.sh + docker compose up --build -d (deploy);
+live uvicorn smoke test against a running Postgres.
