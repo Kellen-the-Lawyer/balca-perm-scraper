@@ -711,3 +711,285 @@ app/requirements.txt into Casebase/venv so import tests run locally.
 
 NOT YET DONE: sync-from-dev.sh + docker compose up --build -d (deploy);
 live uvicorn smoke test against a running Postgres.
+
+=== 2026-06-18 Session ===
+
+## Completed this session
+
+### Visa Bulletin Ingest — June 2026 & July 2026
+
+Added two missing monthly visa bulletins to both the local system DB and the live
+Docker Casebase DB.
+
+**Method:** Fetched both bulletin pages directly (travel.state.gov), parsed tables
+using the existing scrape_visa_bulletins.py logic, upserted via asyncpg into the
+local DB, then transferred to Docker via CSV COPY.
+
+**Results:**
+- June 2026: 120 rows (EB + FB × final_action + dates_for_filing × 5 chargeabilities)
+- July 2026: 120 rows — same structure
+
+**Notable July 2026 data points (practitioner-relevant):**
+- EB-2 India: UNAVAILABLE (pro-rated FY2026 limit reached; DOS notes October advance expected)
+- EB-5 Unreserved India: UNAVAILABLE (same reason)
+- EB-1 India: 15OCT22 (retrogressed from 15DEC22 in June)
+- EB-1 China: 01JUN23 (advanced from 01APR23 in June)
+- EB-3 ALL: 01AUG24 (advanced from 01JUN24 in June)
+
+**Commands used:**
+```
+# Local ingest
+venv/bin/python3 /tmp/ingest_june_july_bulletins.py
+
+# Docker transfer
+docker cp /tmp/vb_new.csv casebase-db:/tmp/vb_new.csv
+docker exec -i casebase-db psql -U perm -d perm_decisions
+  → CREATE TEMP TABLE vb_import ...; \COPY ...; INSERT ... ON CONFLICT DO UPDATE
+
+# Verify
+docker exec -i casebase-db psql -U perm -d perm_decisions -c
+  "SELECT bulletin_date, bulletin_title, COUNT(*) FROM visa_bulletin
+   WHERE bulletin_date >= '2026-05-01' GROUP BY 1,2 ORDER BY 1"
+```
+
+**No app code changes needed** — the existing `/api/visa-bulletin/latest` endpoint
+automatically returns July 2026 as the most recent bulletin since it queries
+`MAX(bulletin_date)`.
+
+=== 2026-06-18 Session ===
+
+## OEWS Wage Prediction Model — Data Collection Phase
+
+### Research: OFLC wage calculation methodology
+- OFLC does NOT publish OEWS percentile values directly. BLS provides custom tabulations:
+  - Level I = mean of lowest-paid 1/3 of workers (~17th pctile)
+  - Level IV = mean of highest-paid 2/3 of workers (~67th pctile)
+  - Level II = L1 + (1/3)(L4 - L1)
+  - Level III = L1 + (2/3)(L4 - L1)
+- BLS uses rolling 6-panel MB3 model (3 years of semiannual surveys)
+  - May 2025 OEWS uses panels: May25, Nov24, May24, Nov23, May23, Nov22
+  - Older panels are aged forward to May reference date using ECI as the aging factor
+  - ECI series used: private industry wages & salaries by occupational group
+- Published BLS percentile figures (10/25/50/75/90) are NOT identical to OFLC's L1-L4
+- May 2025 BLS OEWS release: May 15, 2026 — this IS the source for July 2026 OFLC update
+- NPRM (ETA-2026-0001, 91 FR 15454, Mar 27 2026): would raise pctiles to 34/52/70/88
+  - Comment period closed May 26, 2026. Not yet finalized. July 1 update uses current method.
+
+### Data pulled to /tmp/oews_model/
+- ECI data (via BLS API):
+  - /tmp/oews_model/eci/eci_clean.csv (264 rows)
+  - Series: private all workers, mgmt/prof, service occupations — quarterly 2018-2026
+  - Both annual % change series and index values (Dec 2005=100)
+  - Latest: Q1 2026 — priv all = 3.4%, mgmt/prof = 3.4%
+- OFLC ALC_Export files (5 years):
+  - 2021-22, 2022-23, 2023-24, 2024-25, 2025-26
+  - Each ~27-30MB, 450k rows (SOC x MSA x GeoLvl)
+  - Hourly wage rates for L1-L4 + Average
+- BLS OEWS API (blocked by Akamai for historical years):
+  - Only current year (2025) available via API
+  - BLS download.bls.gov server blocks automated access
+  - Decision: use OFLC files as primary data (they ARE derived from OEWS)
+
+### Next steps
+- Build validation model: for each OFLC year-pair, compute YoY OFLC delta
+  and compare against ECI growth for corresponding panels
+- Test whether ECI-weighted aging model predicts OFLC changes better than naive YoY
+- Apply model to current ECI data (Q1 2026 = 3.4% mgmt/prof) to project July 2026 floors
+- Build the actual prediction tool/widget
+
+=== 2026-06-18 Session (continued) ===
+
+## OEWS Wage Prediction Model — Validation & Cross-Check
+
+### Cross-validation findings
+- BLS national data vs OFLC MSA-mean comparison showed ~17-20% gap (BLS higher)
+- Root cause: geographic composition effect, NOT formula error
+  - BLS national includes all workers; OFLC covers only MSA-level workers
+  - Mean of MSA-level OFLC L1s ≠ national BLS L1 (small metros drag mean down)
+- OFLC internal formula confirmed: Avg = (L1 + 2*L4)/3 holds to 0.17% (rounding only)
+- Correct validation: OFLC YoY change vs ECI YoY change (apples-to-apples)
+
+### OFLC-to-ECI residuals (mean across 10 SOCs):
+- 2021-22→2022-23: -2.0% residual (anomalous — ECI spiked, OFLC lagged)
+- 2022-23→2023-24: +0.7% (OFLC > ECI by small margin)
+- 2023-24→2024-25: +1.3% (OFLC > ECI)
+- 2024-25→2025-26: +0.1% (near-perfect fit)
+- 3-year calibration (excl anomalous): +0.7%
+
+### Final July 2026 projection method
+- Base: Actual OFLC 2025-26 L1/L2/L3/L4 for each MSA×SOC (from ALC_Export.csv)
+- Growth factor: ECI Q2 2025→Q2 2026 (est.) + panel rotation lift + calibration
+  - mgmt/professional SOCs: +5.61%
+  - all-occupations SOCs: +5.85%
+- Prediction uncertainty: ±1.5% → ±$1,500-4,000 on typical L2 floor
+- Output saved: /tmp/oews_july2026_final.json (14 SOCs × 20 MSAs)
+
+### BLS OEWS files now available locally
+- Kellen downloaded: national_M2021_dl.xlsx, national_M2022_dl.xlsx,
+  national_M2024_dl.xlsx, national_M2025_dl.xlsx
+- national_M2023_dl.xlsx missing (not uploaded) — 4-year validation still valid
+- Files at: /mnt/user-data/uploads/ (Claude container only, not Mac)
+- TODO: save these to Casebase repo or a permanent location on Mac
+
+### Key insight for metro-level predictions
+- MSA xlsx files (state/metro downloads) would allow per-MSA formula validation
+- Kellen offered to get them — defer until we need tighter per-MSA confidence intervals
+
+=== 2026-06-18 Session (continued) — BLS MSA Validation ===
+
+## Full MSA-level formula validation completed
+
+### Data
+- Kellen uploaded BLS OEWS MSA files: MSA_M2021 through MSA_M2025 + BOS counterparts
+  - MSA files = Metropolitan Statistical Area, cross-industry, cross-ownership estimates
+  - BOS files = Balance of State (non-metropolitan areas) — not needed for OFLC
+- Mac had all years pre-downloaded at ~/Downloads/oesm{YY}ma/MSA_M20{YY}_dl.xlsx
+
+### Formula validation (19,948 matched BLS MSA × OFLC pairs, 5 years)
+- Tested 8 L1 approximation formulas using BLS A_PCT10 and A_PCT25
+- Best formula: p10_75_p25_25 (L1 = A_PCT10×0.75 + A_PCT25×0.25)
+  - Raw L1 MAE: 7.09%  |  Systematic bias: +2.45% (overestimates)
+  - After bias correction (÷1.0245): L1 MAE = 4.2%, bias ≈ 0%
+- L4 MAE: ~5% (good for cross-validation but current OFLC data preferred)
+- Key finding: publicly published BLS percentiles cannot reconstruct OFLC L1 exactly
+  because OFLC uses special BLS tabulations (mean of bottom 1/3), not published percentiles
+  The 4-8% residual error is irreducible without access to the special tabulation
+
+### Corrected growth rates (July 2026 projection)
+Previous estimates used 5.61%/5.85% — too conservative.
+Corrected from full OFLC YoY validation:
+
+Component breakdown:
+  ECI Q2 2025 → Q2 2026 (est.): mgmt +3.9%, all +3.6%
+  Panel rotation lift (drop Nov2022, add Nov2025): +2.1%
+  Historical calibration (3-year OFLC-ECI residual): +0.71%
+  Total: mgmt/prof SOCs = +6.71%, all-occ SOCs = +6.41%
+
+OFLC-ECI residuals by year-pair (mean across 10 SOCs, MSA-level):
+  2021-22→2022-23: -2.04% (anomalous — ECI spike post-COVID)
+  2022-23→2023-24: +0.66%
+  2023-24→2024-25: +1.32%
+  2024-25→2025-26: +0.14%
+  3-year mean (excl. anomalous): +0.71%
+
+### Output
+- /tmp/oews_model/oews_july2026_v2.json — 14 SOCs × 18 MSAs
+- Widget rebuilt with corrected growth rates and full validation provenance
+- Current floors: actual OFLC 2025-26 published wages
+- Prediction uncertainty: ±1.5% on growth rate → ±$1,500-4,500 on typical L2 floor
+
+### Remaining gaps
+- 2023 national BLS file (national_M2023_dl.xlsx) was never uploaded — minor gap
+- Metro MSA data for 2026 itself doesn't exist yet (July 2026 OFLC not yet published)
+- NPRM ETA-2026-0001 comment period closed May 26 — if finalized before July 1,
+  all four levels would shift to 34th/52nd/70th/88th percentile methodology (much higher)
+  Tool notes this but cannot predict finalization timing
+
+=== 2026-06-18 Session (continued) — Upcoming Wage Estimator ===
+
+## Completed this session
+
+### OEWS July 2026 Prevailing Wage Forecaster — full build and Casebase integration
+
+**Data pipeline:**
+- Pulled all 619 SOC codes from OFLC 2025-26 ALC_Export.csv with real BLS titles (from MSA_M2025_dl.xlsx)
+- Regenerated meta.json with keys sorted by SOC code (previously unsorted — 15-1251 was not adjacent to 15-1252)
+- Generated 619 per-SOC wage files: /public/oews/wages/{soc}.json
+  Each file: {area_code: [l1, l2, l3, l4, el1, el2, el3, el4]} (cur + est)
+- geo.json: 52 states/territories, 1,910 counties, all mapped to CBSA codes via OFLC Geography.csv
+- Growth rates: +6.71% (management/professional SOCs), +6.41% (all-occupations SOCs)
+- All data files deployed to /Users/Dad/Documents/GitHub/Casebase/frontend/public/oews/
+
+**Standalone test page:**
+- /public/wage-forecaster.html — 173 KB, meta.json and geo.json inlined, wage files fetched on demand
+- Served via python3 -m http.server 8765 from /public directory
+- Fixed SOC sort order bug (meta.json regenerated sorted; JS also sorts defensively)
+- Fixed SOC dropdown "stuck open" bug: replaced <select size="8"> (always-visible listbox)
+  with a proper React-controlled SocDropdown component (closes on outside click, opens on button click)
+
+**Casebase integration (WageForecaster.jsx + App.jsx):**
+- WageForecaster.jsx — 466 lines, full inline style system (var(--text), var(--bg2), var(--amber), etc.)
+  matching VisaBulletinView.jsx pattern. No Tailwind.
+- SocDropdown component: custom dropdown with search input, grouped by 22 SOC major categories,
+  closes on outside click, shows selected label in trigger, clear button when selection active
+- App.jsx changes (5 edits):
+  1. import { WageForecaster } from "./WageForecaster"
+  2. Landing card: "Upcoming Wage Estimator" — green accent (#34d399), bar chart icon
+  3. Nav dropdown: added under Tools group
+  4. View render: {view === "wage-forecaster" && <WageForecaster />}
+  5. Mobile drawer: added under Tools section
+- Vite build clean, synced to casebase-app, Docker rebuilt and live
+
+**Key files:**
+- /Users/Dad/Documents/GitHub/Casebase/frontend/src/WageForecaster.jsx
+- /Users/Dad/Documents/GitHub/Casebase/frontend/src/App.jsx (5 edits)
+- /Users/Dad/Documents/GitHub/Casebase/frontend/public/oews/meta.json (619 SOCs, sorted)
+- /Users/Dad/Documents/GitHub/Casebase/frontend/public/oews/geo.json (1,910 counties)
+- /Users/Dad/Documents/GitHub/Casebase/frontend/public/oews/wages/*.json (619 files)
+- /Users/Dad/Documents/GitHub/Casebase/frontend/public/wage-forecaster.html (standalone)
+
+**Pending:**
+- Monitor NPRM ETA-2026-0001 — if finalized before July 1, update growth methodology
+  and add prominent banner to WageForecaster.jsx
+- Consider adding more SOC codes beyond the 619 currently included
+
+=== 2026-06-18 Session (continued) — PWD City/State Parsing Fix ===
+
+## Bug fixed
+
+**Problem**: When a PWD PDF was dropped onto the PERM Comparer, the city field was
+receiving the entire "City State Zip" string (e.g., "Richardson TX 75080") instead
+of splitting into city and state correctly.
+
+**Root cause**: pdfplumber frequently collapses city/state/zip columns into a
+single-space-separated string when extracting text from the ETA-9141 form.
+The Layout A parser split on 2+ spaces, so if the PDF had only single spaces
+between city/state/zip, the entire string landed in parts[0] (city) with
+parts[1] (state) empty.
+
+**Fix**: Added `_US_STATES` set and `_split_city_state_zip(raw_city, raw_state)`
+helper to `app/extract_pwd.py`. The helper handles all four failure modes:
+  - `"Richardson TX 75080", ""` → strips zip, splits state from city tail
+  - `"Richardson TX", ""`       → splits state from city tail
+  - `"Richardson", "TX 75080"`  → strips zip from state field
+  - `"New York", "NY"`          → already correct, no change
+
+Helper is called at every city/state extraction point in both `_extract_new`
+(Layout A + Layout B) and `_extract_old` (Layout A + Layout B).
+
+Unit tests: 10/10 cases passed via Python CLI.
+
+**Files changed**:
+- `/Users/Dad/Documents/GitHub/Casebase/app/extract_pwd.py`
+
+**Deploy**: synced via `sync-from-dev.sh` → `docker compose up --build -d` ✓
+
+=== 2026-06-18 Session (continued) — PWD Dual-Wage & Job Title Fixes ===
+
+## Job title fix
+The new form (2025+) puts job title on the SAME line as the label with only a
+single space separator: "1.Job title * Senior Financial Analyst".
+Old regex required \n or 2+ spaces after the asterisk — never matched.
+Fix: removed the separator requirement; capture to end of line and trim at "2."
+Applied to both _extract_new (F.a.1) and _extract_old (E.a.1).
+
+## Dual-wage fix
+ETA-9141 item 4 = wage on minimum requirements; item 5 = wage on alternative
+requirements. Both can be present. Item 5 uses DOL fill underscores in the PDF:
+"$ 5__9_0_9_3___ ._0_0____" which previous code never extracted.
+
+Changes to app/extract_pwd.py:
+- Added pwdWageMin / pwdWageAlt fields to result dict
+- Added _parse_wage_amount() helper that strips underscores before parsing
+- _extract_new now extracts both item 4 and item 5 separately
+- _extract_old same treatment
+- pwdWage set to max(wageMin, wageAlt) — the operative floor for PERM
+- Frontend banner logic (pwdWageMin != pwdWageAlt) unchanged, still works
+
+Test results across 6 real PWDs:
+- P-100-25322: wageMin=$44,387 / wageAlt=$59,093 → displays $59,093 ✓
+- P-100-26026: wageMin=$131,082 / wageAlt=$154,606 → displays $154,606 ✓
+- All single-wage PWDs unchanged ✓
+
+Files changed: /Users/Dad/Documents/GitHub/Casebase/app/extract_pwd.py
+Deploy: synced + docker rebuilt ✓

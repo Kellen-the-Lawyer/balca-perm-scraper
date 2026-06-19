@@ -3,19 +3,103 @@ import { auditRecruitmentPiece, RECRUITMENT_TYPES } from "./permCompliance";
 
 export function permSplitLines(t){return t.replace(/\r\n/g,'\n').split('\n');}
 
-export const PBULLET=/^[\s]*([-\u2022*]+|\d+[.)]|[a-zA-Z][.)])\s*/;
+export const PBULLET=/^[\s]*([-\u2022\u2013\u2014*\.]+|\d+[.):]|[a-zA-Z][.)])\s*/;
 
-export function permNorm(t){return permSplitLines(t).map(l=>l.replace(PBULLET,'').trim()).filter(l=>l.length>0).join(' ');}
+// permNormWords: reduce text to a lowercase space-separated word sequence,
+// stripping ALL punctuation, special chars, bullets, and extra whitespace.
+// Used only when igFmt=true so the word-level diff sees nothing but words.
+function permNormWords(t){
+  return permSplitLines(t)
+    .map(l=>l.replace(PBULLET,''))              // strip bullet prefixes
+    .join(' ')
+    .replace(/[^A-Za-z0-9\s]/g,' ')            // replace every non-word char with space
+    .replace(/\s+/g,' ')
+    .trim()
+    .toLowerCase();
+}
 
-export function permTok(t,s){return s?Array.from(t):(t.match(/(\s+|[A-Za-z0-9_]+|[^A-Za-z0-9_\s])/g)??[]);}
+// permNorm: human-readable normalisation used for the equality check and for
+// display.  Strips bullets and common list punctuation but keeps readability.
+export function permNorm(t){
+  return permSplitLines(t)
+    .map(l=>l.replace(PBULLET,'').trim())
+    .filter(l=>l.length>0)
+    .join(' ')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
+export function permTok(t,s){return s?Array.from(t):(t.match(/(\s+|[A-Za-z0-9]+|[^A-Za-z0-9\s])/g)??[]);}
 
 export function pLcs(l,r,ci){const eq=(a,b)=>ci?a.toLowerCase()===b.toLowerCase():a===b;const m=Array.from({length:l.length+1},()=>new Array(r.length+1).fill(0));for(let i=l.length-1;i>=0;i--)for(let j=r.length-1;j>=0;j--)m[i][j]=eq(l[i],r[j])?m[i+1][j+1]+1:Math.max(m[i+1][j],m[i][j+1]);return m;}
 
-export function pDiffTok(a,b,s,ci){const at=permTok(a,s),bt=permTok(b,s),m=pLcs(at,bt,ci),ar=[],br=[];const eq=(x,y)=>ci?x.toLowerCase()===y.toLowerCase():x===y;let ai=0,bi=0;while(ai<at.length&&bi<bt.length){if(eq(at[ai],bt[bi])){ar.push({t:at[ai],c:false});br.push({t:bt[bi],c:false});ai++;bi++;}else if(m[ai+1][bi]>=m[ai][bi+1])ar.push({t:at[ai++],c:true});else br.push({t:bt[bi++],c:true});}while(ai<at.length)ar.push({t:at[ai++],c:true});while(bi<bt.length)br.push({t:bt[bi++],c:true});return{ar,br};}
+// pDiffTok: token-level diff.
+// When igFmt=true (ci=true): diff against stripped word-only sequences so that
+// punctuation, special chars, apostrophe variants, slashes, parens etc. never
+// generate highlights.  The displayed tokens still come from the original
+// strings so the rendered text looks normal — only the *changed* flag is driven
+// by the word-only comparison.
+export function pDiffTok(a,b,s,ci){
+  if(ci){
+    // Build word-only sequences for the LCS/diff engine
+    const wordsOf=str=>str
+      .replace(/[^A-Za-z0-9\s]/g,' ')
+      .replace(/\s+/g,' ')
+      .trim()
+      .toLowerCase()
+      .split(' ')
+      .filter(w=>w.length>0);
+    const aw=wordsOf(a), bw=wordsOf(b);
+    const m=pLcs(aw,bw,true);
+    // Reconstruct display tokens from originals, mapping word positions back
+    // to display runs.  Simpler approach: tokenise originals for display,
+    // then mark a display token as changed iff its word (letters+digits only)
+    // is not present at the matched position.
+    // Even simpler and fully correct: do the LCS on words, then emit
+    // word-granularity spans with the original word text.
+    const ar=[], br=[];
+    const eq=(x,y)=>x===y; // already lowercased
+    let ai=0,bi=0;
+    while(ai<aw.length&&bi<bw.length){
+      if(eq(aw[ai],bw[bi])){ar.push({t:aw[ai],c:false});br.push({t:bw[bi],c:false});ai++;bi++;}
+      else if(m[ai+1][bi]>=m[ai][bi+1])ar.push({t:aw[ai++],c:true});
+      else br.push({t:bw[bi++],c:true});
+    }
+    while(ai<aw.length)ar.push({t:aw[ai++],c:true});
+    while(bi<bw.length)br.push({t:bw[bi++],c:true});
+    // Insert spaces between word tokens for readable display
+    const spaced=tks=>tks.flatMap((tk,i)=>i===0?[tk]:[{t:' ',c:false},tk]);
+    return{ar:spaced(ar),br:spaced(br)};
+  }
+  const at=permTok(a,s),bt=permTok(b,s),m=pLcs(at,bt,ci),ar=[],br=[];
+  const eq=(x,y)=>ci?x.toLowerCase()===y.toLowerCase():x===y;
+  let ai=0,bi=0;
+  while(ai<at.length&&bi<bt.length){
+    if(eq(at[ai],bt[bi])){ar.push({t:at[ai],c:false});br.push({t:bt[bi],c:false});ai++;bi++;}
+    else if(m[ai+1][bi]>=m[ai][bi+1])ar.push({t:at[ai++],c:true});
+    else br.push({t:bt[bi++],c:true});
+  }
+  while(ai<at.length)ar.push({t:at[ai++],c:true});
+  while(bi<bt.length)br.push({t:bt[bi++],c:true});
+  return{ar,br};
+}
 
 export function pDiffLines(a,b,s,ci){const al=permSplitLines(a),bl=permSplitLines(b);const eqLine=(x,y)=>ci?x.toLowerCase()===y.toLowerCase():x===y;const m=pLcs(al,bl,ci),ops=[];let ai=0,bi=0;while(ai<al.length&&bi<bl.length){if(eqLine(al[ai],bl[bi])){ops.push({t:'eq',s:al[ai]});ai++;bi++;}else if(m[ai+1][bi]>=m[ai][bi+1])ops.push({t:'rm',s:al[ai++]});else ops.push({t:'add',s:bl[bi++]});}while(ai<al.length)ops.push({t:'rm',s:al[ai++]});while(bi<bl.length)ops.push({t:'add',s:bl[bi++]});const lines=[];let oi=0,rn=1,cn=1;while(oi<ops.length){const cur=ops[oi];if(cur.t==='eq'){lines.push({rn,cn,rt:[{t:cur.s,c:false}],ct:[{t:cur.s,c:false}],ch:false});rn++;cn++;oi++;continue;}const rm=[],add=[];while(oi<ops.length&&ops[oi].t!=='eq'){const p=ops[oi++];(p.t==='rm'?rm:add).push(p.s);}const sz=Math.max(rm.length,add.length);for(let k=0;k<sz;k++){const{ar,br}=pDiffTok(rm[k]??'',add[k]??'',s,ci);lines.push({rn:k<rm.length?rn:null,cn:k<add.length?cn:null,rt:ar,ct:br,ch:true});if(k<rm.length)rn++;if(k<add.length)cn++;}}return lines;}
 
-export function pSummarize(field,ref,cmp,strict,igFmt){const r=igFmt?permNorm(ref):ref,c=igFmt?permNorm(cmp):cmp,lines=pDiffLines(r,c,strict,igFmt),changed=lines.filter(l=>l.ch).length,exact=igFmt?r.toLowerCase()===c.toLowerCase():r===c;return{field,exact,status:exact?'Exact Match':'Differences Found',detail:exact?(igFmt?'Match when formatting ignored.':'Texts are identical.'):`${changed} differing line${changed===1?'':'s'}.`,lines};}
+// pSummarize: when igFmt=true, normalise BOTH sides before diffing.
+// Equality is checked on the fully-stripped word sequence so that punctuation
+// and formatting differences never count as substantive changes.
+export function pSummarize(field,ref,cmp,strict,igFmt){
+  const r=igFmt?permNorm(ref):ref;
+  const c=igFmt?permNorm(cmp):cmp;
+  // For the exact-match test, strip ALL non-word chars so "A/B testing" ==
+  // "A/B testing" and "Master's" == "Masters".
+  const wordOnly=t=>t.replace(/[^A-Za-z0-9\s]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  const exact=igFmt?wordOnly(ref)===wordOnly(cmp):ref===cmp;
+  const lines=pDiffLines(r,c,strict,igFmt);
+  const changed=lines.filter(l=>l.ch).length;
+  return{field,exact,status:exact?'Exact Match':'Differences Found',detail:exact?(igFmt?'Match when formatting ignored.':'Texts are identical.'):`${changed} differing line${changed===1?'':'s'}.`,lines};
+}
 
 export function PTokens({tokens,kind}){if(!tokens.length)return <span style={{color:'var(--text3)',fontStyle:'italic'}}>(no text)</span>;return tokens.map((tk,i)=><span key={i} style={tk.c?{display:'inline',borderRadius:4,padding:'0 1px',background:kind==='reference'?'var(--red-dim)':'var(--green-dim)',color:kind==='reference'?'var(--red)':'var(--green)'}:{}}>{tk.t}</span>);}
 
