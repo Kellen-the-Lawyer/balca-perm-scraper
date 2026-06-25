@@ -96,14 +96,14 @@ const STATUS_COLORS = {
   "Certified":            "#22c55e",
   "Certified-Expired":    "#86efac",
   "Certified - Expired":  "#86efac",
-  "Withdrawn":            "#f59e0b",
+  "Withdrawn":            "#2dd4bf",
   "Denied":               "#ef4444",
   "Certified - Withdrawn":"#fbbf24",
   "Determination Issued": "#22c55e",
   "Redetermination Affirmed": "#86efac",
-  "Redetermination Modified": "#f59e0b",
+  "Redetermination Modified": "#2dd4bf",
   "Center Director Review Affirmed Determination": "#86efac",
-  "Center Director Review Modified Determination": "#f59e0b",
+  "Center Director Review Modified Determination": "#2dd4bf",
 };
 const FALLBACK_COLORS = ["#6366f1","#8b5cf6","#a78bfa","#c4b5fd","#60a5fa","#34d399"];
 

@@ -6,7 +6,7 @@ export const AAO_OUTCOME = {
   Sustained: { bg: "var(--green-dim)",  text: "var(--green)",  dot: "#34d399" },
   Dismissed: { bg: "var(--bg4)",        text: "var(--text2)",  dot: "#5a5a68" },
   Remanded:  { bg: "var(--yellow-dim)", text: "#fbbf24",       dot: "#fbbf24" },
-  Withdrawn: { bg: "var(--bg4)",        text: "var(--text3)",  dot: "#3a3a3f" },
+  Withdrawn: { bg: "var(--bg4)",        text: "var(--text3)",  dot: "#334155" },
 };
 
 export function AaoBadge({ label, small }) {
@@ -113,7 +113,7 @@ export function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }
                 <button key={o} onClick={() => setOutcome(outcome === o ? "" : o)} style={{ fontSize: 11, padding: "3px 10px", height: "auto", background: outcome === o ? (AAO_OUTCOME[o]?.bg || "var(--bg3)") : "var(--bg3)", color: outcome === o ? (AAO_OUTCOME[o]?.text || "var(--text)") : "var(--text3)", border: outcome === o ? `1px solid ${AAO_OUTCOME[o]?.dot || "#fff"}44` : "1px solid var(--border)", borderRadius: 20, fontWeight: outcome === o ? 500 : 400, transition: "all 0.12s" }}>{o}</button>
               ))}
               <div style={{ flex: 1 }} />
-              <button onClick={() => setAdvOpen(o => !o)} style={{ fontSize: 11, padding: "3px 10px", height: "auto", background: advOpen || advancedCount > 0 ? "var(--amber-dim)" : "var(--bg3)", color: advOpen || advancedCount > 0 ? "var(--amber)" : "var(--text3)", border: advOpen || advancedCount > 0 ? "1px solid #f59e0b44" : "1px solid var(--border)", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
+              <button onClick={() => setAdvOpen(o => !o)} style={{ fontSize: 11, padding: "3px 10px", height: "auto", background: advOpen || advancedCount > 0 ? "var(--amber-dim)" : "var(--bg3)", color: advOpen || advancedCount > 0 ? "var(--amber)" : "var(--text3)", border: advOpen || advancedCount > 0 ? "1px solid #2dd4bf44" : "1px solid var(--border)", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
                 Advanced{advancedCount > 0 ? ` (${advancedCount})` : ""}
               </button>
@@ -147,27 +147,27 @@ export function AAOSearchView({ externalDecisionId, externalQuery, onViewGraph }
           {loading && <Spinner />}
           {!loading && searched && matchedPrecedents.length > 0 && (
             <div style={{ borderBottom: "1px solid var(--border)" }}>
-              <div style={{ padding: splitView ? "8px 12px 4px" : "10px 24px 4px", fontSize: 10, fontWeight: 600, color: "#f59e0b", fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <div style={{ padding: splitView ? "8px 12px 4px" : "10px 24px 4px", fontSize: 10, fontWeight: 600, color: "#2dd4bf", fontFamily: "'DM Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#2dd4bf"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                 I&amp;N Dec. Precedents
               </div>
               {matchedPrecedents.map(p => (
                 <div key={p.id} onClick={() => { setSelectedId(p.id); setPrecId(null); }}
-                  style={{ padding: splitView ? "8px 12px" : "10px 24px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 10, borderLeft: "2px solid #f59e0b44", transition: "background 0.1s" }}
+                  style={{ padding: splitView ? "8px 12px" : "10px 24px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 10, borderLeft: "2px solid #2dd4bf44", transition: "background 0.1s" }}
                   onMouseEnter={e => e.currentTarget.style.background = "var(--bg3)"}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{p.party_name}</span>
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#f59e0b", fontWeight: 500 }}>{p.citation}</span>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#2dd4bf", fontWeight: 500 }}>{p.citation}</span>
                       {p.year && <span style={{ fontSize: 11, color: "var(--text3)" }}>{p.year}</span>}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
                       {p.decision_type === "adopted" ? "Adopted Decision" : "I&N Dec. Precedent"}
-                      {p.cited_by_count > 0 && <span style={{ marginLeft: 8, color: "#f59e0b88" }}>cited {p.cited_by_count.toLocaleString()}× in AAO decisions</span>}
+                      {p.cited_by_count > 0 && <span style={{ marginLeft: 8, color: "#2dd4bf88" }}>cited {p.cited_by_count.toLocaleString()}× in AAO decisions</span>}
                     </div>
                   </div>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.5" style={{ flexShrink: 0, marginTop: 2 }}><polyline points="9 18 15 12 9 6"/></svg>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" strokeWidth="2" opacity="0.5" style={{ flexShrink: 0, marginTop: 2 }}><polyline points="9 18 15 12 9 6"/></svg>
                 </div>
               ))}
             </div>

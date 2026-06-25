@@ -5,6 +5,64 @@ export function permSplitLines(t){return t.replace(/\r\n/g,'\n').split('\n');}
 
 export const PBULLET=/^[\s]*([-\u2022\u2013\u2014*\.]+|\d+[.):]|[a-zA-Z][.)])\s*/;
 
+// Split minimum requirements text into individual requirement fragments.
+// Splits on semicolons or on a period+space before a capital letter, but only
+// when the fragment before the period is long enough to be a real sentence
+// (avoids splitting on abbreviations like "B.S.", "M.S.", "Ph.D.").
+export function parseMinReqSegments(text){
+  if(!text||!text.trim())return[];
+
+  // Line-based format (bullet lists, numbered lists, one requirement per line)
+  const lines=text.split(/\r?\n/)
+    .map(l=>l.replace(PBULLET,'').trim().replace(/[.;]\s*$/,''))
+    .filter(l=>l.length>2);
+  if(lines.length>1) return lines;
+
+  // Paragraph format — walk char-by-char splitting on semicolons and sentence
+  // boundaries. Only split on ". " before a capital if the current fragment is
+  // long enough to be a real sentence (avoids abbreviations like "B.S.", "U.S.").
+  const fragments=[];
+  let start=0;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch===';'){
+      const seg=text.slice(start,i).trim().replace(/[;]\s*$/,'');
+      if(seg)fragments.push(seg);
+      start=i+1;
+    } else if(ch==='.'&&i+2<text.length&&text[i+1]===' '&&/[A-Z]/.test(text[i+2])){
+      const seg=text.slice(start,i).trim();
+      if(seg.length>30){
+        fragments.push(seg);
+        start=i+2;
+      }
+    }
+  }
+  const last=text.slice(start).trim().replace(/[.;]\s*$/,'');
+  if(last)fragments.push(last);
+  return fragments;
+}
+
+// After receiving a PWD API response, separate degree-mentioning segments out of
+// mrRef and route the first to primDeg, the second to secDeg. Returns adjusted
+// {primDeg, secDeg, mrRef} so both handlePwdDrop and loadPwd stay consistent.
+// Python serializes None as the string "None" — treat it as empty.
+function normStr(v){return(!v||v==='None')?'':v;}
+
+export function routePwdDegrees(d){
+  let primDeg=normStr(d.primDeg);
+  let secDeg=normStr(d.secDeg);
+  let mrRef=d.mrRef||'';
+  if(mrRef){
+    const segs=parseMinReqSegments(mrRef);
+    const degSegs=segs.filter(s=>/\bdegree\b/i.test(s));
+    const otherSegs=segs.filter(s=>!/\bdegree\b/i.test(s));
+    if(!primDeg&&degSegs[0])primDeg=degSegs[0];
+    if(!secDeg&&degSegs[1])secDeg=degSegs[1];
+    mrRef=otherSegs.join('; ');
+  }
+  return{primDeg,secDeg,mrRef};
+}
+
 // permNormWords: reduce text to a lowercase space-separated word sequence,
 // stripping ALL punctuation, special chars, bullets, and extra whitespace.
 // Used only when igFmt=true so the word-level diff sees nothing but words.
@@ -248,6 +306,45 @@ export function DropTextarea({ value, onChange, minHeight=260, borderColor, back
   );
 }
 
+// ── Minimum Requirements Segment Editor ─────────────────────────────────────
+// Parses mrRef text into numbered segments (split by ; or sentences) and
+// renders each as its own editable text box. Reconstructs the raw string on edit.
+function MinReqSegmentEditor({value, onChange, placeholder, textareaStyle}){
+  // Always include at least one entry so the DOM structure never changes shape
+  // (switching between a fallback <textarea> and a segmented <div> unmounts the
+  // focused element and loses the cursor on the very first keystroke).
+  const segments=useMemo(()=>{
+    const parsed=parseMinReqSegments(value);
+    return parsed.length>0?parsed:[''];
+  },[value]);
+
+  const handleChange=(i,newVal)=>{
+    const segs=[...segments];
+    segs[i]=newVal;
+    // Reconstruct the raw string; drop a trailing empty slot if editing leaves it blank
+    const joined=segs.every(s=>!s.trim())?'':segs.join('; ');
+    onChange({target:{value:joined}});
+  };
+
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {segments.map((seg,i)=>(
+        <div key={i} style={{display:'flex',alignItems:'flex-start',gap:10}}>
+          <div style={{fontSize:11,fontWeight:600,color:'var(--text3)',minWidth:20,paddingTop:11,textAlign:'right',flexShrink:0,fontFamily:"'DM Mono',monospace"}}>
+            {i+1}.
+          </div>
+          <textarea
+            style={{...PS.textarea,flex:1,minHeight:44,resize:'vertical',...(textareaStyle||{})}}
+            value={seg}
+            placeholder={i===0?(placeholder||'Drop the PWD above to populate, or paste the minimum requirements…'):''}
+            onChange={e=>handleChange(i,e.target.value)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Experience Verification Modal ────────────────────────────────────────────
 // TODO (Future): Implement automated experience comparison — compare the total
 // months of experience across all uploaded letters against the years required
@@ -270,7 +367,7 @@ export function ExpHighlightedText({text,keywords}){
     <span>
       {parts.map((p,i)=>
         p.hl
-          ?<mark key={i} style={{background:'#f59e0b44',color:'var(--amber)',borderRadius:3,padding:'0 2px',fontWeight:600}}>{p.text}</mark>
+          ?<mark key={i} style={{background:'#2dd4bf44',color:'var(--amber)',borderRadius:3,padding:'0 2px',fontWeight:600}}>{p.text}</mark>
           :<span key={i}>{p.text}</span>
       )}
     </span>
@@ -370,7 +467,7 @@ export function ExperienceVerificationModal({pwdText,requirementsText,letters,on
         {letters.length>0&&(
           <div style={{display:'flex',gap:6,padding:'10px 24px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0,overflowX:'auto'}}>
             {letters.map((l,i)=>(
-              <button key={i} onClick={()=>switchLetter(i)} style={{fontSize:11,padding:'4px 14px',borderRadius:20,cursor:'pointer',whiteSpace:'nowrap',background:activeIdx===i?'var(--amber-dim)':'var(--bg3)',color:activeIdx===i?'var(--amber)':'var(--text3)',border:activeIdx===i?'1px solid #f59e0b44':'1px solid var(--border)',fontWeight:activeIdx===i?600:400}}>
+              <button key={i} onClick={()=>switchLetter(i)} style={{fontSize:11,padding:'4px 14px',borderRadius:20,cursor:'pointer',whiteSpace:'nowrap',background:activeIdx===i?'var(--amber-dim)':'var(--bg3)',color:activeIdx===i?'var(--amber)':'var(--text3)',border:activeIdx===i?'1px solid #2dd4bf44':'1px solid var(--border)',fontWeight:activeIdx===i?600:400}}>
                 {l.employerName||l.fileName||`Letter ${i+1}`}{l.months!=null&&<span style={{marginLeft:6,opacity:.7}}>{l.months}mo</span>}{l.saved&&<span style={{marginLeft:4,color:'var(--green)'}}>✓</span>}
               </button>
             ))}
@@ -406,7 +503,7 @@ export function ExperienceVerificationModal({pwdText,requirementsText,letters,on
                   <div><div style={{fontSize:10,color:'var(--text3)',marginBottom:2}}>Employer</div><div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{activeLetter.employerName||'—'}</div></div>
                   <div><div style={{fontSize:10,color:'var(--text3)',marginBottom:2}}>Title</div><div style={{fontSize:13,color:'var(--text)'}}>{activeLetter.jobTitle||'—'}</div></div>
                   <div><div style={{fontSize:10,color:'var(--text3)',marginBottom:2}}>Period</div><div style={{fontSize:13,color:'var(--text)'}}>{activeLetter.startDate||'?'} – {activeLetter.endDate||'?'}</div></div>
-                  {activeLetter.months!=null&&<div style={{padding:'4px 14px',borderRadius:20,background:'var(--amber-dim)',border:'1px solid #f59e0b44',color:'var(--amber)',fontSize:12,fontWeight:600}}>{activeLetter.months} mo ({(activeLetter.months/12).toFixed(1)} yrs)</div>}
+                  {activeLetter.months!=null&&<div style={{padding:'4px 14px',borderRadius:20,background:'var(--amber-dim)',border:'1px solid #2dd4bf44',color:'var(--amber)',fontSize:12,fontWeight:600}}>{activeLetter.months} mo ({(activeLetter.months/12).toFixed(1)} yrs)</div>}
                   <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
                     {!activeLetter.saved
                       ?<button onClick={()=>onSaveLetter({...activeLetter,saved:true},activeIdx)} style={{fontSize:11,padding:'5px 14px',background:'var(--green-dim)',color:'var(--green)',border:'1px solid #34d39944',borderRadius:20,cursor:'pointer'}}>✓ Save Time</button>
@@ -651,14 +748,14 @@ export function EptCard({ stateVal, city, telecommute, wageFrom, wageTo }) {
           <div style={{fontSize:10, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>Posting Requirement</div>
           <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>{ept.postingReq}</div>
         </div>
-        <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background: hasRange?'var(--green-dim)':'var(--amber-dim)', border:`1px solid ${hasRange?'#34d39944':'#f59e0b44'}`}}>
+        <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background: hasRange?'var(--green-dim)':'var(--amber-dim)', border:`1px solid ${hasRange?'#34d39944':'#2dd4bf44'}`}}>
           <div style={{fontSize:10, fontWeight:600, color: hasRange?'var(--green)':'var(--amber)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>
             Wage Range Requirement {hasRange ? '✓ Range entered' : '⚠ No range entered yet'}
           </div>
           <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>{ept.wagReq}</div>
         </div>
         {ept.benefitsReq && (
-          <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background:'var(--amber-dim)', border:'1px solid #f59e0b44'}}>
+          <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background:'var(--amber-dim)', border:'1px solid #2dd4bf44'}}>
             <div style={{fontSize:10, fontWeight:600, color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>⚠ Benefits Description Required</div>
             <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>This state requires a general description of benefits and other compensation in job postings, not just a wage range.</div>
           </div>
@@ -926,9 +1023,11 @@ export function PermComparer(){
       setTelecommuteText(d.telecommuteDetail || '');
       setTravel(d.travelDetail || '');
       if (d.jdRef)   setJdRef(d.jdRef);
-      if (d.primDeg) setPrimDeg(d.primDeg);
-      if (d.mrRef)   setMrRef(d.mrRef);
       if (d.pwdWage) setPwdWage(d.pwdWage);
+      const {primDeg,secDeg,mrRef}=routePwdDegrees(d);
+      if(primDeg)setPrimDeg(primDeg);
+      if(secDeg)setSecDeg(secDeg);
+      setMrRef(mrRef);
     } catch(e) {
       setPwdError('Could not extract PWD: ' + e.message);
     } finally {
@@ -979,9 +1078,11 @@ export function PermComparer(){
       setTelecommuteText(d.telecommuteDetail||'');
       setTravel(d.travelDetail||'');
       if(d.jdRef)setJdRef(d.jdRef);
-      if(d.primDeg)setPrimDeg(d.primDeg);
-      if(d.mrRef)setMrRef(d.mrRef);
       if(d.pwdWage)setPwdWage(d.pwdWage);
+      const{primDeg,secDeg,mrRef}=routePwdDegrees(d);
+      if(primDeg)setPrimDeg(primDeg);
+      if(secDeg)setSecDeg(secDeg);
+      setMrRef(mrRef);
     }catch(e){
       setPwdError('Could not extract fields: '+e.message);
     }finally{
@@ -1002,7 +1103,7 @@ export function PermComparer(){
   })();
 
   const pillBtn=(label,active,onClick)=>(
-    <button onClick={onClick} style={{fontSize:11,padding:'3px 10px',height:'auto',background:active?'var(--amber-dim)':'var(--bg3)',color:active?'var(--amber)':'var(--text3)',border:active?'1px solid #f59e0b44':'1px solid var(--border)',borderRadius:20,fontWeight:active?500:400,cursor:'pointer'}}>{label}</button>
+    <button onClick={onClick} style={{fontSize:11,padding:'3px 10px',height:'auto',background:active?'var(--amber-dim)':'var(--bg3)',color:active?'var(--amber)':'var(--text3)',border:active?'1px solid #2dd4bf44':'1px solid var(--border)',borderRadius:20,fontWeight:active?500:400,cursor:'pointer'}}>{label}</button>
   );
 
   const grid2={display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,alignItems:'start'};
@@ -1059,7 +1160,7 @@ export function PermComparer(){
               setExpLetters(prev=>[...prev,droppedLetter]);
             }
             setShowExpModal(true);
-          }} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:'var(--bg3)',color:(expLetters.length>0||droppedLetter)?'var(--amber)':'var(--text2)',border:(expLetters.length>0||droppedLetter)?'1px solid #f59e0b44':'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>
+          }} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:'var(--bg3)',color:(expLetters.length>0||droppedLetter)?'var(--amber)':'var(--text2)',border:(expLetters.length>0||droppedLetter)?'1px solid #2dd4bf44':'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             {' Verify Experience'}{expLetters.length>0&&<span style={{marginLeft:4,padding:'1px 6px',background:'var(--amber)',color:'var(--bg)',borderRadius:10,fontSize:10,fontWeight:700}}>{expLetters.length}</span>}
           </button>}
@@ -1100,7 +1201,7 @@ export function PermComparer(){
             <div style={{marginBottom:14}}><label style={PS.label}>Job Description (from PWD — editable)</label>
               <textarea style={{...PS.textarea,minHeight:120}} value={jdRef} placeholder="Drop the PWD above to populate, or paste the job duties…" onChange={e=>setJdRef(e.target.value)}/></div>
             <div><label style={PS.label}>Minimum Requirements (from PWD — editable)</label>
-              <textarea style={{...PS.textarea,minHeight:160}} value={mrRef} placeholder="Drop the PWD above to populate, or paste the minimum requirements…" onChange={e=>setMrRef(e.target.value)}/></div>
+              <MinReqSegmentEditor value={mrRef} onChange={e=>setMrRef(e.target.value)}/></div>
           </div>
           <RecruitmentAuditPanel key={auditKey} pwd={pwdForAudit} refText={auditRefText}/>
         </>}
@@ -1145,12 +1246,17 @@ export function PermComparer(){
                 <div><label style={PS.label}>Secondary Degree (if any)</label><textarea style={{...PS.textarea,minHeight:70}} value={secDeg} onChange={e=>setSecDeg(e.target.value)}/></div>
               </div>
               <label style={PS.label}>Paste the minimum requirements</label>
-              <textarea style={{...PS.textarea,minHeight:260}} value={mrRef} onChange={e=>setMrRef(e.target.value)}/>
+              <MinReqSegmentEditor value={mrRef} onChange={e=>setMrRef(e.target.value)}/>
             </div>
             <div style={PS.card}>
               {cardHeader('Comparison','Requirements Comparison',results?results.mr.exact:null)}
               <label style={PS.label}>Text to compare against</label>
-              <textarea style={{...PS.textarea,minHeight:260,borderColor:results&&!results.mr.exact?'var(--amber)':'var(--border)',background:results&&!results.mr.exact?'var(--amber-dim)':'var(--bg)'}} value={mrCmp} onChange={e=>setMrCmp(e.target.value)}/>
+              <MinReqSegmentEditor
+                value={mrCmp}
+                onChange={e=>setMrCmp(e.target.value)}
+                placeholder="Paste requirements text here…"
+                textareaStyle={results&&!results.mr.exact?{borderColor:'var(--amber)',background:'var(--amber-dim)'}:undefined}
+              />
             </div>
           </div>
           {results&&<PermDiffPanel res={results.mr} title="Minimum Requirements"/>}

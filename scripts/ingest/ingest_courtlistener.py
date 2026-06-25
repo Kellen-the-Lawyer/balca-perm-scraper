@@ -47,8 +47,6 @@ DB_URL      = os.environ.get(
     "DATABASE_URL",
     "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions",
 )
-OLLAMA_URL  = os.environ.get("OLLAMA_URL",        "http://localhost:11434")
-EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:4b")
 DATA_DIR    = Path(
     os.environ.get(
         "COURTLISTENER_DATA_DIR",
@@ -129,22 +127,13 @@ def chunk_by_paragraphs(
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
 
-def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Call Ollama embedding API for a batch of texts, keeping model hot in GPU."""
-    r = requests.post(
-        f"{OLLAMA_URL}/api/embed",
-        json={
-            "model": EMBED_MODEL,
-            "input": texts,
-            "keep_alive": "30m",   # hold model in GPU memory between batches
-        },
-        timeout=300,
-    )
-    r.raise_for_status()
-    return r.json()["embeddings"]
-
-
-# ── DB helpers ────────────────────────────────────────────────────────────────
+def embed_batch(texts: list) -> list:
+    """Delegate to app.embed.embed_documents (Voyage API, voyage-4-large)."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).parents[2] if 'perm-research' in __file__ else _Path(__file__).parents[2]))
+    from app.embed import embed_documents
+    return embed_documents(list(texts))
 
 def ensure_corpus_allowed(conn):
     """Add court_opinions to the rag_chunks corpus CHECK constraint if absent."""

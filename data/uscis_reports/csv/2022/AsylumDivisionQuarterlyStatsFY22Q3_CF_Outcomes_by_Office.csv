@@ -1,0 +1,41 @@
+Number of Completed Credible Fear Screenings,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"By Outcome, Office, Month",,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"April 1, 2022 - June 30, 2022",,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,April,, ,CF Screening,Outcomes,,,May,, ,CF Screening,Outcomes,,,June,, ,CF Screening,Outcomes,,,Quarter,, ,CF Screening,Outcomes,,
+,,Positive2, ,Negative3,Admin.,Close4,,,Positive2, ,Negative3,Admin.,Close4,,,Positive2, ,Negative3,Admin.,Close4,,,Positive2, ,Negative3,Admin.,Close4,
+Office,Total1,Persecution5,Torture6,Negative,Dissolve7,Other8,Language Access9,Total1,Persecution5,Torture6,Negative,Dissolve7,Other8,Language Access9,Total1,Persecution5,Torture6,Negative,Dissolve7,Other8,Language Access9,Total1,Persecution5,Torture6,Negative,Dissolve7,Other8,Language Access9
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Total,"2,313","1,052",258,851,46,106, -   ,"2,086",883,321,732,94,56, -   ,"5,952","1,978",891,"1,759",130,"1,194", -   ,"10,351","3,913","1,470","3,342",270,"1,356", -   
+Arlington,367,205,46,58,4,54, - ,365,134,72,137,19,3, - ,299,150,63,45,5,36, - ,"1,031",489,181,240,28,93, - 
+Boston,20,11,6,3,,, - ,4,3,,1,,, - ,14,3,,1,2,8, - ,38,17,6,5,2,8, - 
+Chicago,29,11,2,3,13,, - ,23,6,,6,11,, - ,20,4,,6,8,2, - ,72,21,2,15,32,2, - 
+Houston,"1,453",550,152,688,18,45, - ,"1,131",391,190,470,56,24, - ,"4,606","1,381",704,"1,532",83,906, - ,"7,190","2,322","1,046","2,690",157,975, - 
+Los Angeles,116,75,13,26,,2, - ,129,95,9,23,,2, - ,392,155,42,69,4,122, - ,637,325,64,118,4,126, - 
+Miami,105,82,12,7,4,, - ,98,85,12,,1,, - ,149,115,19,2,11,2, - ,352,282,43,9,16,2, - 
+New Orleans,135,64,16,51,2,2, - ,167,79,24,58,4,2, - ,210,81,19,61,4,45, - ,512,224,59,170,10,49, - 
+New York,41,27,8,5,1,, - ,95,52,8,28,2,5, - ,103,16,6,20,5,56, - ,239,95,22,53,8,61, - 
+Newark,26,14,1,10,1,, - ,33,21,4,6,1,1, - ,101,50,22,19,5,5, - ,160,85,27,35,7,6, - 
+San Francisco,21,13,2,,3,3, - ,40,17,1,3,,19, - ,49,23,15,4,3,4, - ,110,53,18,7,6,26, - 
+Tampa, - , - , - , - , - , - , - ,1, - ,1, - , - , - , - ,9, - ,1, - , - ,8, - ,10, - ,2, - , - ,8, - 
+Table Key:,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+- Represents zero or rounds to 0.0,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+References:,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1 The number of Credible Fear Screenings completed during the reporting period.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+2 The number of Credible Fear Screenings with a positive determination (Fear Established) during the reporting period.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+3 The number of Credible Fear Screenings with a negative determination (Fear Not Established) during the reporting period.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+4 The number of Credible Fear Screenings USCIS administratively closed during the reporting period.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+5 The number of Credible Fear Screenings with a positive fear determination based on persecution during the reporting period.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+6 The number of Credible Fear Screenings with a positive fear determination based on torture during the reporting period.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+7 The number of Credible Fear Screenings USCIS administratively closed because the individual withdrew his/her fear claim.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"8The number of of Credible Fear Screenings USCIS administratively closed for various reasons such as non-citizen in State or Federal custody, unable to effectively communicate, ineligible, etc.",,,,,,,,,,,,,,,,,,,,,,,,,,,,
+9 The number of Credible Fear screenings USCIS administratively closed because USCIS was unable to provide an interpreter speaking the individual's preferred language.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Notes:,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+1) Screenings completed or pending a decision may have been received in previous reporting periods.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+2) Screening receipts and outcomes include one individual. ,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+3) The report reflects the most up-to-date summary statistics available at the time the database is queried.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+4) Counts may differ from previous periods due to system updates and post-adjudicative outcomes.,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"5) For a complete list of USCIS forms and descriptions, visit: https://www.uscis.gov/forms",,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Source:,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Refugee, Asylum and International Operations Directorate (RAIO)",,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"GLOBAL Master Affirmative, Affirmative Backlog History, and Master APSO, queried 09/12/2022.",,,,,,,,,,,,,,,,,,,,,,,,,,,,

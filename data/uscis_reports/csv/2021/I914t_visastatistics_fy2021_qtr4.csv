@@ -1,0 +1,51 @@
+"Number of Form I-914, Application for T Nonimmigrant Status",,,,,,,,,,,,
+"By Fiscal Year, Quarter, and Case Status",,,,,,,,,,,,
+Fiscal Years 2008-2021,,,,,,,,,,,,
+,,,,,,,,,,,,
+Period,Applications by Case Status,,,,,,,,,,,
+,Victims of Trafficking1,,,,Family Members1,,,,Fiscal Year Total,,,
+,Applications Received2,Approved3,Denied4,Pending5,Applications Received2,Approved3,Denied4,Pending5,Applications Received2,Approved3,Denied4,Pending5
+,,,,,,,,,,,,
+Receipt Fiscal Year - Total,,,,,,,,,,,,
+2008,389,247,56,193,321,176,23, D ,710,423,79, H 
+2009,461,290,63,307,241,259,54, D ,702,549,117, H 
+2010,541,446,102,305,518,361,74, D ,"1,059",807,176, H 
+2011,882,556,145,502,909,708,114, D ,"1,791","1,264",259, H 
+2012,790,667,81,565,848,747,94,453,"1,638","1,414",175,"1,018"
+2013,804,851,97,421,"1,021",984,85,518,"1,825","1,835",182,939
+2014,908,619,135,590,913,787,95,579,"1,821","1,406",230,"1,169"
+2015,"1,040",611,239,809,"1,113",692,182,854,"2,153","1,303",421,"1,663"
+2016,955,748,175,869,890,937,144,713,"1,845","1,685",319,"1,582"
+2017,"1,177",669,213,"1,180","1,142",667,123,"1,100","2,319","1,336",336,"2,280"
+2018,"1,613",576,300,"1,916","1,315",703,251,"1,483","2,928","1,279",551,"3,399"
+2019,"1,242",500,365,"2,358","1,011",491,216,"1,860","2,253",991,581,"4,218"
+2020,"1,110","1,040",778,"1,798",966,"1,018",511,"1,448","2,076","2,058","1,289","3,246"
+Receipt Fiscal Year 2021 by Quarter,,,,,,,,,,,,
+   Q1. October - December,290,135,101,"1,869",234,82,60,"1,545",524,217,161,"3,414"
+   Q2. January - March,371,226,157,"1,889",242,192,108,"1,539",613,418,265,"3,428"
+   Q3. April - June,520,198,163,"2,092",312,177,113,"1,625",832,375,276,"3,717"
+   Q4. July - September,520,270,103,"2,298",286,171,65,"1,746",806,441,168,"4,044"
+   Total,"1,701",829,524,"2,298","1,074",622,346,"1,746","2,775","1,451",870,"4,044"
+,,,,,,,,,,,,
+Table Key:,,,,,,,,,,,,
+D Disclosure standards not met.,,,,,,,,,,,,
+H Replaces the value from which one could deduce the value of D. ,,,,,,,,,,,,
+- Represents zero or rounds to 0.0.,,,,,,,,,,,,
+,,,,,,,,,,,,
+Reference(s):,,,,,,,,,,,,
+"1 Refers to victims of severe forms of trafficking (T-1) and family members of victims (T-2, 3, 4, 5, 6).",,,,,,,,,,,,
+2  The number of new applications received and entered into a case-tracking system during the reporting period.,,,,,,,,,,,,
+3 The number of applications approved during the reporting period.,,,,,,,,,,,,
+"4  The number of applications that were denied, terminated, or withdrawn during the reporting period.",,,,,,,,,,,,
+5  The number of applications awaiting a decision as of the end of the reporting period.,,,,,,,,,,,,
+"6 Per USCIS best practices, units of less than 10 beneficiaries are masked to limit the possibility of the de-anonymization of data. ",,,,,,,,,,,,
+,,,,,,,,,,,,
+Note(s):,,,,,,,,,,,,
+1) Some applications or petitions approved or denied may have been received in previous reporting periods.,,,,,,,,,,,,
+2) The report reflects the most up-to-date estimate available at the time the database is queried.,,,,,,,,,,,,
+3) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,,,,,,,,,,
+"4) For a complete list of USCIS forms and descriptions, visit https://www.uscis.gov/forms. ",,,,,,,,,,,,
+,,,,,,,,,,,,
+Source(s):,,,,,,,,,,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,,,,,,,,,,
+"C3 Consolidated via SAS, queried 10/2021, TRK 8239.",,,,,,,,,,,,

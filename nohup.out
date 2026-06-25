@@ -1,0 +1,3 @@
+usage: re_embed_voyage.py [-h] [--reset] [--limit LIMIT] [--dry-run]
+                          [--db-url DB_URL]
+re_embed_voyage.py: error: unrecognized arguments: /Users/Dad/Library/Logs/re_embed_final.log

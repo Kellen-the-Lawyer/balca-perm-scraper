@@ -314,28 +314,11 @@ def _extract_pdf_text_source(local_path: str | None, gcs_object: str | None) -> 
 
 import json as _json
 
-OLLAMA_URL        = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL      = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:latest")
 OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "mistral:7b-instruct")
-EMBED_DIM      = 1024  # MRL truncation to stay under pgvector's 2000-dim index limit
-QUERY_INSTRUCT = "Instruct: Given a legal research query, retrieve relevant passages that answer the query\nQuery: "
+EMBED_DIM         = int(os.environ.get("EMBED_DIM", "1024"))
 
-async def embed_query(text: str) -> list:
-    """Embed a single query via local Ollama, truncated to EMBED_DIM."""
-    payload = _json.dumps({
-        "model": OLLAMA_MODEL,
-        "input": [QUERY_INSTRUCT + text.strip()[:32000]],
-        "options": {"num_ctx": 32768},
-    }).encode()
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
-            f"{OLLAMA_URL}/api/embed",
-            content=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    return data["embeddings"][0][:EMBED_DIM]
+# Query embedding: local voyage-4-nano via sentence-transformers (no API call at query time)
+from app.embed import embed_query  # noqa: E402
 
 CORPUS_LABELS = {
     "balca":      "BALCA Decision",
@@ -354,10 +337,7 @@ __all__ = [
     "GCS_CHUNK_SIZE",
     "GCS_RAW_BUCKET",
     "OLLAMA_CHAT_MODEL",
-    "OLLAMA_MODEL",
-    "OLLAMA_URL",
     "PDF_BASE_PATH",
-    "QUERY_INSTRUCT",
     "REGULATIONS_BASE_PATH",
     "USCIS_POLICY_MANUAL_GCS_OBJECT",
     "_aao_gcs_object",

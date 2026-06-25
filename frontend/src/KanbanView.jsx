@@ -14,13 +14,13 @@ function kanbanFetch(path, opts = {}) {
 const COLS = [
   { id: "todo",       label: "To Do",      accent: "#a4a4b3" },
   { id: "inprogress", label: "In Progress", accent: "#60a5fa" },
-  { id: "review",     label: "Review",      accent: "#f59e0b" },
+  { id: "review",     label: "Review",      accent: "#2dd4bf" },
   { id: "done",       label: "Done",        accent: "#34d399" },
 ];
 
 const PRIORITY = {
   high: { label: "High",   bg: "#f8717118", text: "#f87171", dot: "#f87171" },
-  med:  { label: "Medium", bg: "#f59e0b18", text: "#f59e0b", dot: "#f59e0b" },
+  med:  { label: "Medium", bg: "#2dd4bf18", text: "#2dd4bf", dot: "#2dd4bf" },
   low:  { label: "Low",    bg: "#34d39918", text: "#34d399", dot: "#34d399" },
 };
 

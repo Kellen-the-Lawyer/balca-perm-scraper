@@ -1,20 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #0e0e0f;
-  --bg2:       #141416;
-  --bg3:       #1c1c1f;
-  --bg4:       #242428;
-  --border:    #2a2a2e;
-  --border2:   #3a3a3f;
-  --text:      #f0f0f3;
-  --text2:     #c6c6d1;
-  --text3:     #a4a4b3;
-  --amber:     #f59e0b;
-  --amber2:    #fbbf24;
-  --amber-dim: #f59e0b22;
+  --bg:        #0b1120;
+  --bg2:       #0f172a;
+  --bg3:       #1e293b;
+  --bg4:       #334155;
+  --border:    #1e293b;
+  --border2:   #334155;
+  --text:      #f1f5f9;
+  --text2:     #cbd5e1;
+  --text3:     #64748b;
+  --amber:     #2dd4bf;
+  --amber2:    #5eead4;
+  --amber-dim: #2dd4bf22;
   --green:     #34d399;
   --green-dim: #34d39918;
   --red:       #f87171;
@@ -22,8 +22,8 @@
   --blue:      #60a5fa;
   --blue-dim:  #60a5fa18;
   --yellow-dim:#fbbf2418;
-  --radius:    6px;
-  --radius-lg: 10px;
+  --radius:    8px;
+  --radius-lg: 14px;
 }
 
 html, body, #root {
@@ -81,7 +81,7 @@ button:active { transform: scale(0.98); }
 button.primary {
   background: var(--amber);
   border-color: var(--amber);
-  color: #0e0e0f;
+  color: #042f2e;
   font-weight: 600;
 }
 button.primary:hover { background: var(--amber2); border-color: var(--amber2); }
@@ -379,6 +379,40 @@ mark {
   .mobile-drawer-item { min-height: 48px; }
   .header-search input { height: 38px; }
   .citation-graph-svg { user-select: none; -webkit-user-select: none; }
+}
+
+/* ── Light theme ─────────────────────────────────── */
+html[data-theme="light"] {
+  --bg:        #eef2f7;
+  --bg2:       #f5f7fa;
+  --bg3:       #e8edf5;
+  --bg4:       #dde4ef;
+  --border:    #dde4ef;
+  --border2:   #c8d3e3;
+  --text:      #0f172a;
+  --text2:     #374151;
+  --text3:     #64748b;
+  --amber:     #0d9488;
+  --amber2:    #0f766e;
+  --amber-dim: #0d948818;
+  --green:     #059669;
+  --green-dim: #05966918;
+  --red:       #dc2626;
+  --red-dim:   #dc262618;
+  --blue:      #2563eb;
+  --blue-dim:  #2563eb18;
+  --yellow-dim:#d9770618;
+}
+html[data-theme="light"] button.primary { color: #ffffff; }
+html[data-theme="light"] mark { background: var(--amber-dim); color: var(--amber2); }
+
+/* ── Grid dot background (kellenpowell.com Slate style) ── */
+.grid-bg {
+  background-image: radial-gradient(circle at 1px 1px, rgba(148,163,184,0.10) 1px, transparent 0);
+  background-size: 26px 26px;
+}
+html[data-theme="light"] .grid-bg {
+  background-image: radial-gradient(circle at 1px 1px, rgba(100,116,139,0.10) 1px, transparent 0);
 }
 
 /* ── Mobile layout ───────────────────────────────── */

@@ -1,0 +1,30 @@
+Report to Congress,,,,,,,
+Number of Service-Wide Forms,,,,,,,
+"By Month, Form Status, and Processing Time",,,,,,,
+For the Month of March 2023,,,,,,,
+Form Number,Description,Forms Received,Approvals,Denials,Pending,Pending Over 6 Months,Avg. Processing Time
+I-130,Petition for Alien Relative,"91,073","86,070","5,524","1,975,943","1,520,870",16.2
+I-360,"Petition for Amerasian, Widow(er), or Special Immigrant","8,150","5,840",639,"104,597","65,106",12.5
+I-485,Application to Register Permanent Residence or Adjust Status (Asylum),"4,628","2,851",211,"56,647","41,060",25.5
+I-485,Application to Register Permanent Residence or Adjust Status (Cuban),"9,071","4,448","1,466","39,772","13,442",5.5
+I-485,Application to Register Permanent Residence or Adjust Status (Employment),"12,122","13,552","1,326","211,273","143,560",12.9
+I-485,Application to Register Permanent Residence or Adjust Status (Family),"37,128","41,119","2,405","496,346","318,515",13.1
+I-485,Application to Register Permanent Residence or Adjust Status (Other),"3,466","3,147",233,"59,598","44,429",16.9
+I-485,Application to Register Permanent Residence or Adjust Status (Refugee),"1,902","1,127",79,"24,851","16,816",24.6
+I-751,Petition to Remove Conditions on Residence,"13,439","11,135",528,"243,257","178,267",23.6
+I-765,Application for Employment Authorization,"353,971","271,045","26,734","1,539,808","675,870",5.2
+N-400,Application for Naturalization,"78,892","72,355","7,863","461,397","130,817",7.9
+Notes,,,,,,,
+"1) ""Forms Received"" are the number of new applications or petitions received and entered into a case-tracking system during the reporting period.",,,,,,,
+"2) ""Approvals"" are the number of applications or petitions approved during the reporting period.",,,,,,,
+"3) ""Denials"" are the number of applications or petitions that were denied during the reporting period.",,,,,,,
+"4) ""Pending"" is the number of applications or petitions awaiting a decision as of the end of the reporting period. Some actions taken on cases are not reflected in this report such as administrative closures and transfers between offices; thus, the total pending counts cannot be calculated using data from previous reporting periods.",,,,,,,
+"5) ""Pending Over Six Months"" is the number of applications pending a decision more than six months after receipt, as of the end of the reporting period.",,,,,,,
+"6) ""Avg. Processing Time"" is the number of months it took for an application, petition, or request to be processed from receipt to completion; the average processing time is calculated using all applications and petitions completed in the reporting period and may differ from processing times reported on other USCIS.gov webpages. ",,,,,,,
+"7) This report is produced in response to direction set forth in the Consolidated Appropriations Act, 2022, Joint Explanatory Statement (H. R. 2471 / P.L. 117-103).",,,,,,,
+"8) Some applications or petitions approved, denied, or pending a decision may have been received in previous reporting periods.",,,,,,,
+9) The report reflects the most up-to-date estimate available at the time the database is queried and may differ from other published reports.,,,,,,,
+"10) Forms received, completed (approved and denied), and pending counts may differ from counts reported in previously published reports due to processing delays and the time at which the data are queried, system updates, and post-adjudicative outcomes.",,,,,,,
+"11) For a complete list of USCIS forms and descriptions, visit https://www.uscis.gov/forms.",,,,,,,
+Source:,,,,,,,
+"ELIS, CLAIMS3, queried April 2023",,,,,,,

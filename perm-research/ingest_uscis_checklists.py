@@ -42,8 +42,6 @@ load_dotenv(Path(__file__).parent / ".env")
 
 DB_URL       = os.environ.get("DATABASE_URL",
                "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions")
-OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:latest")
 EMBED_DIM    = 1024
 CHUNK_TOKENS  = 800
 OVERLAP_TOKENS = 80
@@ -193,48 +191,13 @@ def make_source_id(form: str, classification: str) -> str:
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
 
-def check_ollama():
-    try:
-        with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5) as r:
-            tags = json.loads(r.read())
-        models = [m["name"] for m in tags.get("models", [])]
-        if not any(OLLAMA_MODEL.split(":")[0] in m for m in models):
-            log.error(f"Model '{OLLAMA_MODEL}' not found. Run: ollama pull {OLLAMA_MODEL}")
-            sys.exit(1)
-        log.info(f"Ollama OK — model: {OLLAMA_MODEL}")
-    except Exception as e:
-        log.error(f"Cannot reach Ollama at {OLLAMA_URL}: {e}")
-        log.error("Start Ollama first: ollama serve")
-        sys.exit(1)
-
-
-def embed_batch(texts: list[str]) -> list[list[float]]:
-    cleaned = [(DOC_INSTRUCT + t.strip()[:32000]) or " " for t in texts]
-    payload = json.dumps({
-        "model": OLLAMA_MODEL,
-        "input": cleaned,
-        "options": {"num_ctx": 32768},
-    }).encode()
-
-    for attempt in range(5):
-        try:
-            req = urllib.request.Request(
-                f"{OLLAMA_URL}/api/embed",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                data = json.loads(resp.read())
-            return [vec[:EMBED_DIM] for vec in data["embeddings"]]
-        except Exception as e:
-            wait = 15 * (attempt + 1)
-            log.warning(f"Ollama error (attempt {attempt+1}/5): {e} — retry in {wait}s")
-            time.sleep(wait)
-
-    raise RuntimeError("Ollama failed after 5 attempts")
-
-# ── HNSW index ────────────────────────────────────────────────────────────────
+def embed_batch(texts: list) -> list:
+    """Delegate to app.embed.embed_documents (Voyage API, voyage-4-large)."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).parents[2] if 'perm-research' in __file__ else _Path(__file__).parents[2]))
+    from app.embed import embed_documents
+    return embed_documents(list(texts))
 
 def rebuild_hnsw(conn):
     with conn.cursor() as cur:
@@ -362,7 +325,6 @@ def run_embed(conn, batch_size: int):
         log.info("No chunks pending embedding")
         return
 
-    log.info(f"Embedding {len(pending):,} chunk(s) (model: {OLLAMA_MODEL})")
     done = 0
 
     for i in range(0, len(pending), batch_size):
@@ -436,7 +398,6 @@ def main():
         run_ingest(conn, args.limit)
 
     if args.embed:
-        check_ollama()
         run_embed(conn, args.batch_size)
 
     conn.close()

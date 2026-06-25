@@ -16,8 +16,9 @@ from fastapi.staticfiles import StaticFiles
 
 from core import database, ensure_operational_schema
 import kanban as kanban_module
-from routers import (aao, balca, checklists, extraction, ina, oflc, policy,
-                     projects, rag, regulations, search_all, visa_bulletin)
+from routers import (aao, balca, checklists, eb_inventory, extraction, ina,
+                     oflc, policy, projects, rag, regulations, search_all,
+                     visa_bulletin)
 
 
 @asynccontextmanager
@@ -33,7 +34,7 @@ app = FastAPI(title="PERM Decisions Research API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(kanban_module.register_routes(database))
 for _r in (balca, projects, aao, regulations, policy, search_all, extraction,
-           ina, checklists, rag, oflc, visa_bulletin):
+           ina, checklists, rag, oflc, visa_bulletin, eb_inventory):
     app.include_router(_r.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"

@@ -156,7 +156,7 @@ export function AskView({ onNavigate }) {
 
         {notReady && (
           <div style={{ marginTop: 8, fontSize: 12, color: "var(--amber)",
-            background: "var(--amber-dim,#f59e0b22)", padding: "6px 10px", borderRadius: "var(--radius)" }}>
+            background: "var(--amber-dim,#2dd4bf22)", padding: "6px 10px", borderRadius: "var(--radius)" }}>
             RAG index is empty. Run <code>python3 ingest_rag.py --corpus regulation --corpus policy</code> to get started.
           </div>
         )}

@@ -1,4 +1,25 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useNavigate as useRouterNavigate, useLocation } from "react-router-dom";
+
+const VIEW_PATHS = {
+  "landing":            "/",
+  "balca":              "/balca",
+  "aao":               "/aao",
+  "regulations":        "/regulations",
+  "policy":             "/policy",
+  "citation-graph":     "/citation-graph",
+  "aao-citation-graph": "/aao-citation-graph",
+  "perm-comparer":      "/perm-comparer",
+  "visa-bulletin":      "/visa-bulletin",
+  "wage-forecaster":    "/wage-forecaster",
+  "eb-inventory":       "/eb-inventory",
+  "projects":           "/projects",
+  "oflc":               "/oflc",
+  "kanban":             "/kanban",
+  "ask":               "/ask",
+  "search-all":         "/search-all",
+};
+const PATH_VIEWS = Object.fromEntries(Object.entries(VIEW_PATHS).map(([k, v]) => [v, k]));
 import "./index.css";
 import { API } from "./apiBase";
 import { KanbanView } from "./KanbanView";
@@ -14,29 +35,31 @@ import { PolicyView, RegulationsView } from "./RegulationPolicyViews";
 import { SearchAllView } from "./SearchAllView";
 import { useFetch } from "./common";
 import { WageForecaster } from "./WageForecaster";
+import { EbInventoryView } from "./EbInventoryView";
 
 function LandingPage({ onNavigate }) {
   const { data: stats } = useFetch(`${API}/stats`);
   const { data: aaoStats } = useFetch(`${API}/aao/stats`);
 
   const modules = [
-    { id: "balca", label: "BALCA / PERM Decisions", description: "Board of Alien Labor Certification Appeals — employer-sponsored green card appeals", count: stats?.total_decisions, countLabel: "decisions", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>, available: true },
+    { id: "balca", label: "BALCA / PERM Decisions", description: "Board of Alien Labor Certification Appeals — employer-sponsored green card appeals", count: stats?.total_decisions, countLabel: "decisions", accent: "#2dd4bf", accentDim: "#2dd4bf22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>, available: true },
     { id: "aao", label: "AAO Decisions", description: "Administrative Appeals Office — USCIS benefit petition appeals across all visa categories", count: aaoStats?.total_decisions, countLabel: "decisions", accent: "#60a5fa", accentDim: "#60a5fa22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>, available: true },
     { id: "regulations", label: "Regulations & Statutes", description: "8 CFR, 20 CFR, 22 CFR, and 29 CFR — full text search across 120 parts, 2,301 pages", accent: "#34d399", accentDim: "#34d39922", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>, available: true },
     { id: "policy", label: "Policy Manuals", description: "USCIS Policy Manual, Foreign Affairs Manual — agency guidance and adjudication policies", accent: "#a78bfa", accentDim: "#a78bfa22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>, available: true },
     { id: "search-all", label: "Search All", description: "Cross-corpus search across decisions, regulations, and policy documents simultaneously", accent: "#fb7185", accentDim: "#fb718522", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>, available: true },
     { id: "aao-citation-graph", label: "AAO Citation Graph", description: "Map how AAO decisions cite each other — surface the most-referenced precedents and form-type patterns visually", accent: "#60a5fa", accentDim: "#60a5fa22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="12" x2="17" y2="6"/><line x1="7" y1="12" x2="17" y2="18"/></svg>, available: true },
     { id: "citation-graph", label: "Citation Graph", description: "Map how search results cite each other — see the most-cited cases and citation branches emerge visually", accent: "#34d399", accentDim: "#34d39922", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="12" x2="17" y2="6"/><line x1="7" y1="12" x2="17" y2="18"/></svg>, available: true },
-    { id: "perm-comparer", label: "PERM Comparer", description: "Compare job description and requirements language, validate PWD wage positioning, and export reports.", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>, available: true },
+    { id: "perm-comparer", label: "PERM Comparer", description: "Compare job description and requirements language, validate PWD wage positioning, and export reports.", accent: "#2dd4bf", accentDim: "#2dd4bf22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>, available: true },
     { id: "visa-bulletin", label: "Visa Bulletin", description: "Monthly DOS priority dates — track cutoffs, retrogression, and backlog estimates for EB and family categories", accent: "#34d399", accentDim: "#34d39922", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, available: true },
     { id: "wage-forecaster", label: "Upcoming Wage Estimator", description: "July 2026 prevailing wage projections — all 619 H-1B/PERM occupation codes across 530 metro areas, current OFLC 2025-26 floors and ECI-calibrated estimates", accent: "#34d399", accentDim: "#34d39922", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>, available: true },
-    { id: "oflc", label: "DOL Performance Data", description: "PERM, LCA, and Prevailing Wage disclosure data — 1.4M+ records across FY2020–FY2026. Dashboards, templates, and pivot builder.", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>, available: true },
+    { id: "oflc", label: "DOL Performance Data", description: "PERM, LCA, and Prevailing Wage disclosure data — 1.4M+ records across FY2020–FY2026. Dashboards, templates, and pivot builder.", accent: "#2dd4bf", accentDim: "#2dd4bf22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>, available: true },
+    { id: "eb-inventory", label: "EB Inventory", description: "Priority date queue analysis — 74K observations across 5 countries and 7 categories. Tier 1 forecaster for Philippines/Mexico, regime monitor for India/China, queue position for all.", accent: "#60a5fa", accentDim: "#60a5fa22", icon: <svg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.5'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>, available: true },
     { id: "ask", label: "Ask AI", description: "Ask a research question — get a cited answer synthesized across cases, regulations, and policy", accent: "#f472b6", accentDim: "#f472b622", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, available: false, comingSoon: true },
-    { id: "letter-assistant", label: "Letter Assistant", description: "AI-powered drafting and review for NIW and EB-1A support letters — powered by AAO precedent", accent: "#f59e0b", accentDim: "#f59e0b22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, available: false, comingSoon: true },
+    { id: "letter-assistant", label: "Letter Assistant", description: "AI-powered drafting and review for NIW and EB-1A support letters — powered by AAO precedent", accent: "#2dd4bf", accentDim: "#2dd4bf22", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, available: false, comingSoon: true },
   ];
 
   return (
-    <div style={{ height: "100%", overflowY: "auto" }}>
+    <div className="grid-bg" style={{ height: "100%", overflowY: "auto" }}>
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "48px 32px 64px" }}>
         <div style={{ marginBottom: 48, textAlign: "center" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 12 }}>
@@ -67,7 +90,7 @@ function LandingPage({ onNavigate }) {
 // ── Ask AI View ───────────────────────────────────────────────────────────────
 
 const CORPUS_COLORS = {
-  balca:      { color: "#f59e0b", label: "BALCA" },
+  balca:      { color: "#2dd4bf", label: "BALCA" },
   aao:        { color: "#60a5fa", label: "AAO" },
   regulation: { color: "#34d399", label: "Regulation" },
   policy:     { color: "#a78bfa", label: "Policy" },
@@ -126,30 +149,40 @@ function NavDropdown({ label, items, currentView, onNavigate }) {
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [view, setView] = useState("landing");
+  const routerNav = useRouterNavigate();
+  const location  = useLocation();
+  const view = PATH_VIEWS[location.pathname] ?? "landing";
+
   const [externalDecision, setExternalDecision] = useState(null);
   const [searchKey, setSearchKey] = useState(0);
   const [headerQuery, setHeaderQuery] = useState("");
   const [graphSeed, setGraphSeed] = useState("");
   const [aaoGraphKey, setAaoGraphKey] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [theme, setTheme] = useState("dark");
+  const toggleTheme = () => setTheme(t => {
+    const next = t === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    return next;
+  });
 
-  const goHome = () => { setView("landing"); setExternalDecision(null); setSearchKey(k => k + 1); };
-  const navigate = (id) => { if (id === "landing") { goHome(); } else { setView(id); } };
-  const openDecision = (id, query = "", source = "balca") => { setExternalDecision({ id, query, source }); setView(source === "aao" ? "aao" : "balca"); };
+  const goTo   = (id) => routerNav(VIEW_PATHS[id] ?? "/");
+  const goHome = () => { setExternalDecision(null); setSearchKey(k => k + 1); routerNav("/"); };
+  const navigate = (id) => { if (id === "landing") { goHome(); } else { goTo(id); } };
+  const openDecision = (id, query = "", source = "balca") => { setExternalDecision({ id, query, source }); goTo(source === "aao" ? "aao" : "balca"); };
   const openFromSearchAll = (corpus, id, query) => {
-    if (corpus === "balca") { setExternalDecision({ id, query, source: "balca" }); setView("balca"); }
-    else if (corpus === "aao") { setExternalDecision({ id, query, source: "aao" }); setView("aao"); }
-    else setView(corpus === "regulation" ? "regulations" : "policy");
+    if (corpus === "balca") { setExternalDecision({ id, query, source: "balca" }); goTo("balca"); }
+    else if (corpus === "aao") { setExternalDecision({ id, query, source: "aao" }); goTo("aao"); }
+    else goTo(corpus === "regulation" ? "regulations" : "policy");
   };
-  const openGraph    = (seed) => { setGraphSeed(seed); setSearchKey(k => k + 1); setView("citation-graph"); };
-  const openGraphAAO = (seed) => { setGraphSeed(seed); setAaoGraphKey(k => k + 1); setView("aao-citation-graph"); };
+  const openGraph    = (seed) => { setGraphSeed(seed); setSearchKey(k => k + 1); goTo("citation-graph"); };
+  const openGraphAAO = (seed) => { setGraphSeed(seed); setAaoGraphKey(k => k + 1); goTo("aao-citation-graph"); };
 
   const handleHeaderSearch = (e) => {
     e.preventDefault();
     if (!headerQuery.trim()) return;
     setSearchKey(k => k + 1);
-    setView("search-all");
+    goTo("search-all");
   };
 
   const icon = {
@@ -189,7 +222,7 @@ export default function App() {
     { label: "Data", items: [
       { type: "item", id: "oflc",           label: "DOL Data",           icon: icon.table },
       { type: "sep" },
-      { type: "item", id: "uscis-data",     label: "USCIS Data",         icon: icon.table, disabled: true },
+      { type: "item", id: "eb-inventory",  label: "EB Inventory",       icon: icon.table },
     ]},
   ];
 
@@ -212,7 +245,7 @@ export default function App() {
       { id: "wage-forecaster", label: "Upcoming Wage Estimator", icon: icon.cal },
     ]},
     { section: "Data", items: [
-      { id: "oflc",           label: "DOL Data",       icon: icon.table  },
+      { id: "oflc",           label: "DOL Data",       icon: icon.table  },      { id: "eb-inventory",   label: "EB Inventory",   icon: icon.table  },
     ]},
     { section: "Other", items: [
       { id: "visa-bulletin",  label: "Visa Bulletin",  icon: icon.cal    },
@@ -278,6 +311,13 @@ export default function App() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </button>
           */}
+          {/* Theme toggle */}
+          <button className="header-icon-btn" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} aria-label="Toggle theme">
+            {theme === "dark"
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            }
+          </button>
         </div>
       </div>
 
@@ -318,12 +358,13 @@ export default function App() {
         {view === "search-all" && <SearchAllView key={`search-all-${searchKey}`} onNavigate={openFromSearchAll} initialQuery={headerQuery} />}
         {view === "regulations" && <RegulationsView />}
         {view === "policy" && <PolicyView />}
-        {view === "citation-graph" && <CitationGraphView key={`graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "balca" }); setView("balca"); }} initialQuery={graphSeed} />}
-        {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${aaoGraphKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} onOpenPrecedent={(id) => { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); }} initialQuery={graphSeed} />}
-        {view === "ask" && <AskView onNavigate={(corpus, id) => { if (corpus === "balca") { setExternalDecision({ id, query: "", source: "balca" }); setView("balca"); } else if (corpus === "aao") { setExternalDecision({ id, query: "", source: "aao" }); setView("aao"); } else if (corpus === "regulation") { setView("regulations"); } else if (corpus === "policy") { setView("policy"); } }} />}
+        {view === "citation-graph" && <CitationGraphView key={`graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "balca" }); goTo("balca"); }} initialQuery={graphSeed} />}
+        {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${aaoGraphKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); goTo("aao"); }} onOpenPrecedent={(id) => { setExternalDecision({ id, query: "", source: "aao" }); goTo("aao"); }} initialQuery={graphSeed} />}
+        {view === "ask" && <AskView onNavigate={(corpus, id) => { if (corpus === "balca") { setExternalDecision({ id, query: "", source: "balca" }); goTo("balca"); } else if (corpus === "aao") { setExternalDecision({ id, query: "", source: "aao" }); goTo("aao"); } else if (corpus === "regulation") { goTo("regulations"); } else if (corpus === "policy") { goTo("policy"); } }} />}
         {view === "perm-comparer" && <PermComparer />}
         {view === "visa-bulletin" && <VisaBulletinView />}
         {view === "wage-forecaster" && <WageForecaster />}
+        {view === "eb-inventory" && <EbInventoryView />}
         {view === "projects" && <ProjectsView onOpenDecision={openDecision} />}
         {view === "oflc" && <OflcView />}
         {view === "kanban" && <KanbanView />}

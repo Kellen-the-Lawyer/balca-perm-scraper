@@ -32,8 +32,6 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 # ── Config (mirrors ingest_rag.py) ────────────────────────────────────────────
 
 DB_URL       = os.environ.get("DATABASE_URL", "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions")
-OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:8b")
 EMBED_DIM    = 1024
 BATCH_SIZE   = 2
 
@@ -227,45 +225,16 @@ def run_ingest(conn, ina_json: Path, reset: bool = False) -> None:
 
 # ── Embed pass ────────────────────────────────────────────────────────────────
 
-def check_ollama(model: str) -> None:
-    try:
-        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            tags = json.loads(resp.read())
-        models = [m["name"] for m in tags.get("models", [])]
-        if not any(model.split(":")[0] in m for m in models):
-            print(f"WARNING: model '{model}' not found in Ollama. Available: {models}")
-            print(f"Run:  ollama pull {model}")
-            sys.exit(1)
-        print(f"Ollama OK — model: {model}")
-    except Exception as e:
-        print(f"ERROR: Cannot reach Ollama at {OLLAMA_URL}: {e}")
-        print("Run:  ollama serve")
-        sys.exit(1)
-
-
 def embed_batch(texts: list) -> list:
-    cleaned = [(DOC_INSTRUCT + t.strip()[:32000]) if t.strip() else " " for t in texts]
-    payload = json.dumps({
-        "model":   OLLAMA_MODEL,
-        "input":    cleaned,
-        "keep_alive": "30m",
-        "options":  {"num_ctx": 32768},
-    }).encode()
-    req = urllib.request.Request(
-        f"{OLLAMA_URL}/api/embed",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=300) as resp:
-        data = json.loads(resp.read())
-    return [vec[:EMBED_DIM] for vec in data["embeddings"]]
-
+    """Delegate to app.embed.embed_documents (Voyage API, voyage-4-large)."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).parents[2] if 'perm-research' in __file__ else _Path(__file__).parents[2]))
+    from app.embed import embed_documents
+    return embed_documents(list(texts))
 
 def run_embed(conn, batch_size: int = BATCH_SIZE) -> None:
     print(f"\n=== INA Embed pass ===")
-    check_ollama(OLLAMA_MODEL)
 
     # Count pending
     with conn.cursor() as cur:

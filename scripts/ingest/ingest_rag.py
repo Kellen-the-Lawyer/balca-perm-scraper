@@ -24,9 +24,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 DB_URL         = os.environ.get("DATABASE_URL", "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions")
-OLLAMA_URL     = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL   = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:4b")
-EMBED_DIM      = 1024  # MRL truncation — Qwen3 4B native is 2560 but 1024 stays under pgvector's 2000-dim index limit at ~95% quality
+EMBED_DIM      = 1024
 CHUNK_TOKENS   = 800
 OVERLAP_TOKENS = 80
 BATCH_SIZE     = 50    # overnight runs — bump back to 20 for daytime use
@@ -125,31 +123,12 @@ def chunk_regulations(text: str, target: int = 600) -> list:
 # ── Embedding via Ollama ──────────────────────────────────────────────────────
 
 def embed_batch(texts: list) -> list:
-    """Embed texts via Ollama, truncating to EMBED_DIM via MRL. Retries on 500."""
-    cleaned = [(DOC_INSTRUCT + t.strip()[:32000]) if t.strip() else " " for t in texts]
-    payload = json.dumps({
-        "model": OLLAMA_MODEL,
-        "input": cleaned,
-        "keep_alive": "30m",
-    }).encode()
-
-    for attempt in range(5):
-        try:
-            req = urllib.request.Request(
-                f"{OLLAMA_URL}/api/embed",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=600) as resp:
-                data = json.loads(resp.read())
-            return [vec[:EMBED_DIM] for vec in data["embeddings"]]
-        except Exception as e:
-            wait = 15 * (attempt + 1)
-            print(f"    Ollama error (attempt {attempt+1}/5): {e} — retrying in {wait}s")
-            time.sleep(wait)
-
-    raise RuntimeError(f"Ollama failed after 5 attempts")
+    """Embed texts via Voyage API (voyage-4-large). Delegates to app.embed."""
+    import sys
+    from pathlib import Path as _Path
+    sys.path.insert(0, str(_Path(__file__).parents[2]))
+    from app.embed import embed_documents
+    return embed_documents(texts)
 
 
 def embed_query(text: str) -> list:
@@ -422,17 +401,12 @@ def main():
 
     # Verify Ollama is running and model is available
     try:
-        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
         with urllib.request.urlopen(req, timeout=30) as resp:
             tags = json.loads(resp.read())
         models = [m["name"] for m in tags.get("models", [])]
-        if not any(OLLAMA_MODEL.split(":")[0] in m for m in models):
-            print(f"WARNING: model '{OLLAMA_MODEL}' not found in Ollama. Available: {models}")
             print("Run: ollama pull qwen3-embedding:8b")
             sys.exit(1)
-        print(f"Ollama OK — using model: {OLLAMA_MODEL}")
     except Exception as e:
-        print(f"ERROR: Cannot reach Ollama at {OLLAMA_URL}: {e}")
         print("Make sure Ollama is running: ollama serve")
         sys.exit(1)
 

@@ -298,10 +298,10 @@ export function HighlightedText({ text, activeDocQ, matchIndex, resetMatches, re
           <mark key={i}
             ref={el => registerRef(idx, el)}
             style={{
-              background: isActive ? "#f59e0b" : "#f59e0b44",
+              background: isActive ? "#2dd4bf" : "#2dd4bf44",
               color: isActive ? "#000" : "inherit",
               borderRadius: 2,
-              outline: isActive ? "2px solid #f59e0b" : "none",
+              outline: isActive ? "2px solid #2dd4bf" : "none",
             }}>
             {part}
           </mark>
@@ -312,7 +312,7 @@ export function HighlightedText({ text, activeDocQ, matchIndex, resetMatches, re
 }
 
 export function RegBadge({ label }) {
-  return <span style={{ background: "var(--amber-dim)", color: "var(--amber)", border: "1px solid #f59e0b33", fontSize: 10, fontWeight: 500, padding: "2px 7px", borderRadius: 4 }}>{label}</span>;
+  return <span style={{ background: "var(--amber-dim)", color: "var(--amber)", border: "1px solid #2dd4bf33", fontSize: 10, fontWeight: 500, padding: "2px 7px", borderRadius: 4 }}>{label}</span>;
 }
 
 export function useFetch(url) {
@@ -337,7 +337,7 @@ export function Spinner() {
 
 // ── Search view — owns all search + detail state ──────────────────────────────
 
-export const PROJECT_COLORS_INLINE = ["#f59e0b","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];
+export const PROJECT_COLORS_INLINE = ["#2dd4bf","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];
 
 export function SaveToProject({ decisionId, searchQuery, small }) {
   const [projects, setProjects] = useState(null);
@@ -504,4 +504,4 @@ export function SaveToProject({ decisionId, searchQuery, small }) {
 
 // ── Projects view ─────────────────────────────────────────────────────────────
 
-export const PROJECT_COLORS = ["#f59e0b","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];
+export const PROJECT_COLORS = ["#2dd4bf","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];

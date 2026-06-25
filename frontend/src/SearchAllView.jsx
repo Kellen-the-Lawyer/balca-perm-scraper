@@ -3,7 +3,7 @@ import { API } from "./apiBase";
 import { Spinner } from "./common";
 
 export const CORPUS_META = {
-  balca:      { label: "BALCA",       accent: "var(--amber)",  dim: "var(--amber-dim)",  dot: "#f59e0b" },
+  balca:      { label: "BALCA",       accent: "var(--amber)",  dim: "var(--amber-dim)",  dot: "#2dd4bf" },
   aao:        { label: "AAO",         accent: "var(--blue)",   dim: "var(--blue-dim)",   dot: "#60a5fa" },
   regulation: { label: "Regulations", accent: "var(--green)",  dim: "var(--green-dim)",  dot: "#34d399" },
   policy:     { label: "Policy",      accent: "#a78bfa",       dim: "#a78bfa22",         dot: "#a78bfa" },

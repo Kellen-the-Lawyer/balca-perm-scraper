@@ -526,15 +526,15 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
     simRef.current = sim;
 
     const outcomeColor = (o) => ({ Dismissed: "#5a5a68", Sustained: "#34d399", Remanded: "#fbbf24", Withdrawn: "#a78bfa" }[o] || "#60a5fa");
-    const nodeColor = (n) => n.node_type === "precedent" ? "#f59e0b" : outcomeColor(n.outcome);
+    const nodeColor = (n) => n.node_type === "precedent" ? "#2dd4bf" : outcomeColor(n.outcome);
     const nodeFill  = (n) => n.node_type === "precedent"
-      ? (n.tier === "primary" ? "#f59e0b" : "#f59e0b88")
+      ? (n.tier === "primary" ? "#2dd4bf" : "#2dd4bf88")
       : (n.tier === "primary" ? outcomeColor(n.outcome) : outcomeColor(n.outcome) + "66");
 
     const link = g.append("g").selectAll("line").data(edges).join("line")
       .attr("stroke", d => {
         const tgt = nodeById[d.target?.id ?? d.target];
-        return tgt?.node_type === "precedent" ? "#f59e0b" : outcomeColor(tgt?.outcome);
+        return tgt?.node_type === "precedent" ? "#2dd4bf" : outcomeColor(tgt?.outcome);
       })
       .attr("stroke-opacity", 0.35).attr("stroke-width", 1.5)
       .attr("marker-end", d => {
@@ -641,7 +641,7 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
           <div style={{ position: "absolute", bottom: 16, left: 16, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", maxWidth: 300, pointerEvents: "none" }}>
             {hovered.node_type === "precedent" ? (
               <>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#f59e0b", marginBottom: 3 }}>{hovered.party_name}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#2dd4bf", marginBottom: 3 }}>{hovered.party_name}</div>
                 <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 3 }}>{hovered.citation} · {hovered.year}</div>
                 <div style={{ fontSize: 11, color: "var(--text3)" }}>Cited by {hovered.cited_by_count} decisions in graph · I&N Dec. precedent</div>
               </>
@@ -659,7 +659,7 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
         {selectedNode && (
           <div style={{ position: "absolute", top: 16, right: 16, width: 280, background: "var(--bg2)", border: `1px solid ${accent}44`, borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: selectedNode.node_type === "precedent" ? "#f59e0b" : "var(--text)", flex: 1, paddingRight: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: selectedNode.node_type === "precedent" ? "#2dd4bf" : "var(--text)", flex: 1, paddingRight: 8 }}>
                 {selectedNode.node_type === "precedent" ? selectedNode.party_name : (selectedNode.form_type || selectedNode.filename)}
               </div>
               <button onClick={() => setSelectedNode(null)} style={{ background: "none", border: "none", color: "var(--text3)", cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
@@ -669,7 +669,7 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
                 <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 4 }}>{selectedNode.citation} · {selectedNode.year}</div>
                 <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 12 }}>Cited by {selectedNode.cited_by_count} decisions in this graph</div>
                 {onOpenPrecedent && <button onClick={() => onOpenPrecedent(selectedNode.prec_id)}
-                  style={{ width: "100%", padding: "7px 0", background: "#f59e0b22", color: "#f59e0b", border: "1px solid #f59e0b44", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
+                  style={{ width: "100%", padding: "7px 0", background: "#2dd4bf22", color: "#2dd4bf", border: "1px solid #2dd4bf44", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
                   Open precedent →
                 </button>}
               </>

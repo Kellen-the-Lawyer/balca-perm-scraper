@@ -993,3 +993,574 @@ Test results across 6 real PWDs:
 
 Files changed: /Users/Dad/Documents/GitHub/Casebase/app/extract_pwd.py
 Deploy: synced + docker rebuilt ✓
+
+
+=== 2026-06-18 Session (continued) — USCIS Statistical Data Pipeline ===
+
+## What was built
+
+Full 3-phase pipeline to scrape, download, and ingest all USCIS Immigration
+and Citizenship Data Library content into PostgreSQL.
+
+### Phase 1 — Catalog scrape (COMPLETE)
+Scraped all 18 pages of the USCIS Data Library
+(https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data)
+with items_per_page=100. 1,728 entries on site, 1,372 unique files after
+dedup on stable_id (the remainder are duplicate listings of the same file
+under different category filter views — stable_id is derived from URL path).
+
+Result: 1,372 rows in uscis_report_catalog, 1,372 matching rows in
+uscis_report_files with download_status='pending'.
+
+**Key facts about the catalog:**
+- 1,011 PDFs, 235 XLSX, 125 CSV, 1 other
+- Fiscal years 1993-2026
+- Form types: I-485 (121), I-130 (77), I-129 (75), I-140 (63), I-360 (49), etc.
+- robots.txt Crawl-delay: 10 → we use 11s + up to 2s jitter
+
+### Schema (schema/uscis_stats_schema.sql)
+Three tables created in perm_decisions:
+
+  uscis_report_catalog  — one row per unique USCIS data file (1,372 rows)
+    stable_id, title, description, published_date, file_url, file_type,
+    file_size_kb, categories[], fiscal_year, quarter, form_type
+
+  uscis_report_files    — download state tracker (1,372 rows)
+    report_id FK, local_path, file_size_bytes, sha256, download_status,
+    error_message, downloaded_at, ingested_at
+
+  uscis_stat_rows       — normalized stat observations (empty, populated in phase 3)
+    report_id FK, sheet_name, row_index, metric_name, metric_category,
+    fiscal_year, fiscal_quarter, period_label, period_start, period_end,
+    country_of_birth, state_code, uscis_office, form_type, case_status,
+    eligibility_category, naics_code, soc_code, numeric_value, text_value,
+    unit, stable_id
+
+### Scripts
+
+Phase 1 (catalog — already run):
+  scripts/scrape/scrape_uscis_data_catalog.py
+  Options: --dry-run, --start-page N
+
+Phase 2 (download all files — NOT yet run):
+  scripts/scrape/download_uscis_reports.py
+  Files go to: data/uscis_reports/<file_type>/<fiscal_year>/<filename>
+  Options: --form I-129, --year 2026, --limit N, --dry-run, --retry-failed
+  Time estimate: 1,372 files × 12s delay = ~4.5 hours
+
+Phase 3 (ingest XLSX/CSV into uscis_stat_rows — NOT yet run):
+  scripts/ingest/ingest_uscis_stats.py
+  Options: --stable-id <id>, --limit N, --dry-run
+
+**Important**: Only XLSX and CSV files will yield rows in uscis_stat_rows.
+PDFs (1,011 of 1,372) will show download_status='done' but ingested_at stays
+NULL until a PDF text extraction step is added. For now the PDF catalog
+entries are valuable as metadata for knowing what reports exist.
+
+### Next steps
+1. Run download_uscis_reports.py overnight (4.5 hours at 10s delay)
+   `cd /Users/Dad/Documents/GitHub/Casebase && nohup venv/bin/python3 scripts/scrape/download_uscis_reports.py > /tmp/uscis_download.log 2>&1 &`
+
+2. After downloads complete, run ingest:
+   `nohup venv/bin/python3 scripts/ingest/ingest_uscis_stats.py > /tmp/uscis_ingest.log 2>&1 &`
+
+3. Statistical modeling ideas (see session notes):
+   - Approval rate trends by form type × fiscal year
+   - RFE rate correlation with case category / eligibility class
+   - Processing time time-series with ARIMA forecasting
+   - Country-of-birth patterns in EB adjustment of status
+   - DACA expiration cohort analysis
+
+### Key data architecture note
+uscis_stat_rows is a SEPARATE concern from rag_chunks. These are structured
+numerical observations, not text to embed. Do NOT add to rag_chunks.
+Statistical queries use uscis_stat_rows directly via pandas/statsmodels.
+
+
+=== 2026-06-19 Session — USCIS Pipeline Completion ===
+
+## Status: Full pipeline complete and verified in Docker DB
+
+### Final counts (docker exec casebase-db)
+  uscis_report_catalog : 1,372 entries
+  uscis_report_files   : 1,372 done (100%)
+  uscis_stat_rows      : 107,652 rows from 188 XLSX/CSV files
+  Distinct form types  : 555
+  Fiscal years         : 10 (1993-2026, heavy on 2017-2026)
+
+### Issues resolved this session
+1. Local postgres crashed during first run — all catalog/stat data lost from
+   local DB. Files on disk (368MB in data/uscis_reports/) survived.
+2. Re-scraped catalog into Docker (18 pages, ~4 min).
+3. Wrote reconcile_uscis_downloads.py to match 1,372 disk files to DB entries
+   and update download_status='done' without re-downloading.
+4. Re-ran ingest_uscis_stats.py against Docker — 107,652 rows in ~20 seconds.
+5. Cleaned ~120 bogus fiscal_year values (row numbers misidentified as years)
+   with: UPDATE uscis_stat_rows SET fiscal_year=NULL WHERE fiscal_year<1990
+   OR fiscal_year>2030
+
+### Key scripts
+  scripts/scrape/scrape_uscis_data_catalog.py   -- Phase 1 (catalog)
+  scripts/scrape/download_uscis_reports.py       -- Phase 2 (file downloads)
+  scripts/scrape/reconcile_uscis_downloads.py    -- Fix disk/DB mismatch
+  scripts/ingest/ingest_uscis_stats.py           -- Phase 3 (XLSX/CSV -> rows)
+  schema/uscis_stats_schema.sql                  -- 3-table schema
+
+### Important env var pattern (zsh ! escaping)
+  Always use: echo 'DATABASE_URL=...' > /tmp/uscis.env
+  Then:       env $(cat /tmp/uscis.env) venv/bin/python3 script.py
+  Never inline DATABASE_URL="...CameronHollis!234..." — zsh expands !
+
+### Data quality notes
+  - 107,652 stat rows from 188 files (XLSX/CSV only)
+  - 1,184 PDFs downloaded and cataloged but not yet parsed into stat rows
+  - FY2017 has 89K rows legitimately (H-1B employer CSV = one row per employer)
+  - EB inventory files (country x preference x month) yield 0 rows — non-standard
+    layout that bypasses header detection. High value target for custom parser.
+  - 555 distinct form_type values — many are artifacts of column mapper picking
+    up form numbers from description text rather than actual form_type columns.
+    Real distribution: I-129 (3,538), I-485 (2,311), I-765 (1,639), I-589 (1,371)
+
+### Next steps for this corpus
+  1. Statistical modeling opportunities:
+     - H-1B approval/RFE rate trends by fiscal year (I-129 rows)
+     - Processing time time-series (Processing Time metric, 562 rows)
+     - I-485 pending inventory by country of birth
+     - EB-5 (I-526) receipt/approval trends
+     - DACA cohort expiration modeling
+  2. Custom parser for EB inventory files (high value for visa bulletin work)
+  3. PDF extraction for the 1,184 PDF reports (mostly pre-2015, lower priority)
+  4. Expose uscis_stat_rows via API endpoint for frontend charting
+  5. pg_dump local -> Docker sync should be established as standard practice
+     to avoid the data loss that occurred this session
+
+
+=== 2026-06-19 Session (continued) — EB Inventory Custom Parser ===
+
+## eb_inventory table: COMPLETE
+
+Custom parser built for the USCIS "Pending Applications for Employment-Based
+Preference Categories" XLSX files — the documents that motivated this entire
+scraping effort.
+
+### Why generic ingest failed
+These files use a WIDE PIVOT format: each column is a priority date year
+(10-year sliding window), not a metric. The generic ingest_uscis_stats.py
+header detector couldn't map "Priority Date Year - 2013" to any canonical
+field, so all 25 files yielded 0 rows.
+
+### Layout (consistent across all 25 files)
+  Row 0: "Form I-485, Application to Register Permanent Residence..."
+  Row 1: Report title with country and year range
+  Row 2: "As of <Month> <Day>, <Year>"  <- report_date extracted here
+  Row 3: Column headers (15 columns, always same structure)
+  Row 4+: Data rows
+  Col 0: Country Of Chargeability
+  Col 1: Preference Category (full text -> normalized to EB1/EB2/etc.)
+  Col 2: Visa Status (Available / Awaiting Availability)
+  Col 3: Priority Date Month
+  Col 4-14: Priority Date Year - YYYY (or "Prior Years")
+  "D" = suppressed (<10 cases) -> stored as NULL with is_suppressed=TRUE
+  "0" = genuinely zero
+
+### Result
+  74,052 rows in eb_inventory table
+  25 report snapshots (Feb 2024 - Apr 2026)
+  5 countries: Rest of the World, India, China, Mexico, Philippines
+  7 preference categories: EB1, EB2, EB3, EW3, EB4, EB5, CRW
+  Total known pending across all snapshots (not deduplicated):
+    EB2: 1,434,094  EB1: 1,179,309  EB3: 895,109
+    EB4: 479,244    EW3: 192,698    EB5: 187,266  CRW: 25,199
+
+### Key analytical finding: India EB2 queue movement
+  Apr 2026 snapshot — 2013 priority year cohort: 7,670 pending
+  Mar 2026 snapshot — 2013 priority year cohort: 8,594 pending
+  Feb 2026 snapshot — 2013 priority year cohort: 9,233 pending
+  -> ~800 cases/month being cleared from 2013 India EB2 cohort
+  -> 2013 clears in ~9-10 months at current pace
+  -> 2014 cohort (17,421 cases) then becomes front -> ~22 more months
+
+### Script
+  scripts/ingest/ingest_eb_inventory.py
+  Run: env $(cat /tmp/uscis.env) venv/bin/python3 scripts/ingest/ingest_eb_inventory.py
+  Re-running is safe (ON CONFLICT DO UPDATE)
+
+### Next steps
+  1. Frontend chart: queue depth over time by country x category x priority_year
+  2. API endpoint: /api/eb-inventory?country=India&category=EB2
+  3. Priority date advancement forecasting: fit linear/ARIMA model to
+     monthly queue depletion rates per cohort
+  4. Cross-reference with visa_bulletin table to correlate cutoff date
+     movement with inventory depletion rate
+
+
+=== 2026-06-19 Session (continued) — EB Inventory Backtesting ===
+
+## Backtest v3 results: all 5 countries x 7 categories
+
+Scripts:
+  scripts/analysis/backtest_eb_inventory.py   (v1, India only, naive)
+  scripts/analysis/backtest_eb_inventory_v2.py (v2, India combined EB2+EB3, spread-adjusted)
+  scripts/analysis/backtest_eb_inventory_v3.py (v3, all countries, all categories)
+Results: data/analysis/eb_inventory_backtest_v3.csv
+
+### Key finding: model accuracy is heavily country-dependent
+
+BEST (reliable, buildable as a tool):
+  Philippines EB3  MAE=0.8mo  w6=99%   n=96
+  Mexico      EB2  MAE=1.3mo  w6=95%   n=63
+  Mexico      EB3  MAE=1.7mo  w6=94%   n=80
+  Philippines EB2  MAE=2.1mo  w6=91%   n=77
+  Rest of World EB3 MAE=3.3mo w6=84%  n=161
+
+MEDIUM (usable with caveats):
+  Rest of World EB2  MAE=7.5mo  w6=69%  n=164
+  China EB3          MAE=19.1mo median=5.8mo  w6=51% (bimodal — good when eb2_ahead)
+
+POOR (not reliable):
+  India EB2/EB3: MAE=23-15mo — dominated by downgrade/upgrade dynamic
+  China EB1/EB2: MAE=20-38mo — backlog too large, DOS-driven
+  EB4/EW3/CRW: MAE=14-55mo — too few visas, erratic movement
+
+### Why Philippines and Mexico work so well
+
+Both countries have MUCH smaller I-140 backlogs relative to annual visa supply
+compared to India/China. Their queues actually deplete on observable timescales,
+so the depletion rate is a genuine signal. Also:
+  - Philippines EB3: historically very stable, no downgrade incentive
+    (EB3 ahead of EB2 for Philippines much more rarely than India)
+  - Mexico EB2/EB3: similar reason — spread rarely creates downgrade pressure
+
+### The regime finding is the most important result
+
+BY REGIME (all countries, all categories):
+  eb2_ahead   n=656  MAE=2.4mo  w6=91%   ← highly reliable
+  eb3_ahead   n=208  MAE=19.7mo w6=26%   ← unreliable
+  near_parity n=115  MAE=27.5mo w6=18%   ← unreliable
+  n/a         n=518  MAE=41.7mo w6=18%   ← non-EB2/EB3 categories
+
+The eb2_ahead regime is actionable across ALL countries. When EB2 is ahead
+of EB3 for any country, clearance predictions are accurate within ~2.4 months.
+
+### What this means for what to build
+
+1. Philippines + Mexico EB2/EB3: direct forecaster is reliable. Good for tool.
+2. All countries in eb2_ahead regime: reliable regardless of country. Good for alerts.
+3. India/China EB1/EB2: forecasting not reliable. Better to show queue position
+   (how many cases ahead) + historical advancement rate, not a clearance date.
+4. EB4/EW3/CRW: too sparse and erratic. Show raw data only, no forecast.
+
+### I-140 backlog insight
+India I-140 backlog: 486,400 approved petitions awaiting visa (Dec 2025)
+Annual visa supply: ~2,803 (7% per-country cap)
+Queue at current pace: 173 years
+Backlog growth: +21K/year — growing 7x faster than consumption
+-> No inventory model can predict India EB2 clearance by priority year
+-> DOS controls cutoffs via their own demand statistics, not USCIS inventory
+
+
+=== 2026-06-19 Session (continued) — EB Inventory Three-Tier Tool: COMPLETE ===
+
+## All three tiers built, tested, deployed
+
+### Backend (app/routers/eb_inventory.py — 578 lines)
+Six endpoints:
+
+  GET /api/eb-inventory/snapshots
+    All 25 report dates with total pending counts
+
+  GET /api/eb-inventory/inventory?country=&category=&from_date=&to_date=
+    Raw combined EB2+EB3 pending by (report_date, priority_year) for charting
+
+  GET /api/eb-inventory/spread-history?country=
+    Monthly EB2 vs EB3 cutoff spread history from visa_bulletin
+
+  GET /api/eb-inventory/regime?country=&category=        [Tier 2]
+    Current spread regime, accuracy stats, interpretation text
+
+  GET /api/eb-inventory/forecast?country=&category=      [Tier 1]
+    Clearance date projections per priority_year (Tier 1 combos only)
+    Returns 422 with helpful error for non-Tier-1 combos
+
+  GET /api/eb-inventory/queue-position?country=&category=&priority_year=&priority_month=  [Tier 3]
+    Cases ahead of a priority date + historical advancement rate
+
+### Frontend (frontend/src/EbInventoryView.jsx — 476 lines)
+  - Country buttons: India / China / Mexico / Philippines / Rest of the World
+  - Category buttons: EB1 / EB2 / EB3 / EB4 / EB5 / EW3 / CRW
+  - Auto-detects tier on country+category change, auto-selects best tab
+  - Tier 1 tab: forecast table with confidence dots (high/medium/low)
+  - Tier 2 tab: regime badge, spread metric cards, spread history table (24mo)
+  - Tier 3 tab: year/month inputs, cases-ahead stat cards, advancement table
+  - Registered in App.jsx at view "eb-inventory"
+
+### Infrastructure fix
+  - Local postgres crashed on earlier pg_dump (stale postmaster.pid)
+  - Fix: rm /opt/homebrew/var/postgresql@16/postmaster.pid then brew services restart
+  - eb_inventory and uscis_report_catalog/files tables pg_dump'd from Docker
+    and restored to local postgres so local API server can serve them
+  - Built and synced to casebase-app
+
+### Smoke test results
+  /api/eb-inventory/forecast?country=Mexico&category=EB2
+    regime=eb2_ahead, spread=+380d, MAE=1.3mo
+    10 priority years with high/medium confidence projections
+
+  /api/eb-inventory/regime?country=India&category=EB2
+    regime=eb3_ahead, spread=-105d, MAE=19.7mo, within6mo=26%
+    interpretation: "EB3 cutoff ahead — downgrade incentive active"
+
+  /api/eb-inventory/queue-position?country=India&category=EB2&priority_year=2013&priority_month=June
+    cases_ahead=3,820, cases_in_year=7,670
+    avg_monthly_advance=21 days, est_years_processing_queue=1.3
+    clearance_date_available=false (correct)
+
+=== 2026-06-21 Session — USCIS Electronic Reading Room (FOIA) Scrape ===
+
+## Phase 1 (catalog) COMPLETE
+
+Scraped https://www.uscis.gov/records/electronic-reading-room
+Pages 0-20 with items_per_page=100 (page 20 had 60 rows, 21+ empty).
+2,042 rows scraped -> 2,036 unique documents after dedup on stable_id.
+
+### Schema: schema/uscis_foia_schema.sql
+  uscis_foia_documents table (catalog + download + ingest tracking in one table)
+    stable_id, title, description, published_date, file_url, file_type,
+    file_size_kb, doc_category, local_path, sha256, download_status,
+    downloaded_at, ingested_at
+
+### Script: scripts/scrape/scrape_uscis_reading_room.py
+  Modeled on scrape_uscis_data_catalog.py. 11s crawl delay + jitter, UA rotation.
+  Filters to /sites/default/files/ links only (skips nav links — first 1-2
+  rows per page are site navigation, not documents).
+  Run: venv/bin/python3 scripts/scrape/scrape_uscis_reading_room.py [--dry-run]
+
+### Catalog composition
+  Date range: 1977-12-25 to 2026-06-04
+  File types: 1,951 PDF, 79 xlsx, 5 other, 1 xls
+  Top categories: foia (1,558), foia-logs (167), outreach-engagements (95),
+    contracts (75), data (51), questions-and-answers (22), reports (20),
+    lesson-plans (14), notices (8), guides (6), memos (5), presentations (5),
+    legal-docs (4), aao-decisions (3), checklists (1)
+
+### High-value research content identified
+  RAIO lesson plans (asylum/refugee officer training): Persecution, Nexus,
+  Well-Founded Fear, Refugee Definition, Credible/Reasonable Fear Procedures
+  Manuals, IRFA, Trafficking, COI. Policy memos, leadership guidance.
+
+### Next steps
+  1. Download PDFs (reuse download pattern; ~2,000 files at 10s delay = ~5.5hr)
+     Consider filtering OUT foia-logs (167) and contracts (75) — low research value
+  2. Ingest text-extractable PDFs into rag_chunks under new 'uscis_foia' corpus
+     (genuinely useful for legal research, unlike statistical spreadsheets)
+  3. Local DB only so far — pg_dump to Docker once downloads/ingest complete
+
+=== 2026-06-23 Session — CRITICAL: Postgres port topology clarified ===
+
+## The two Postgres instances (DO NOT CONFUSE)
+
+  Homebrew Postgres  -> port 5433  -> FULL CORPUS (402,211 rag_chunks)
+    - Connect (local, password-less trust): postgresql://perm@127.0.0.1:5433/perm_decisions
+    - This is where ALL real work lives: uscis_stat_rows (107,652),
+      eb_inventory (68,137), uscis_foia_documents (2,036), uscis_foia chunks
+    - pg_hba.conf trusts local IPv4/IPv6; md5 required only for remote subnets
+      (192.168.5.0/24 and 192.168.6.0/24 added for MBP cross-network access)
+
+  Docker casebase-db -> port 5432  -> LIVE APP DB (only 10,173 rag_chunks)
+    - Connect: docker exec casebase-db psql -U perm -d perm_decisions
+    - Different 'perm' password than Homebrew -> CLI psql to localhost:5432
+      gives "password authentication failed" (this caused a long debugging
+      detour this session)
+
+## Gotcha that wasted time
+  Scripts default DB_URL to localhost:5432. After the Homebrew port move to
+  5433, localhost:5432 now hits DOCKER, not Homebrew. Auth fails because
+  Docker's perm password differs. FIX: always pass
+  DATABASE_URL="postgresql://perm@127.0.0.1:5433/perm_decisions" for CLI runs
+  against the full corpus, OR add DATABASE_URL to .env (currently absent).
+
+  TODO: add DATABASE_URL=postgresql://perm@127.0.0.1:5433/perm_decisions to
+  Casebase/.env so scripts stop defaulting to the Docker instance.
+
+## FOIA ingest NUL-byte bug FIXED
+  ingest_foia.py crashed at doc 248/1734 on a PDF with NUL (0x00) bytes in
+  extracted text ("A string literal cannot contain NUL characters").
+  Fixed in extract_text(): strip \x00 and sub-space control chars before
+  chunking. Resumed; dedup on source_id skips the 248 already done.
+
+=== 2026-06-23 Session — H-1B Employer Panel Analysis ===
+
+## Custom parser built: scripts/ingest/ingest_h1b_employers.py
+The generic ingest mangled the "Approved H-1B Petitions by Employer" CSVs
+(FY2015-2017) because they use a master/detail layout: employer master row
+(tax#, name, total petitions, avg salary) followed by degree-breakdown detail
+rows. Custom parser handles this -> h1b_employers table, 161,218 rows.
+
+  Table: h1b_employers (fiscal_year, tax_id_last4, employer_name,
+    total_petitions, total_masked, avg_salary, degree, degree_count,
+    degree_masked, stable_id)
+  Run: DATABASE_URL="postgresql://perm@127.0.0.1:5433/perm_decisions" \
+       venv/bin/python3 scripts/ingest/ingest_h1b_employers.py --reset
+
+## Key findings FY2017 (4,008 employers, 294,524 petitions)
+  Market concentration: top 10 employers = 31.5% of all petitions,
+    top 50 = 48.5%, top 100 = 54.4%. Highly concentrated.
+  Top employers dominated by India-based IT staffing/outsourcing:
+    Cognizant 28,908 | TCS 14,697 | Infosys 13,408 | Wipro 6,529
+  Product companies pay far more: Microsoft $185K, Ernst&Young $156K,
+    Amazon $144K, Cognizant $141K vs staffing firms ~$82-104K
+  Degree mix: Bachelor's 120,513 | Master's 100,716 | Doctorate 15,035
+  Cognizant 3-yr growth: 21,459 (FY16) -> 28,908 (FY17)
+
+## Data quality notes / TODO
+  - "TOTAL" summary row present in each file -> exclude in queries
+  - Employer name variations across years (COGNIZANT TECH SOLUTIONS US vs
+    COGNIZANT TECH SOLNS US CORP) break year-over-year joins. Tax_id_last4
+    is more stable but not unique. Future: fuzzy-match / canonicalize names
+    for a clean longitudinal panel.
+  - FY2015/2016 master rows put one degree in the master row + detail rows;
+    FY2017 puts all degrees in detail rows. Total_petitions only on master.
+  - Only CSV years (2015-2017) parsed. FY2012-2014, 2018 are PDFs (harder).
+
+
+=== 2026-06-23 Session — Full CFR Scraper and Ingest ===
+
+## Completed this session
+
+### Full eCFR scraper + ingest pipeline (Option C — scrape all, embed selectively)
+
+Decision: Scrape all 50 CFR titles (~9,659 parts); embed only immigration-relevant
+titles into rag_chunks now; store everything else in regulations_docs for keyword
+search and future embedding.
+
+EMBED_TITLES (chunked into rag_chunks):
+  8   Aliens and Nationality (DHS/USCIS)
+  20  Employees Benefits (DOL/ETA — PERM, H-1B wage rules)
+  22  Foreign Relations (State Dept — visa processing)
+  28  Judicial Administration (DOJ/EOIR — removal, BIA)
+  29  Labor (DOL/WHD — FLSA, H-2A/H-2B enforcement)
+  45  Public Welfare (HHS/ORR — refugee resettlement)
+
+### scripts/scrape/scrape_ecfr_full.py
+
+eCFR versioner API (no auth):
+  titles.json -> structure/{date}/title-{n}.json -> versions/title-{n}/part-{p}.json
+  -> full/{date}/title-{n}.xml?part={p}
+
+XML-to-text via ElementTree walk: SECTION -> paragraph header, HEAD/SUBJECT ->
+headings, P/FP/* -> body text, NOTE -> bracketed, XTBL -> tab rows.
+
+Output: ~/casebase_cfr/{title_num}/{title_num} CFR Part {part} (as of YYYY-MM-DD).txt
+Env: CFR_OUT_DIR (default ~/casebase_cfr), CFR_DELAY (default 0.5s)
+Estimated runtime: ~1.5hr for all 9,659 parts
+
+Commands:
+  venv/bin/python3 scripts/scrape/scrape_ecfr_full.py               # all titles
+  venv/bin/python3 scripts/scrape/scrape_ecfr_full.py --title 20 --part 656
+  venv/bin/python3 scripts/scrape/scrape_ecfr_full.py --skip-complete  # resume
+  venv/bin/python3 scripts/scrape/scrape_ecfr_full.py --list-titles
+
+### scripts/ingest/ingest_cfr_full.py
+
+Phase 1 (--ingest): reads .txt files from CFR_OUT_DIR, upserts regulations_docs,
+  pre-chunks EMBED_TITLES into rag_chunks (embedding=NULL)
+Phase 2 (--embed): embeds pending rag_chunks for regulation corpus
+
+FILENAME_RE handles both new "as of YYYY-MM-DD" and legacy "up to date as of M-D-YYYY"
+so existing OneDrive files also parse correctly.
+
+Commands:
+  DATABASE_URL=postgresql://perm@127.0.0.1:5433/perm_decisions   CFR_OUT_DIR=/Users/Dad/casebase_cfr   venv/bin/python3 scripts/ingest/ingest_cfr_full.py --ingest
+
+  venv/bin/python3 scripts/ingest/ingest_cfr_full.py --embed
+  venv/bin/python3 scripts/ingest/ingest_cfr_full.py --status
+  venv/bin/python3 scripts/ingest/ingest_cfr_full.py --ingest --title 20 --reset
+
+Verified: Title 20 Part 656 (PERM regs) downloaded (114,729 chars), ingested
+into Homebrew Postgres (44 chunks, 19 section markers). Clean upsert.
+
+### TODO: add to Casebase/.env
+  DATABASE_URL=postgresql://perm@127.0.0.1:5433/perm_decisions
+  CFR_OUT_DIR=/Users/Dad/casebase_cfr
+
+### Full run sequence
+  # Step 1 - Scrape overnight (~1.5hr)
+  nohup venv/bin/python3 scripts/scrape/scrape_ecfr_full.py     > ~/Library/Logs/cfr_scrape.log 2>&1 &
+
+  # Step 2 - Ingest all into regulations_docs + chunk EMBED_TITLES
+  DATABASE_URL="postgresql://perm@127.0.0.1:5433/perm_decisions"   CFR_OUT_DIR="$HOME/casebase_cfr"   venv/bin/python3 scripts/ingest/ingest_cfr_full.py --ingest
+
+  # Step 3 - Embed EMBED_TITLES (Titles 8,20,22,28,29,45)
+  DATABASE_URL="postgresql://perm@127.0.0.1:5433/perm_decisions"   venv/bin/python3 scripts/ingest/ingest_cfr_full.py --embed
+
+  # Step 4 - Dump to Docker after verifying
+  pg_dump -U perm -h 127.0.0.1 -p 5433 -t regulations_docs -t rag_chunks     --data-only -F c perm_decisions > /tmp/cfr_ingest.dump
+  docker cp /tmp/cfr_ingest.dump casebase-db:/tmp/
+  docker exec casebase-db pg_restore -U perm -d perm_decisions --data-only /tmp/cfr_ingest.dump
+
+
+=== 2026-06-24 Session — Voyage AI Embedding Migration ===
+
+## Completed this session
+
+### Switched from local Ollama (qwen3-embedding:4b) to Voyage AI API
+
+Decision: replace local Ollama embedding with Voyage AI for both ingestion
+and query-time embedding. Rationale: better legal retrieval quality
+(Voyage 4 ranks top-3 on MLEB legal benchmark), eliminates Intel Mac
+dependency, full corpus re-embed fits within Voyage's 200M free token tier.
+
+### Architecture
+
+  embed_documents()  ->  voyage-4-large via Voyage API  (ingestion, one-time)
+  embed_query()      ->  voyage-4-lite via Voyage API   (query-time, $0.02/MTok)
+
+Both models share the Voyage 4 embedding space — vectors are directly
+comparable in pgvector. Both output 1024-dim floats, fitting existing
+vector(1024) schema with no migration needed.
+
+voyage-4-nano (local via sentence-transformers) was attempted but has
+incompatible custom modeling code with the current transformers version
+on Python 3.14. Dropped in favor of voyage-4-lite API.
+
+### Files changed
+
+  app/embed.py          — NEW: shared embedding module, replaces all Ollama calls
+  app/core.py           — embed_query() now imported from app.embed; Ollama vars removed
+  scripts/ingest/ingest_cfr_full.py  — embed_texts() delegates to embed_documents()
+  scripts/ingest/ingest_rag.py       — embed_batch() delegates to embed_documents()
+  .env                  — Added VOYAGE_API_KEY, removed OLLAMA_URL + OLLAMA_EMBED_MODEL
+
+### Remaining ingest scripts to update
+  scripts/ingest/ingest_foia.py
+  scripts/ingest/ingest_policy.py
+  perm-research/ingest_*.py scripts (ingest_dol_faqs, ingest_form_instructions, etc.)
+  Any other script with its own embed_texts/embed_batch Ollama call
+
+### Next steps
+  1. Update remaining ingest scripts (same pattern: delegate to embed_documents)
+  2. Write re-embed script: null all embeddings, re-embed everything with voyage-4-large
+  3. Run re-embed as background job (nohup) — ~402K chunks, fits in 200M free tier
+  4. pg_dump homebrew -> Docker once re-embed complete
+  5. Add VOYAGE_DOC_MODEL and VOYAGE_QUERY_MODEL to .env (currently using defaults)
+
+### Smoke test results (2026-06-24)
+  embed_documents(["H-1B specialty occupation..."]) -> 1024 dims OK
+  embed_query("specialty occupation software engineer") -> 1024 dims OK
+
+
+=== 2026-06-25 Session — Voyage Migration Completion + CFR Full Ingest ===
+
+voyage-4-nano restored: auto-patch in app/embed.py removes cache_position
+from create_causal_mask() call on every import — survives HF cache clears.
+Final architecture: embed_documents()->voyage-4-large API, embed_query()->local nano.
+
+Full corpus re-embed complete: 684,424 chunks, 0 pending.
+Token-aware batching added to app/embed.py (_MAX_CHARS_BATCH=160K, _MAX_CHUNKS_BATCH=25).
+
+Full CFR ingested: EMBED_TITLES filter removed from ingest_cfr_full.py.
+All 50 titles now in rag_chunks (233,544 chunks). All 10 remaining ingest
+scripts updated to use app.embed.embed_documents().
+
+Next: pg_dump to Docker, retrieval eval (20-30 queries), re-ranker integration,
+court_opinions bulk ingest, citation-weighted retrieval in /api/ask.

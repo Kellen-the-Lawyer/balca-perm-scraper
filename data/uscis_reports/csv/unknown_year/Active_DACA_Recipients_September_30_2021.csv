@@ -1,0 +1,374 @@
+"Count of Active DACA Recipients
+",,,
+By Month of Current DACA Expiration,,,
+"As of September 30, 2021",,,
+,,,
+Month of Current DACA Expiration,Active DACA Recipients (Rounded),,
+21-Sep,990,,
+21-Oct,"15,910",,
+21-Nov,"10,970",,
+21-Dec,"15,180",,
+22-Jan,"19,130",,
+22-Feb,"21,330",,
+22-Mar,"18,580",,
+22-Apr,"34,680",,
+22-May,"41,820",,
+22-Jun,"36,440",,
+22-Jul,"16,450",,
+22-Aug,"2,810",,
+22-Sep,"21,230",,
+22-Oct,"23,920",,
+22-Nov,"19,960",,
+22-Dec,"45,260",,
+23-Jan,"17,990",,
+23-Feb,"17,710",,
+23-Mar,"30,860",,
+23-Apr,"15,980",,
+23-May,"26,570",,
+23-Jun,"25,210",,
+23-Jul,"32,670",,
+23-Aug,"55,840",,
+23-Sep,"43,540",,
+Grand Total,"611,030",,
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+"3) This report reflects the number of individuals with DACA expiration on or after Sep. 30, 2021 as of Sep. 30, 2021.",,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Totals may not sum due to rounding.,,,
+"6) Counts less than 10 are notated with the letter ""D"".",,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+"ELIS & C3 Consolidated, queried 10/2021, TRK 8245.",,,
+,,,
+,,,
+"Count of Active DACA Recipients
+",,,
+By Country of Birth,,,
+0,,,
+,,,
+Country of Birth,"Count
+(rounded)",Country of Birth,"Count
+(rounded)"
+Grand Total,"611,030",Paraguay,160
+Mexico,"493,680",Zambia,160
+El Salvador,"23,590",Thailand,150
+Guatemala,"16,050",South Africa,150
+Honduras,"14,620",Saudi Arabia,150
+Peru,"5,760",Armenia,140
+"Korea, South","5,750",Egypt,140
+Brazil,"4,680",Haiti,140
+Ecuador,"4,350",Hong Kong,140
+Colombia,"3,850",Malaysia,140
+Argentina,"3,080",United Arab Emirates,140
+Philippines,"3,030",France,120
+Jamaica,"2,040",Lithuania,120
+India,"2,030",Ukraine,120
+Venezuela,"1,960",Senegal,120
+Dominican Republic,"1,810",Russia,110
+Uruguay,"1,570",Sri Lanka,110
+Trinidad and Tobago,"1,330",Cameroon,110
+Bolivia,"1,290",Zimbabwe,110
+Costa Rica,"1,230",Guinea,100
+Nicaragua,"1,210",Japan,100
+Chile,"1,090",Côte D'Ivoire,100
+Poland,"1,040",Morocco,90
+Pakistan,"1,030",Grenada,90
+Nigeria,830,Greece,90
+Guyana,760,Romania,90
+Belize,630,"Gambia, The",90
+Indonesia,600,Saint Vincent and the Grenadines,90
+Canada,590,Spain,80
+Kenya,550,Suriname,80
+China,540,Lebanon,80
+Bangladesh,410,Sierra Leone,80
+United Kingdom,410,Fiji,80
+Portugal,400,Barbados,70
+Ghana,380,Dominica,70
+Mongolia,380,Tanzania,70
+Panama,330,Malawi,70
+Italy,290,Czech Republic,70
+Israel,270,Hungary,60
+"Bahamas, The",250,Macedonia,60
+Albania,220,Uganda,60
+Saint Lucia,190,Liberia,60
+Taiwan,190,New Zealand,60
+Jordan,190,Bulgaria,50
+Turkey,170,Vietnam,50
+Germany,170,Nepal,50
+Country of Birth,"Count
+(rounded)",Country of Birth,"Count
+(rounded)"
+Antigua and Barbuda,50,Afghanistan,D
+Iran,50,Croatia,D
+Tonga,50,Libya,D
+Kuwait,50,Macau,D
+Democratic Republic of Congo,50,Burundi,D
+Cabo Verde,40,Iraq,D
+Netherlands,40,Kazakhstan,D
+Angola,40,Latvia,D
+Australia,40,Madagascar,D
+Montenegro,40,Namibia,D
+Cambodia,40,Slovenia,D
+Mali,40,Somalia,D
+Singapore,40,French Guiana,D
+Uzbekistan,30,Georgia,D
+Ethiopia,30,Lesotho,D
+Qatar,30,Moldova,D
+Turks and Caicos Islands,30,Burkina Faso,D
+Slovakia,30,Guadeloupe,D
+"Virgin Islands, British",30,Kyrgyzstan,D
+Saint Kitts and Nevis,30,Norway,D
+Yemen,30,Central African Republic,D
+Sweden,30,Cyprus,D
+Samoa,20,Mauritania,D
+Serbia,20,Mauritius,D
+Togo,20,Aruba,D
+Austria,20,Bosnia and Herzegovina,D
+Bahrain,20,Brunei,D
+Belgium,20,Chad,D
+Estonia,20,Luxembourg,D
+Gabon,20,Rwanda,D
+Netherlands Antilles,20,Bhutan,D
+Yugoslavia,20,Guinea-Bissau,D
+Bermuda,20,Marshall Islands,D
+Ireland,20,"Micronesia, Federated States of",D
+Kosovo,20,Sudan,D
+Botswana,20,Swaziland,D
+Cayman Islands,20,Tuvalu,D
+Syria,10,Equatorial Guinea,D
+USSR,10,Martinique,D
+Algeria,10,Palau,D
+Azerbaijan,10,Papua New Guinea,D
+Congo,10,Tunisia,D
+Western Samoa,10,Turkmenistan,D
+Belarus,10,Andorra,D
+Denmark,10,Burma,D
+Laos,10,Cuba,D
+Niger,10,Eritrea,D
+Oman,10,Finland,D
+Switzerland,10,French Polynesia,D
+Benin,10,Malta,D
+Montserrat,10,Mozambique,D
+Country of Birth,"Count
+(rounded)",Country of Birth,"Count
+(rounded)"
+New Caledonia,D,Zaire,D
+Tajikistan,D,Not available,220
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+0,,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Totals may not sum due to rounding.,,,
+"6) Counts less than 10 are notated with the letter ""D"".",,,
+7) Country of birth reflects the country of birth reported on the form I-821D.,,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+0,,,
+,,,
+,,,
+"Count of Active DACA Recipients
+",,,
+By State or Territory,,,
+0,,,
+,,,
+State or Territory of Residence,"Count
+(rounded)",State or Territory of Residence,"Count
+(rounded)"
+Grand Total,"611,030",Missouri,"2,790"
+California,"175,110",Nebraska,"2,760"
+Texas,"101,330",Idaho,"2,620"
+Illinois,"31,850",Kentucky,"2,560"
+New York,"25,590",Iowa,"2,330"
+Florida,"23,570",Louisiana,"1,600"
+Arizona,"23,070",Delaware,"1,260"
+North Carolina,"22,840",Mississippi,"1,230"
+Georgia,"19,630",Rhode Island,830
+New Jersey,"15,350",District of Columbia,550
+Washington,"15,290",Wyoming,480
+Colorado,"13,690",Hawaii,360
+Nevada,"11,740",New Hampshire,240
+Oregon,"9,200",South Dakota,200
+Virginia,"8,790",North Dakota,120
+Indiana,"8,470",West Virginia,100
+Utah,"8,070",Montana,80
+Maryland,"7,470",Alaska,70
+Tennessee,"7,220",Puerto Rico,60
+Wisconsin,"6,190",Maine,50
+Oklahoma,"5,850",Armed Forces Americas (except Canada),40
+South Carolina,"5,500",Vermont,30
+New Mexico,"5,330",Virgin Islands,30
+Kansas,"5,150",Guam,10
+Massachusetts,"5,110",American Samoa,D
+Michigan,"4,960",Northern Mariana Islands,D
+Minnesota,"4,840",Federated States of Micronesia,D
+Pennsylvania,"4,330",Armed Forces Pacific,D
+Arkansas,"4,250",Palau,D
+Alabama,"3,860","Armed Forces Africa, Canada, Europe, Middle East",D
+Ohio,"3,700",Not available,D
+Connecticut,"3,280",,
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+0,,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Totals may not sum due to rounding.,,,
+"6) Counts less than 10 are notated with the letter ""D"".",,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+0,,,
+,,,
+,,,
+"Count of Active DACA Recipients
+",,,
+By Core Based Statistical Area,,,
+0,,,
+,,,
+Core Based Statistical Area,"Count 
+(rounded)",Core Based Statistical Area,"Count 
+(rounded)"
+Grand Total,"611,030","Milwaukee-Waukesha-West Allis, WI","2,500"
+"Los Angeles-Long Beach-Anaheim, CA","75,390","Santa Rosa, CA","2,270"
+"New York-Newark-Jersey City, NY-NJ-PA","37,800","Detroit-Warren-Dearborn, MI","2,170"
+"Dallas-Fort Worth-Arlington, TX","32,780","Winston-Salem, NC","2,120"
+"Houston-The Woodlands-Sugar Land, TX","31,370","Baltimore-Columbia-Towson, MD","2,110"
+"Chicago-Naperville-Elgin, IL-IN-WI","30,410","Brownsville-Harlingen, TX","2,010"
+"Riverside-San Bernardino-Ontario, CA","22,510","Salem, OR","1,950"
+"Phoenix-Mesa-Scottsdale, AZ","20,150","Yakima, WA","1,880"
+"Atlanta-Sandy Springs-Roswell, GA","13,850","Merced, CA","1,840"
+"San Francisco-Oakland-Hayward, CA","12,540","Greensboro-High Point, NC","1,840"
+"Washington-Arlington-Alexandria, DC-VA-MD-WV","11,220","Kennewick-Richland, WA","1,770"
+"San Diego-Carlsbad, CA","9,990","Tulsa, OK","1,760"
+"Las Vegas-Henderson-Paradise, NV","9,410","Columbus, OH","1,750"
+"Miami-Fort Lauderdale-West Palm Beach, FL","8,880","Tucson, AZ","1,720"
+"Denver-Aurora-Lakewood, CO","8,620","Memphis, TN-MS-AR","1,700"
+"San Jose-Sunnyvale-Santa Clara, CA","7,790","Durham-Chapel Hill, NC","1,650"
+"Austin-Round Rock, TX","6,810","Bridgeport-Stamford-Norwalk, CT","1,650"
+"Seattle-Tacoma-Bellevue, WA","6,810","Reno, NV","1,640"
+"McAllen-Edinburg-Mission, TX","6,760","Fayetteville-Springdale-Rogers, AR-MO","1,610"
+"Sacramento--Roseville--Arden-Arcade, CA","5,500","Provo-Orem, UT","1,590"
+"Charlotte-Concord-Gastonia, NC-SC","5,420","Vallejo-Fairfield, CA","1,460"
+"Portland-Vancouver-Hillsboro, OR-WA","5,420","El Paso, TX","1,450"
+"Bakersfield, CA","4,850","North Port-Sarasota-Bradenton, FL","1,420"
+"San Antonio-New Braunfels, TX","4,830","Cape Coral-Fort Myers, FL","1,410"
+"Fresno, CA","4,740","Omaha-Council Bluffs, NE-IA","1,390"
+"Salt Lake City, UT","4,220","Birmingham-Hoover, AL","1,350"
+"Philadelphia-Camden-Wilmington, PA-NJ-DE-MD","4,040","Grand Rapids-Wyoming, MI","1,320"
+"Boston-Cambridge-Newton, MA-NH","3,880","Gainesville, GA","1,280"
+"Minneapolis-St. Paul-Bloomington, MN-WI","3,810","Greenville-Anderson-Mauldin, SC","1,270"
+"Oxnard-Thousand Oaks-Ventura, CA","3,680","Ogden-Clearfield, UT","1,230"
+"Indianapolis-Carmel-Anderson, IN","3,640","Santa Cruz-Watsonville, CA","1,210"
+"Raleigh, NC","3,430","Lakeland-Winter Haven, FL","1,190"
+"Visalia-Porterville, CA","3,350","Laredo, TX","1,180"
+"Stockton-Lodi, CA","3,220","Wichita, KS","1,160"
+"Kansas City, MO-KS","3,150","Providence-Warwick, RI-MA","1,140"
+"Tampa-St. Petersburg-Clearwater, FL","2,980","Boise City, ID","1,110"
+"Nashville-Davidson--Murfreesboro--Franklin, TN","2,930","Elkhart-Goshen, IN","1,110"
+"Modesto, CA","2,880","Richmond, VA","1,050"
+"Santa Maria-Santa Barbara, CA","2,780","Greeley, CO","1,010"
+"Salinas, CA","2,760",Other CBSA,"92,690"
+"Oklahoma City, OK","2,760",Not available,"1,310"
+"Albuquerque, NM","2,560",Non CBSA,"13,340"
+"Orlando-Kissimmee-Sanford, FL","2,520",,
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+0,,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Core Based Statistical Areas (CBSA) at the time of most recent adjudication. CBSAs are defined by the Office of Management and Budget.,,,
+6) Totals may not sum due to rounding.,,,
+"7) Counts less than 10 are notated with the letter ""D"".",,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+0,,,
+,,,
+,,,
+"Count of Active DACA Recipients
+",,,
+By Gender,,,
+0,,,
+,,,
+Gender,Count (rounded),,
+Grand Total,"611,030",,
+Female,"328,260",,
+Male,"282,550",,
+Not available,220,,
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+"3) This report reflects the number of individuals with DACA expiration on or after Sep. 30, 2021 as of Sep. 30, 2021.",,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Totals may not sum due to rounding.,,,
+"6) Counts less than 10 are notated with the letter ""D"".",,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+"ELIS & C3 Consolidated, queried 10/2021, TRK 8245.",,,
+,,,
+,,,
+"Count of Active DACA Recipients
+",,,
+By Marital Status,,,
+"As of September 30, 2021",,,
+,,,
+Marital Status,Count (rounded),,
+Grand Total,"611,030",,
+Single,"436,710",,
+Married,"155,710",,
+Divorced,"12,000",,
+Widowed,490,,
+Not available,"6,120",,
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+"3) This report reflects the number of individuals with DACA expiration on or after Sep. 30, 2021 as of Sep. 30, 2021.",,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Marital status reflects the DACA recipient's marital status as of the most recent adjudication.,,,
+6) Totals may not sum due to rounding.,,,
+"7) Counts less than 10 are notated with the letter ""D"".",,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+"ELIS & C3 Consolidated, queried 10/2021, TRK 8245.",,,
+,,,
+,,,
+"Count of Active DACA Recipients
+",,,
+"By Age on September 30, 2021",,,
+"As of September 30, 2021",,,
+,,,
+Age,Count (rounded),,
+Grand Total,"611,030",,
+Under 16,30,,
+16-20,"27,850",,
+21-25,"205,830",,
+26-30,"201,890",,
+31-35,"126,580",,
+36-39,"47,010",,
+Not available,"1,830",,
+Average Age,28,,
+Median Age,27,,
+Interquartile Range,24 to 31,,
+,,,
+Note(s):,,,
+1) The report reflects the most up-to-date estimate available at the time the database is queried.,,,
+2) Counts may differ from those reported in previous periods due to system updates and post-adjudicative outcomes.,,,
+"3) This report reflects the number of individuals with DACA expiration on or after Sep. 30, 2021 as of Sep. 30, 2021.",,,
+4) Individuals who have obtained Lawful Permanent Resident status or U.S. citizenship are excluded.,,,
+5) Totals may not sum due to rounding.,,,
+"6) Counts less than 10 are notated with the letter ""D"".",,,
+,,,
+Source:,,,
+"Department of Homeland Security, U.S. Citizenship and Immigration Services, Office of Performance and Quality",,,
+"ELIS & C3 Consolidated, queried 10/2021, TRK 8245.",,,

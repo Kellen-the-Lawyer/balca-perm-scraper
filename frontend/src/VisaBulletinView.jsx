@@ -324,7 +324,7 @@ function VisaBulletinView() {
                         <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 1 }}>{PREF_LABELS[p]?.split(" ").slice(0, 3).join(" ")}</div>
                       </td>
                       {COUNTRIES.map(c => (
-                        <td key={c} style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", background: selCountry === c ? (selPref === p ? "#f59e0b22" : "var(--amber-dim)") : "transparent" }}>
+                        <td key={c} style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", background: selCountry === c ? (selPref === p ? "#2dd4bf22" : "var(--amber-dim)") : "transparent" }}>
                           {(() => {
                             const row = lookup[p]?.[c];
                             if (!row) return <span style={{ color: "var(--text3)" }}>—</span>;
