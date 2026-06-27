@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT_DIR / ".env")
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 import httpx
 import databases

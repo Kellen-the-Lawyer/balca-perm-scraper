@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate as useRouterNavigate, useLocation } from "react-router-dom";
 
 const VIEW_PATHS = {
@@ -6,6 +6,7 @@ const VIEW_PATHS = {
   "balca":              "/balca",
   "aao":               "/aao",
   "regulations":        "/regulations",
+  "reg-nav-prototype":  "/reg-nav-prototype",
   "policy":             "/policy",
   "citation-graph":     "/citation-graph",
   "aao-citation-graph": "/aao-citation-graph",
@@ -32,6 +33,7 @@ import { AAOCitationGraphView, CitationGraphView } from "./CitationGraphs";
 import { PermComparer } from "./PermComparer";
 import { ProjectsView } from "./ProjectsViews";
 import { PolicyView, RegulationsView } from "./RegulationPolicyViews";
+import { RegulationNavPrototype } from "./RegulationNavPrototype";
 import { SearchAllView } from "./SearchAllView";
 import { useFetch } from "./common";
 import { WageForecaster } from "./WageForecaster";
@@ -211,6 +213,7 @@ export default function App() {
     ]},
     { label: "Statutes & Regs", items: [
       { type: "item", id: "regulations",    label: "Regulations (CFR)",  icon: icon.book  },
+      { type: "item", id: "reg-nav-prototype", label: "Reg Nav Prototype", icon: icon.book },
       { type: "item", id: "policy",         label: "Policy Manuals",     icon: icon.books },
     ]},
     { label: "Tools", items: [
@@ -238,6 +241,7 @@ export default function App() {
     ]},
     { section: "Statutes & Regs", items: [
       { id: "regulations",    label: "Regulations (CFR)", icon: icon.book  },
+      { id: "reg-nav-prototype", label: "Reg Nav Prototype", icon: icon.book },
       { id: "policy",         label: "Policy Manuals",    icon: icon.books },
     ]},
     { section: "Tools", items: [
@@ -357,6 +361,7 @@ export default function App() {
         {view === "aao" && <AAOSearchView key={`aao-${searchKey}`} externalDecisionId={externalDecision?.source === "aao" ? externalDecision?.id : null} externalQuery={externalDecision?.source === "aao" ? externalDecision?.query : null} onViewGraph={openGraphAAO} />}
         {view === "search-all" && <SearchAllView key={`search-all-${searchKey}`} onNavigate={openFromSearchAll} initialQuery={headerQuery} />}
         {view === "regulations" && <RegulationsView />}
+        {view === "reg-nav-prototype" && <RegulationNavPrototype />}
         {view === "policy" && <PolicyView />}
         {view === "citation-graph" && <CitationGraphView key={`graph-${searchKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "balca" }); goTo("balca"); }} initialQuery={graphSeed} />}
         {view === "aao-citation-graph" && <AAOCitationGraphView key={`aao-graph-${aaoGraphKey}`} onNavigate={(id) => { setExternalDecision({ id, query: "", source: "aao" }); goTo("aao"); }} onOpenPrecedent={(id) => { setExternalDecision({ id, query: "", source: "aao" }); goTo("aao"); }} initialQuery={graphSeed} />}
