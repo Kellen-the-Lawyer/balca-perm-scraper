@@ -1564,3 +1564,400 @@ scripts updated to use app.embed.embed_documents().
 
 Next: pg_dump to Docker, retrieval eval (20-30 queries), re-ranker integration,
 court_opinions bulk ingest, citation-weighted retrieval in /api/ask.
+
+═══════════════════════════════════════════════════════════════════════════
+2026-07-01 — July 1 Wage Comparer dashboard + actual 2026-27 wage load
+═══════════════════════════════════════════════════════════════════════════
+DATA:
+- Loaded actual 2026-27 OFLC wages (ALC+EDC) into current_oews_wages on
+  Homebrew 5433: 4,761,850 rows (848 ALC SOCs, 606 EDC, 530 areas, 2013 counties).
+  Loader: scripts/ingest/load_oflc_wages.py. Source: /Users/Dad/Downloads/OFLC_Wages_2026-27
+- Loaded prior-year 2025-26 into prior_oews_wages (same schema, 4,761,850 rows)
+  from /Users/Dad/Downloads/OFLC_Wages_2025-26_Updated. Used for YoY comparison.
+- IMPORTANT: wages are HOURLY in the export; ×2080 for annual. geo_level 1=MSA
+  (most specific) → 4=national fallback. Compare only same geo_level; cap >$350/hr.
+- YoY comparison CSVs on Desktop: wage_decreases_2526_to_2627.csv,
+  wage_big_increases_2526_to_2627.csv. Old wage-estimator JSONs were corrupted by
+  forward-projection artifacts — do NOT use for comparison; use raw prior CSV.
+
+DASHBOARD (July 1 Wage Comparer, /wage-dashboard):
+- app/routers/wages.py — 6 endpoints under /api/wages/*. Uses
+  `from core import *` + `await database.fetch_all(text(...).bindparams(**p))`.
+  NOTE: databases lib needs .bindparams() — passing a positional dict throws
+  "TextClause has no attribute values". pw_wage_level values are 'I'/'II'/'III'/'IV'
+  (NOT 'Level I').
+- frontend/src/WageDashboard.jsx — 5 panels: summary cards, US SVG heat map
+  (click state → MSA dropdown → top-10 SOC wage compare), top movers, employer
+  Level-I exposure. Registered in App.jsx + api.py router loop.
+- WageForecaster.jsx retitled "July 1, 2026 Wage Update"; NPRM banner/countdown removed.
+
+DEPLOY GOTCHAS RESOLVED:
+- sync overwrote deploy core.py's `from embed import` with dev's `from app.embed`
+  → container ModuleNotFoundError. Added permanent sed fixup to sync-from-dev.sh
+  (app.embed → embed).
+- Docker Desktop registry proxy (http.docker.internal:3128) wedged, hanging all
+  builds/pulls on "load metadata". Fix: full `osascript quit Docker` + `open -a Docker`,
+  wait ~2min for daemon. Then `docker pull node:24-slim python:3.12-slim` to warm cache.
+- All 6 endpoints return 200; container healthy on port 8080.
+
+2026-07-01 (later) — Dashboard v2: replaced Employer Mix, added interactive panels
+- Replaced hand-drawn rectangle "map" with real US state SVG paths:
+  frontend/src/usStatePaths.js (from @svg-maps/usa, MIT; viewBox "192 9 1028 746",
+  AK/HI insets). Heat map now has hover-brighten, top-8 state quick-click list.
+- Removed EmployerExposurePanel. New panels in WageDashboard.jsx:
+  * MatrixPanel — /api/wages/matrix: top 14 H-1B SOCs × top 12 metros (city→area
+    via LATERAL ILIKE match), Level I % change per cell, diverging red/green scale,
+    hover tooltip w/ $ values. '·' = geo tier changed (not comparable).
+  * SocExplorerPanel — /api/wages/soc-search?q= (autocomplete) +
+    /api/wages/soc/{soc}/areas (top 20 areas by |Level I change|, same-geo-tier only).
+  * StateImpactScatter — /api/wages/state-impact: per-state filings (x, log) vs
+    median Level I change (y), bubble size = % combos decreased; click drives the
+    same state drill-down as the map.
+- Layout: cards → map → matrix → SOC explorer → [movers | scatter].
+- All 9 /api/wages endpoints 200. Bundle index-Cxsmwgex.js live.
+
+=== 2026-07-02: Wage dashboard performance + matrix/SOC-explorer fixes ===
+- Created scripts/sql/wage_matviews.sql (applied to BOTH Homebrew 5433 and Docker 5432):
+  * mv_wage_yoy (355,033 rows): matched cur/prior Level I comparison (alc, <350/hr,
+    deduped per soc/area, joined on same geo_level). Serves summary, movers,
+    state-impact, soc/{code}/areas, matrix cells.
+  * mv_lca_soc_filings (558 rows): certified H-1B counts per base SOC.
+  * mv_soc_titles (848 rows): SOC codes/titles in 2026-27 data; powers soc-search
+    and filters top-SOC lists.
+  * Partial indexes on oflc_lca (state/city/employer WHERE H-1B Certified) and
+    composite indexes on current/prior_oews_wages.
+  * REFRESH all three matviews after any OFLC wage or LCA re-ingest.
+- wages.py rewritten to read from matviews. Matrix + compare_area top-SOC lists now
+  restricted to SOCs present in 2026-27 data (removes 81 retired 2010-vintage codes
+  like 15-1132; oflc_lca spans FY2020-FY2026 hence the stale codes).
+- SOC Explorer endpoint returns top 20 gains + top 20 reductions (direction field);
+  WageDashboard.jsx renders two labeled columns. Note: UNION + ORDER BY expression
+  requires wrapping in subquery (asyncpg FeatureNotSupportedError otherwise).
+- Matrix was 5.4s due to metro_areas CTE being inlined into the LATERAL (re-executed
+  40x); fixed with AS MATERIALIZED -> 0.32s. Endpoints now 3ms-320ms (was multi-second
+  full scans, zero indexes existed beyond PKs).
+- Docker rebuild succeeded; prior registry-proxy stall did not recur. Deployed live.
+- NOTE: summary/movers previously joined cur/prior without matching geo_level;
+  mv_wage_yoy standardizes on geo_level match, so header-card counts shifted slightly
+  (more correct: same geography compared).
+
+=== 2026-07-02 (later): SOC Hierarchy Treemap drilldown ===
+- New /api/wages/treemap endpoint (wages.py): 3 depths off existing matviews.
+  No params = 22 major groups (LEFT(soc_code,2) rollup of mv_wage_yoy +
+  mv_lca_soc_filings); ?group=NN = detailed SOCs; ?soc=NN-NNNN = metros.
+  SOC_MAJOR_GROUPS static title dict lives in wages.py. 6-300ms responses.
+- New frontend/src/TreemapPanel.jsx: squarified treemap (hand-rolled, no deps),
+  vivid 5-stop diverging color scale (coral-orange-gold-green-teal, ±8% domain,
+  dark-mode variants), pill breadcrumbs, hover detail bar, click-to-drill.
+  Tiles sized by H-1B filings (+floor so zero-filing SOCs stay visible);
+  metro depth sized by 2026-27 annual wage. Inserted above MatrixPanel.
+- Deployed live. Sanity: 15- group med +5.2%, 484K filings; 19- leads med at +6.7%.
+
+=== 2026-07-06 — PERM Verification System (Phase 1 shipped)
+- New module app/perm_verify/: form_9089_schema.json (canonical FLAG-edition field schema),
+  RULES_INVENTORY.md (51-rule catalog, 4 tiers, RED/YELLOW + citations),
+  extract_9089.py (layout-based extractor for flattened FLAG prints),
+  rules.py (Tier 1 completeness/consistency, Tier 2 recruitment timing,
+  Tier 4 form-only audit flags), engine.py (CLI orchestrator).
+- Extraction technique: values = Helvetica >=11pt (wage digits 9.6pt special-cased);
+  labels 7-9pt; checked boxes = ZapfDingbats '4' with answer token to the right;
+  merged label rows segmented into cells at numbered sub-label boundaries (x-windows).
+- Filing window logic: presumes filing date = review date; reports first-day-to-file
+  (max of mandatory step ends + 30d; second-latest additional-step start + 30d)
+  and last-day-to-file (earliest step start + 180d) per 656.17(e)(1).
+- Validated on 3 certified fixtures (test_fixtures/): G-100-24345-530692,
+  G-100-24283-396066, G-100-24285-402843 — all 0 RED with in-window filing dates;
+  YELLOWs are legitimate (employee referral doc, notice proof, G.9 business necessity).
+  Appendix C extraction added after fixtures 2-3 exposed the gap.
+- CLI: venv/bin/python3 -m app.perm_verify.engine <pdf> [--filing-date YYYY-MM-DD] [--json]
+- DB note: postgresql://perm:perm_local_pw@localhost:5432 still fails password auth
+  (retested 7/6); use Homebrew :5433 trust auth or `docker exec casebase-db psql`.
+- Pending: ingest 9089 General Instructions + PERM FAQ chunks linkage for flag
+  citations (rag_chunks 'form_instructions_dol'); Tier 3 wage checks need PWD/9141
+  input path (extract_pwd.py); T2-014/T4-007 need O*NET SVP loaded into Postgres;
+  sync to casebase-app not yet run (module is backend-only, no frontend yet).
+
+=== 2026-07-06 (later) — PERM Verification Phase 2: cited flags
+- Ingested ETA-9089 General Instructions (FLAG edition, exp 02/28/2029) into
+  rag_chunks corpus 'form_instructions_dol' (34 chunks, section-split, embedded
+  via voyage-4-large). Script: perm-research/ingest_9089_instructions.py
+  (standard --ingest/--embed/--status/--reset CLI, --folder defaults Downloads).
+- DDL: extended rag_chunks_corpus_check to allow 'form_instructions_dol' —
+  applied to BOTH Homebrew :5433 and Docker (docker exec).
+- New app/perm_verify/citations.py: per-flag retrieval from rag_chunks scoped
+  by citation_type (regulation->regulation/final_rules/form_instructions_dol;
+  balca->balca/ina_cases; faq->dol_faqs; typo/data_check skip). Two-stage rank:
+  cfr_citation LIKE boost then cosine distance. Query embedding =
+  app.embed.embed_query_sync (voyage-4-nano local, $0).
+- engine.py --cite flag attaches top-3 supporting chunks per flag (chunk id,
+  corpus, source_label, snippet, distance) in both report and --json output.
+- Retrieval spot-check on Chewy fixture: employee-referral flag retrieved
+  2015-PER-00279 (the documentation-standard case); roving flag retrieved
+  2014-PER-00115 / 2013-PER-03415 travel-requirement denials. On point.
+- Pending next: Tier 3 wage checks (PWD/9141 input via extract_pwd.py);
+  O*NET SVP/Job Zone load for T2-014/T4-007; BALCA issue-tagging pass (Phase 4);
+  frontend panel in Casebase UI + sync-from-dev deploy when UI exists.
+
+=== 2026-07-06 (later) — PERM Verification Phase 3: Tier 3 wage/PWD checks
+- New app/perm_verify/extract_9141.py: ETA-9141 determination extractor.
+  Techniques: regex over normalized text (handles two-column interleave where
+  values precede labels); checked boxes = \uf071 glyphs OVERLAID with small
+  diagonal line strokes (p.lines), unlike 9089's ZapfDingbats marks; money
+  amounts may interleave fill-line underscores (1__5_3_6_0_1 -> 153601).
+- New app/perm_verify/rules_tier3.py: T3-001 wage < higher-of-two PWD wages;
+  T3-003 <2% cushion; T3-005 PWD validity at filing; T3-010 PWD number
+  mismatch (halts further cross-checks); T3-011/012 FEIN/name identity;
+  T3-014/015 BLS-area/ZIP geography; T3-020 worker education < PWD minimum;
+  T3-021 Appendix A experience months < required; T3-016 travel consistency.
+- engine.py --pwd <9141.pdf> wires Tier 3 into the report/JSON.
+- Validated: Chewy 9141 (P-100-24067-778988, uploaded) all-field assertions;
+  6 additional Chewy 9141s from ~/Desktop/PERM Comparer Improvement Docs
+  generalize (2 staged in test_fixtures/9141/). Underscore fix surfaced dual
+  wages on 3 PWDs previously read as single-wage (incl. alternate-survey
+  Mercer/Gartner case with N/A OEWS level + pw_survey_name captured).
+- Negative tests: expired PWD, low wage, wrong PWD number, higher-of-two all
+  fire; mismatched 9089x9141 pair -> T3-010 RED; matched pair -> 0 flags.
+- NOTE: the Chewy 9141 PDF itself is not on local disk (was uploaded to chat);
+  synthetic dict used for matched-pair test. Ask Kellen to drop it in
+  test_fixtures/9141/ for a true end-to-end paired fixture.
+
+=== 2026-07-06 (later) — PERM Verification: paired fixture + O*NET checks (T2-014/T4-007)
+- Chewy 9141 (P-100-24067-778988) staged at test_fixtures/9141/. TRUE paired
+  end-to-end run (9089 + --pwd 9141, filing 2024-11-20): 0 RED, 3 legitimate
+  YELLOWs; every Tier 3 cross-check passes silently on the certified pair.
+- O*NET Job Zones loaded: onet_job_zones (923 rows) + onet_job_zone_reference
+  from onet/db_30_2_mysql (14_job_zones.sql / 02_job_zone_reference.sql,
+  MySQL INSERTs are Postgres-compatible after table rename). Loaded to BOTH
+  Homebrew :5433 and Docker.
+- New app/perm_verify/rules_onet.py wired into engine (runs when --pwd given):
+  T2-014 RED: non-professional recruitment (H.b.1b) on a Zone 4-5 occupation;
+  T2-015 YELLOW: Zone 3 borderline. T4-007 RED: G.9=No/N-A but required
+  experience months alone exceed the Job Zone SVP ceiling (Z1-2<=12, Z3<=24,
+  Z4<=48, Z5 unbounded) — conservative: education deliberately NOT converted
+  to SVP time. T4-007b YELLOW: exceeds ceiling with G.9=Yes (Appendix C must
+  meet Information Industries).
+- Tests: 72-month Zone-4 PWD (real case P-100-25149) + G.9=No -> T4-007 RED;
+  G.9=Yes -> T4-007b YELLOW; forced 1b occupation type -> T2-014 RED.
+- Note: P-100-25149 (real Chewy PWD) requires 72 months on a Zone 4 SOC —
+  its eventual 9089 must have G.9=Yes + strong Appendix C or will flag.
+
+=== 2026-07-06 (later) — Disclosure-data validation of PERM verify (Kellen's idea)
+- New app/perm_verify/validate_disclosure.py: joins oflc_perm x oflc_pw on
+  pwd_number (165K pairs; 3,148 denied / 153K certified with both wages),
+  maps rows to engine form/pwd dicts, runs T3-001/005/011/014 + T2-014/015
+  (job zone pre-joined in SQL), scores flag rates vs ground truth.
+- FOUND AND FIXED A REAL RULE BUG: T3-005 originally RED-flagged any filing
+  after PWD expiration; 656.40(c) permits it when RECRUITMENT BEGAN during
+  validity. First run flagged 47% of CERTIFIED cases (anti-signal). Fixed in
+  rules_tier3.py: expired-at-filing now checks earliest recruitment start
+  (rules._steps); RED only if recruitment also outside validity; YELLOW
+  advisory when recruitment dates unavailable. fd<validity_start stays RED.
+- Post-fix results (3,148 denied vs 20K certified sample, seed 42):
+  overall RED rate 10.61% denied vs 1.09% certified (~10x lift).
+  Per-rule lifts: T3-005 83x (0.83%/0.01%), T3-001 19x (2.35%/0.11%),
+  T2-014 11x (5.53%/0.41%), T3-014 6x (2.95%/0.46%), T3-011 3x.
+- Certified-side hits are largely disclosure-data artifacts: $0.40 hourly-
+  annualization rounding, a $1.99M unit-error PW, MSA column shifts in the
+  source files, single-digit FEIN typos DOL forgave. True precision higher.
+- Not testable from disclosure data (columns absent): Tier 1 completeness,
+  Tier 2 timing windows, T4-007 SVP, T3-020/021 worker quals.
+- Regression: Chewy paired fixture still 0 RED; post-expiry filing with
+  in-validity recruitment correctly NOT flagged.
+
+=== 2026-07-06 (later) — Unflagged-denied analysis (Phase 4 scoping)
+- New app/perm_verify/analyze_unflagged_denied.py; report at
+  /tmp/unflagged_denied_report.txt (regenerate anytime, ~1 min).
+- Layer 1 (3,148 joined denied): 10.6% caught by form-level rules; 89.4%
+  unflagged = Phase 4 territory. Unflagged mix: SOC 15 (17.7%) then heavy
+  non-professional tail (53 transport 10.3%, 31 healthcare support 9.1%,
+  35 food service 8.8%, 37 cleaning 5.8%).
+- Layer 2 (27K denied vs 623K certified, full oflc_perm):
+  * Non-professional denial rate 3.88% vs professional 1.21% (1.93 lift).
+  * Blue-collar SOC groups 49/45/31/47/53 at 2.4-3.3x lift.
+  * FW NOT currently employed: 3.40% denial vs 1.39% employed (2.4x) —
+    outside hires denied far more than incumbent sponsorships.
+  * employer_layoff=Y is PROTECTIVE (0.20 lift, n=29) — disclosers did the
+    notify-and-consider homework.
+  * FY2023 worst year (5.86%); FY2025 best (1.86%).
+  * Employer denial-rate outliers: Omega Compliance Solutions 152/152=100%
+    (fraud-sweep pattern), home-healthcare agencies clustered at 100%,
+    PwC entities 15-19% across three spellings, Equifax 14.7%.
+  * "Law firm" outliers are mostly non-law-firm agencies (Worldwide
+    HealthStaff 54.9%, Immigration Solutions of America 22%).
+- Phase 4 scoping conclusions: prioritize BALCA tagging for (1) recruitment
+  documentation sufficiency 656.17(e)/656.10(d), (2) bona fide job
+  opportunity 656.17(l) esp. small/household employers, (3) audit
+  non-response, (4) qualification/Kellogg. Cheap heuristic first pass
+  (regex CFR cites in decisions) validated as right starting point since
+  denial grounds concentrate on a handful of sections.
+- Immediate follow-on available: T4-016 (employer denial-rate base-rate
+  YELLOW) — this analysis produced exactly the SQL/percentiles to power it.
+
+=== 2026-07-06 (later) — Phase 4 step 1: BALCA CFR heuristic tagging (no LLM)
+- New perm-research/tag_balca_cfr.py: pure-regex pass over 52,368 balca
+  chunks / 18,230 decisions. Normalizes all 20 CFR 656.x cite formats +
+  detects key en banc precedents (Kellogg, Information Industries, Modular
+  Container, Delitizer, HealthAmerica, Lucky Horse, Il Cortile).
+- Coverage finding: only 7,561 decisions cite ANY 656.x section; regex
+  caught 7,560 (~100%). The other 10,670 are dispositional orders
+  (dismissals 74%, withdrawals 21% of sample) — now tagged
+  disposition(kind) so retrieval can exclude them. NO LLM tagging needed
+  for this layer; LLM reserved for finer sub-issue splits later if evals
+  demand it.
+- Primary-issue distribution confirms denial-analysis priorities:
+  656.17(f) ad content 21.1%, 656.17(e) recruitment 13.2%, 656.10(d)
+  notice 9.7%, 656.17(i) quals 7.6%, 656.24 CO determination ~8.6%,
+  656.20 audit 4.4%, 656.40 PW ~2.3%.
+- Written: balca_issue_tags (5433; docker has DDL, data sync rides the
+  next pg_dump refresh) + rag_chunks.cfr_citation backfilled on 21,391
+  balca chunks (each chunk's dominant substantive cite) — this activates
+  the citations.py cfr LIKE boost for BALCA retrieval immediately.
+- Next: (a) filter disposition-tagged decisions out of balca retrieval in
+  citations.py; (b) scope flags to form_section via balca_issue_tags;
+  (c) retrieval quality eval before any re-ranker/LLM spend.
+
+=== 2026-07-06 (later) — PERM Verify frontend (local dev, not deployed)
+- New app/routers/perm_verify.py: POST /api/perm-verify/run (multipart:
+  form_9089 required, form_9141 optional, filing_date, cite). Runs
+  engine.verify in threadpool. Registered in api.py.
+- New frontend/src/PermVerifyView.jsx (~300 lines, house style: CSS vars,
+  common.jsx Spinner, inline styles like sibling views). Elements: dual
+  PDF dropzones, filing-date + cite controls, filing-window RAIL (timeline
+  bar w/ first/last-day markers + filing position, green/red by in_window),
+  summary stat cards (case, employer, wages, PWD validity), flag cards
+  (RED then YELLOW, left-border color, rule id, section, citation,
+  collapsible supporting chunks when cite=on).
+- App.jsx wired: VIEW_PATHS /perm-verify, import, landing card, both nav
+  lists (Tools), render switch. 6 patches.
+- Local run: uvicorn on :8001 (vite proxy target; needs
+  PYTHONPATH=<repo root> so both `routers` and `app.embed` resolve —
+  same import quirk sync-from-dev.sh seds for Docker), vite on :5173.
+- Smoke-tested through HTTP + vite proxy with the paired Chewy fixtures:
+  0 RED / 3 YELLOW, window correct; cite=true returns support chunks
+  (2015-PER-00279 top for T2-012); cold cite call ~26s (nano model load),
+  warm calls fast. NOT synced to casebase-app per local-first testing.
+
+=== 2026-07-07 — Blank-page fix: NODE_ENV=production shell env
+- Root cause of blank PERM Verify page (and any fresh frontend dev serve):
+  NODE_ENV=production is exported in the login shell. Two effects:
+  (1) plain `npm install` omits devDependencies (vite pruned from
+  node_modules -> `vite: command not found`); (2) `vite dev` runs in
+  production mode -> plugin-react skips the Fast Refresh preamble ->
+  "Uncaught ReferenceError: $RefreshSig$ is not defined" -> React never
+  mounts -> blank root.
+- Fixes: `npm install --include=dev` to restore the tree; package.json
+  dev script pinned to `NODE_ENV=development vite` so terminal launches
+  work regardless of shell env. Verified headlessly (Chrome --dump-dom):
+  preamble present, no console errors, PERM Verify view renders.
+- Debug technique that cracked it: headless Chrome --enable-logging=stderr
+  --dump-dom against the dev server reproduces browser-only failures
+  without needing pasted console output.
+
+=== 2026-07-07 — Annotated-form overlay (PERM Verify frontend v2)
+- Kellen's ask: show the ACTUAL form with checks/flags positioned next to
+  each selection. Feasible because extract_9089 is geometry-based.
+- extract_9089.py now emits form['_layout']: per-page dims + 128 field
+  anchors {path: page/x/y} (sections A-J via _run_map, H items, AppA
+  education/work-experience block headers).
+- New app/perm_verify/layout.py: ITEM_PATHS (flag section_item -> schema
+  path; REQUIRED_FIELDS inverse + manual extras incl. H.d step rows,
+  notice, B/C, AppA.B/E) with suffix-fallback resolution; build_overlay()
+  renders pages to base64 PNGs (pdfplumber to_image via pypdfium2, 96dpi)
+  and emits markers: RED/YELLOW at flagged fields (flag_index for card
+  jump), OK green checks at required fields extracted-and-unflagged.
+- Router: render=true form flag attaches result['overlay'] (~3MB for the
+  13-page Chewy fixture).
+- PermVerifyView: FormOverlay component — stacked page images, %-positioned
+  markers (x/pageW, y/pageH), hover tooltip = rule + message, click flag
+  marker scrolls to its flag card; toggles: show passing checks,
+  flagged-pages-only (default) vs all pages.
+- Verified: Chewy pair -> 3 YELLOW markers on correct fields (employee
+  referral row p5, notice section p6, F.c travel p3) + 43 green checks;
+  repo-local vite build clean (npx vite failed via stale ~/.npm/_npx
+  cache — use ./node_modules/.bin/vite or npm run build).
+
+=== 2026-07-07 — PERM Verify refinements: marker popovers + PDF export
+- Inline popovers: clicking a flag marker on the annotated form opens an
+  anchored popover (level chip, rule id, section, message, "Full details &
+  citations" link that scrolls to the flag card). Popover flips left near
+  the right edge; page-background click or x closes; active marker gets a
+  wider halo. OK checks keep hover tooltips only.
+- PDF export: new app/perm_verify/report_pdf.py (reportlab 5 — newly
+  installed in venv — + Pillow). build_pdf(payload): cover page (caption,
+  filing-window table, summary counts, full flag list with citations and
+  cite-mode support sources) then annotated form pages with markers DRAWN
+  INTO the images (rule-id labels beside RED/YELLOW dots, small green OK
+  dots) so the PDF is self-contained work product. include_all_pages flag;
+  default = flagged pages only.
+- Router: POST /api/perm-verify/export-pdf (JSON = the run result +
+  include_all_pages) -> attachment perm-verify-<case>.pdf.
+- Frontend: "Export PDF report" button + "all pages in PDF" checkbox above
+  the filing-window rail; downloads via blob.
+- Verified end-to-end: Chewy pair w/ cite+render -> 4-page, 667KB PDF;
+  cover caption/window/T2-012/2015-PER-00279 all present; annotated pages
+  render; frontend builds clean, no console errors headless. Opened the
+  sample report in Preview for Kellen.
+
+=== 2026-07-07 — citations.py: disposition filter + form-section scoping
+- Three changes to resolve_flag() (app/perm_verify/citations.py):
+  1. DISTINCT ON (corpus, source_id) — one chunk per decision. Fixed a real
+     bug: T2-012 previously returned 2016-PER-00369 TWICE; now 3 distinct
+     decisions.
+  2. Disposition exclusion — balca chunks whose decision is tagged
+     cfr_section='disposition' (dismissals/withdrawals, 11,087 chunks =
+     21.2% of balca) are filtered from retrieval. Verified sample
+     20198 no longer surfaces.
+  3. Form-section rank boost — _form_sections_for(section_item) maps a
+     flag's 9089 section to balca_issue_tags.form_section values; matching
+     decisions sort ahead of non-matching (after cfr_rank, before dist).
+     Soft boost, not a filter: degrades to distance when no tagged match
+     (e.g. G.12 layoff — only 12 decisions cite 656.17(k), boost correctly
+     inert).
+- Ranking order: cfr_rank (CFR-section match) -> section_rank (issue-tag
+  match, balca only) -> cosine distance.
+- Verified live through API (cite=true, Chewy fixture): all support sets
+  distinct, on-section decisions. T4-011 now returns roving/travel cases
+  (2013-PER-02117 etc.) vs the old set.
+- FINDING (not a regression; for the retrieval eval backlog): regulation
+  corpus cfr_citation is Part-level ('20 CFR 656') not section-level, so
+  656.10(d) notice flags can't pinpoint within Part 656 — the CFR boost
+  promotes the whole Part correctly but can't rank subsections. Fix belongs
+  in the regulation ingest, not here.
+- DB note: reconfirmed :5432/perm_local_pw fails auth (it's the Docker
+  published port); all work against Homebrew :5433 source of truth. Not
+  synced to casebase-app (local-first).
+
+=== 2026-07-07 — Docker DB refresh (deploy copy synced from source of truth)
+- Synced Homebrew :5433 (source of truth) -> Docker :5432 deploy DB via
+  pg_dump piped straight into `docker exec -i casebase-db psql` (no host
+  intermediate file; rag_chunks is ~10GB on-disk source / 4.9GB loaded).
+- Tables synced (--clean --if-exists --no-owner --no-privileges):
+    rag_chunks         684,882 rows (exact parity; 684,458 embedded)
+    balca_issue_tags    33,631 rows (incl. 10,670 disposition tags)
+    onet_job_zones         923 / onet_job_zone_reference 4 (already present)
+  HNSW index idx_rag_embedding rebuilt in-container (~35 min for 685K x
+  1024-dim vectors; monitored via pg_stat_progress_create_index).
+- DELIBERATELY EXCLUDED oflc_perm / oflc_pw / OES wage tables — those feed
+  only the dev-only validate_disclosure.py + analyze_unflagged_denied.py
+  scripts, never the live verifier. Matches "Docker only carries what's
+  referenced" principle.
+- Verified end-to-end: citation resolver run AGAINST Docker
+  (postgresql://perm:<DB_PASSWORD>@127.0.0.1:5432) returns the same 3
+  distinct on-section BALCA decisions for T2-012 as Homebrew; disposition
+  filter + issue-tag scoping both fire. Distances differ trivially
+  (0.4231 vs 0.3935) — HNSW is approximate + rebuilt independently, benign.
+- SCOPE: pure DB data refresh into the running container volume. NO git
+  changes, NO casebase-app code deploy, NO sync-from-dev.sh, NO rebuild.
+  Persists in the docker volume only.
+
+--- DB access reference (corrected & re-verified 7/7) ---
+- Knowledge base / SOURCE OF TRUTH: postgresql://perm@127.0.0.1:5433/perm_decisions
+  (Homebrew, port 5433, TRUST auth / NO password). 684,882 chunks. This is
+  what DATABASE_URL in repo .env points to and what all perm_verify code uses.
+- Docker DEPLOY db: `docker exec casebase-db psql -U perm -d perm_decisions`
+  (passwordless), OR port 5432 with password = DB_PASSWORD in
+  casebase-app/.env (value: CameronHollis!234). NOTE: port 5432 is the
+  Docker published port (com.docker), NOT a local Postgres.
+- The string `postgresql://perm:perm_local_pw@localhost:5432/...` DOES NOT
+  WORK (verified: FATAL password auth failed). perm_local_pw is stale and
+  matches neither DB. Do not use.

@@ -14,20 +14,20 @@ const TIER1 = new Set([
 ]);
 
 const REGIME_META = {
-  eb2_ahead:   { color: "var(--green, #34d399)", label: "EB2 Ahead", desc: "EB2 cutoff leads EB3 — forecasts reliable" },
-  eb3_ahead:   { color: "var(--amber, #fbbf24)", label: "EB3 Ahead", desc: "EB3 leads EB2 — downgrade incentive active, queue inflated" },
+  eb2_ahead:   { color: "var(--green, #27815f)", label: "EB2 Ahead", desc: "EB2 cutoff leads EB3 — forecasts reliable" },
+  eb3_ahead:   { color: "var(--amber, #b47718)", label: "EB3 Ahead", desc: "EB3 leads EB2 — downgrade incentive active, queue inflated" },
   near_parity: { color: "var(--text3, #888)",    label: "Near Parity", desc: "Cutoffs close — transitional, monitor weekly" },
   "n/a":       { color: "var(--text3, #888)",    label: "N/A",        desc: "Spread regime doesn't apply to this category" },
   unknown:     { color: "var(--text3, #888)",    label: "Unknown",    desc: "Insufficient data" },
 };
 
 const CONFIDENCE_META = {
-  high:               { color: "#34d399", label: "High" },
-  medium:             { color: "#fbbf24", label: "Medium" },
-  low:                { color: "#f87171", label: "Low" },
-  cleared:            { color: "#34d399", label: "Cleared" },
+  high:               { color: "#27815f", label: "High" },
+  medium:             { color: "#b47718", label: "Medium" },
+  low:                { color: "#bf4b4b", label: "Low" },
+  cleared:            { color: "#27815f", label: "Cleared" },
   insufficient_data:  { color: "#888",    label: "Insufficient data" },
-  queue_growing:      { color: "#f87171", label: "Queue growing" },
+  queue_growing:      { color: "#bf4b4b", label: "Queue growing" },
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -128,11 +128,11 @@ function ForecastPanel({ country, category }) {
           label="Backtest MAE"
           value={`${data.backtest_accuracy?.mae_months ?? "—"} mo`}
           sub="mean absolute error"
-          accent="#34d399"
+          accent="#27815f"
         />
       </div>
 
-      <SectionHeader accent="#34d399">Priority date forecasts — {country} {category}</SectionHeader>
+      <SectionHeader accent="#27815f">Priority date forecasts — {country} {category}</SectionHeader>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
@@ -186,16 +186,16 @@ function RegimePanel({ country, category }) {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
             <StatCard label="Current Regime" value={loading ? "…" : <RegimeBadge regime={regime?.regime} />} />
-            <StatCard label="Spread" value={loading ? "…" : (regime?.spread_days != null ? `${regime.spread_days > 0 ? "+" : ""}${regime.spread_days}d` : "—")} sub="EB2 minus EB3 cutoff" accent={regime?.spread_days > 0 ? "#34d399" : regime?.spread_days < 0 ? "#fbbf24" : "var(--text)"} />
+            <StatCard label="Spread" value={loading ? "…" : (regime?.spread_days != null ? `${regime.spread_days > 0 ? "+" : ""}${regime.spread_days}d` : "—")} sub="EB2 minus EB3 cutoff" accent={regime?.spread_days > 0 ? "#27815f" : regime?.spread_days < 0 ? "#b47718" : "var(--text)"} />
             <StatCard label="EB2 Cutoff" value={loading ? "…" : fmtDate(regime?.eb2_cutoff)} />
             <StatCard label="EB3 Cutoff" value={loading ? "…" : fmtDate(regime?.eb3_cutoff)} />
-            <StatCard label="Forecast accuracy (eb2_ahead)" value="2.4 mo MAE" sub="91% within 6 months" accent="#34d399" />
+            <StatCard label="Forecast accuracy (eb2_ahead)" value="2.4 mo MAE" sub="91% within 6 months" accent="#27815f" />
           </div>
 
           {!loading && regime && (
             <div style={{
               padding: "12px 16px", marginBottom: 20,
-              background: regime.regime === "eb2_ahead" ? "#34d39910" : regime.regime === "eb3_ahead" ? "#fbbf2410" : "var(--bg2)",
+              background: regime.regime === "eb2_ahead" ? "#27815f10" : regime.regime === "eb3_ahead" ? "#b4771810" : "var(--bg2)",
               border: `1px solid ${REGIME_META[regime.regime]?.color || "var(--border)"}44`,
               borderRadius: "var(--radius)", fontSize: 13
             }}>
@@ -237,7 +237,7 @@ function RegimePanel({ country, category }) {
                         <td style={{ padding: "5px 8px", fontFamily: "monospace" }}>{fmtDate(r.bulletin_date)}</td>
                         <td style={{ padding: "5px 8px", fontFamily: "monospace" }}>{fmtDate(r.eb2_cutoff)}</td>
                         <td style={{ padding: "5px 8px", fontFamily: "monospace" }}>{fmtDate(r.eb3_cutoff)}</td>
-                        <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: sd > 0 ? "#34d399" : sd < 0 ? "#fbbf24" : "var(--text)" }}>
+                        <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: sd > 0 ? "#27815f" : sd < 0 ? "#b47718" : "var(--text)" }}>
                           {sd != null ? (sd > 0 ? `+${sd}` : sd) : "—"}
                         </td>
                         <td style={{ padding: "5px 8px" }}><RegimeBadge regime={reg} /></td>
@@ -294,18 +294,18 @@ function QueuePositionPanel({ country, category }) {
           </select>
         </div>
         <button onClick={run}
-          style={{ padding: "8px 20px", background: "var(--amber, #fbbf24)", border: "none", borderRadius: "var(--radius)", color: "#000", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+          style={{ padding: "8px 20px", background: "var(--amber, #b47718)", border: "none", borderRadius: "var(--radius)", color: "#000", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
           Check queue
         </button>
       </div>
 
       {loading && <div style={{ color: "var(--text3)", fontSize: 13 }}>Loading…</div>}
-      {error && <div style={{ color: "#f87171", fontSize: 13 }}>Error: {JSON.stringify(error)}</div>}
+      {error && <div style={{ color: "#bf4b4b", fontSize: 13 }}>Error: {JSON.stringify(error)}</div>}
 
       {data && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
-            <StatCard label="Cases ahead" value={fmt(data.cases_ahead)} sub="approx pending I-485s" accent="#60a5fa" />
+            <StatCard label="Cases ahead" value={fmt(data.cases_ahead)} sub="approx pending I-485s" accent="#315f7c" />
             <StatCard label="Cases in PY" value={fmt(data.cases_in_priority_year)} sub={`${data.priority_year} total`} />
             <StatCard label="Current cutoff" value={data.cutoff_unavailable ? "Unavailable" : fmtDate(data.current_cutoff)} sub={`as of ${fmtDate(data.latest_bulletin)}`} />
             <StatCard label="Avg monthly advance" value={data.avg_monthly_advance_days != null ? `${data.avg_monthly_advance_days}d` : "—"} sub="days/month (12mo avg)" />
@@ -324,7 +324,7 @@ function QueuePositionPanel({ country, category }) {
               {country === "India" ? "~486,000" : "many"} approved I-140 petitioners who have not yet filed I-485. Priority date advancement is controlled by DOS visa number management, not USCIS inventory levels.
             </div>
             {data.clearance_date_note && (
-              <div style={{ marginTop: 8, color: "#f87171", fontSize: 12 }}>{data.clearance_date_note}</div>
+              <div style={{ marginTop: 8, color: "#bf4b4b", fontSize: 12 }}>{data.clearance_date_note}</div>
             )}
           </div>
 
@@ -343,7 +343,7 @@ function QueuePositionPanel({ country, category }) {
                   <tr key={i} style={{ borderBottom: "1px solid var(--border)22" }}>
                     <td style={{ padding: "5px 8px", fontFamily: "monospace" }}>{fmtDate(r.bulletin_date)}</td>
                     <td style={{ padding: "5px 8px", fontFamily: "monospace" }}>{fmtDate(r.priority_date)}</td>
-                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: r.advance_days > 0 ? "#34d399" : "#f87171" }}>
+                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", color: r.advance_days > 0 ? "#27815f" : "#bf4b4b" }}>
                       {r.advance_days > 0 ? `+${r.advance_days}` : r.advance_days}
                     </td>
                   </tr>
@@ -374,10 +374,10 @@ export function EbInventoryView() {
   }, [country, category, t]);
 
   const tabs = [
-    ...(t === 1 ? [{ id: "forecast", label: "Forecast", accent: "#34d399",
+    ...(t === 1 ? [{ id: "forecast", label: "Forecast", accent: "#27815f",
       desc: `Tier 1 — backtest MAE ~${{"Philippines|EB3":0.8,"Mexico|EB2":1.3,"Mexico|EB3":1.7,"Philippines|EB2":2.1,"Rest of the World|EB3":3.3}[`${country}|${category}`] ?? "—"} months` }] : []),
-    ...((category === "EB2" || category === "EB3") ? [{ id: "regime", label: "Regime monitor", accent: "#fbbf24", desc: "Tier 2 — EB2/EB3 spread and regime history" }] : []),
-    { id: "queue", label: "Queue position", accent: "#60a5fa", desc: "Tier 3 — cases ahead of a priority date" },
+    ...((category === "EB2" || category === "EB3") ? [{ id: "regime", label: "Regime monitor", accent: "#b47718", desc: "Tier 2 — EB2/EB3 spread and regime history" }] : []),
+    { id: "queue", label: "Queue position", accent: "#315f7c", desc: "Tier 3 — cases ahead of a priority date" },
   ];
 
   return (
@@ -400,7 +400,7 @@ export function EbInventoryView() {
             {COUNTRIES.map(c => (
               <button key={c} onClick={() => setCountry(c)}
                 style={{ padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
-                  background: country === c ? "var(--amber, #fbbf24)" : "var(--bg2)",
+                  background: country === c ? "var(--amber, #b47718)" : "var(--bg2)",
                   color: country === c ? "#000" : "var(--text3)",
                   border: "1px solid var(--border)", borderRadius: "var(--radius)",
                   transition: "all 0.15s" }}>
@@ -415,7 +415,7 @@ export function EbInventoryView() {
             {CATEGORIES.map(c => (
               <button key={c} onClick={() => setCategory(c)}
                 style={{ padding: "5px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
-                  background: category === c ? "var(--amber, #fbbf24)" : "var(--bg2)",
+                  background: category === c ? "var(--amber, #b47718)" : "var(--bg2)",
                   color: category === c ? "#000" : "var(--text3)",
                   border: "1px solid var(--border)", borderRadius: "var(--radius)",
                   transition: "all 0.15s" }}>
@@ -431,9 +431,9 @@ export function EbInventoryView() {
         <span style={{
           fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
           padding: "3px 10px", borderRadius: 4,
-          background: t === 1 ? "#34d39920" : t === 2 ? "#fbbf2420" : "#60a5fa20",
-          color:      t === 1 ? "#34d399"   : t === 2 ? "#fbbf24"   : "#60a5fa",
-          border:     `1px solid ${t === 1 ? "#34d39940" : t === 2 ? "#fbbf2440" : "#60a5fa40"}`,
+          background: t === 1 ? "#27815f20" : t === 2 ? "#b4771820" : "#315f7c20",
+          color:      t === 1 ? "#27815f"   : t === 2 ? "#b47718"   : "#315f7c",
+          border:     `1px solid ${t === 1 ? "#27815f40" : t === 2 ? "#b4771840" : "#315f7c40"}`,
         }}>
           Tier {t}
         </span>

@@ -26,24 +26,35 @@ function citationFromParts(section, tokens) {
   return `${section}${tokens.map(t => `(${t})`).join("")}`;
 }
 
-function tokenKind(token) {
-  if (/^\d+$/.test(token)) return "number";
-  if (/^[IVXLCDM]+$/.test(token)) return "upper-roman";
-  if (/^[ivxlcdm]+$/.test(token)) return "roman";
-  if (/^[A-Z]+$/.test(token)) return "upper";
-  if (/^[a-z]+$/.test(token)) return "lower";
-  return "other";
+function tokenKinds(token) {
+  if (/^\d+$/.test(token)) return ["number"];
+  if (/^[IVXLCDM]+$/.test(token)) return ["upper-roman", "upper"];
+  if (/^[a-z]+$/.test(token)) {
+    const kinds = ["lower"];
+    if (/^(?:i{1,3}|iv|v|vi{0,3}|ix|x{1,3}(?:i{0,3}|iv|v|vi{0,3}|ix)?)$/.test(token)) kinds.push("roman");
+    return kinds;
+  }
+  if (/^[A-Z]+$/.test(token)) return ["upper"];
+  return ["other"];
 }
 
 const TOKEN_LEVELS = ["lower", "number", "roman", "upper", "number", "lower", "roman", "upper"];
 
+function isFirstTokenForKind(token, kind) {
+  if (kind === "number") return token === "1";
+  if (kind === "lower") return token === "a";
+  if (kind === "roman") return token === "i";
+  if (kind === "upper") return token === "A";
+  return false;
+}
+
 function advanceOutlineStack(stack, token) {
-  const kind = tokenKind(token);
-  if (kind === "other" || kind === "upper-roman") return null;
+  const kinds = tokenKinds(token);
+  if (kinds.includes("other") || kinds.includes("upper-roman")) return null;
   const expectedNext = TOKEN_LEVELS[stack.length];
-  if (kind === expectedNext) return [...stack, token];
+  if (kinds.includes(expectedNext) && isFirstTokenForKind(token, expectedNext)) return [...stack, token];
   for (let i = Math.min(stack.length - 1, TOKEN_LEVELS.length - 1); i >= 0; i -= 1) {
-    if (TOKEN_LEVELS[i] === kind) return [...stack.slice(0, i), token];
+    if (kinds.includes(TOKEN_LEVELS[i])) return [...stack.slice(0, i), token];
   }
   return [...stack, token];
 }
@@ -93,6 +104,73 @@ function getPreview(lines, startLine, sectionTitle, fallback) {
   return fallback;
 }
 
+function cleanDisplayChrome(raw, doc) {
+  const partPattern = escapeRegExp(String(doc?.cfr_part || ""));
+  const citationLine = new RegExp(`^\\s*${doc?.cfr_title}\\s+CFR\\s+${partPattern}(?:\\.\\w+)?(?:\\([^)]+\\))*\\s*$`, "i");
+  const lines = raw.split("\n");
+  const cleaned = [];
+  let skipPartName = false;
+
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (/^\d+\s+CFR\s+.+\(enhanced display\)\s+page\s+\d+\s+of\s+\d+\s*$/i.test(trimmed)) {
+      skipPartName = false;
+      return;
+    }
+    if (/^\d+\s+CFR\s+Part\s+.+\(up to date as of .+\)\s*$/i.test(trimmed)) {
+      skipPartName = false;
+      return;
+    }
+    if (citationLine.test(trimmed)) {
+      skipPartName = Boolean(doc?.part_name);
+      return;
+    }
+    if (skipPartName && doc?.part_name && trimmed === doc.part_name) {
+      skipPartName = false;
+      return;
+    }
+    skipPartName = false;
+    cleaned.push(line);
+  });
+
+  return cleaned.join("\n").trim();
+}
+
+function isSectionContentsHeader(line) {
+  return /\bTABLE\s+\d+\s+TO\s+§\s*[\d.]+[A-Z]?\s*[—-]\s*SECTION CONTENTS\b/i.test(line);
+}
+
+function paragraphMarkersForLine(lineText, lineStart, nextLineText = "") {
+  const markers = [];
+  const nextHeading = nextLineText.trim();
+  const startMatch = lineText.match(/^\s*\(([A-Za-z]+|\d+)\)\s*(.*)$/);
+  let firstMarkerEnd = 0;
+
+  if (startMatch) {
+    const markerIndex = lineText.indexOf("(");
+    firstMarkerEnd = lineText.indexOf(")", markerIndex) + 1;
+    const rawRest = startMatch[2].trim();
+    const rest = rawRest || nextHeading;
+    if (rest.length >= 3) {
+      if (!rawRest.startsWith("(")) markers.push({ token: startMatch[1], rest, offset: lineStart + markerIndex });
+    }
+  }
+
+  const inlineRe = /[.;:—–-]\s*\(([A-Za-z]+|\d+)\)\s*(.*)$/g;
+  let inlineMatch;
+  while ((inlineMatch = inlineRe.exec(lineText))) {
+    const openIndex = lineText.indexOf("(", inlineMatch.index);
+    if (openIndex < firstMarkerEnd) continue;
+    const rawRest = inlineMatch[2].trim();
+    if (rawRest.startsWith("(")) continue;
+    const rest = rawRest || nextHeading;
+    if (rest.length < 3) continue;
+    markers.push({ token: inlineMatch[1], rest, offset: lineStart + openIndex });
+  }
+
+  return markers;
+}
+
 function buildRegulationModel(doc) {
   const text = doc?.full_text || "";
   const title = doc?.cfr_title;
@@ -106,20 +184,84 @@ function buildRegulationModel(doc) {
   );
   const lineMatches = [...text.matchAll(/^.*$/gm)];
   const lines = lineMatches.map(m => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
-  const markerRe = new RegExp(`^\\s*${title}\\s+CFR\\s+(${part}(?:\\.\\w+)?(?:\\([^)]+\\))*)\\s*$`, "i");
-  const markers = [];
+  const sectionRe = new RegExp(`^\\s*§\\s*(${escapeRegExp(String(part))}(?:\\.\\w+)?)\\s+(.+)`, "i");
+  const legacyMarkerRe = new RegExp(`^\\s*${title}\\s+CFR\\s+(${escapeRegExp(String(part))}(?:\\.\\w+)?(?:\\([^)]+\\))*)\\s*$`, "i");
+  const partBodyRe = new RegExp(`^\\s*PART\\s+${escapeRegExp(String(part))}\\s*[—–-]`);
+  const bodyStartLine = Math.max(0, lines.findIndex(line => partBodyRe.test(line.text)));
+  const semanticMarkers = [];
+  const semanticKeys = new Set();
+
+  const pushMarker = marker => {
+    if (semanticKeys.has(marker.key)) return;
+    semanticMarkers.push(marker);
+    semanticKeys.add(marker.key);
+  };
 
   lines.forEach((line, idx) => {
-    const match = line.text.match(markerRe);
+    if (idx < bodyStartLine) return;
+    const match = line.text.match(sectionRe);
     if (!match) return;
     const citation = match[1];
-    markers.push({
+    pushMarker({
       citation,
       key: normalizeKey(citation),
       line: idx,
       start: line.start,
+      heading: compactHeading(match[2], sectionTitles.get(citation) || nodeLabel(citation)),
     });
   });
+
+  if (semanticMarkers.length) {
+    const sectionMarkers = [...semanticMarkers];
+    sectionMarkers.forEach((sectionMarker, sectionIdx) => {
+      const sectionEnd = sectionMarkers[sectionIdx + 1]?.start ?? text.length;
+      let stack = [];
+      let inSectionContents = false;
+
+      for (let lineIdx = sectionMarker.line + 1; lineIdx < lines.length; lineIdx += 1) {
+        const line = lines[lineIdx];
+        if (line.start >= sectionEnd) break;
+        const trimmed = line.text.trim();
+
+        if (isSectionContentsHeader(trimmed)) {
+          inSectionContents = true;
+          continue;
+        }
+        if (inSectionContents) {
+          if (/modified for the following/i.test(trimmed)) inSectionContents = false;
+          continue;
+        }
+
+        paragraphMarkersForLine(line.text, line.start, lines[lineIdx + 1]?.text || "").forEach(marker => {
+          const nextStack = advanceOutlineStack(stack, marker.token);
+          if (!nextStack) return;
+          stack = nextStack;
+          const citation = citationFromParts(sectionMarker.citation, stack);
+          pushMarker({
+            citation,
+            key: normalizeKey(citation),
+            line: lineIdx,
+            start: marker.offset,
+            heading: compactHeading(marker.rest, nodeLabel(citation)),
+          });
+        });
+      }
+    });
+  } else {
+    lines.forEach((line, idx) => {
+      const match = line.text.match(legacyMarkerRe);
+      if (!match) return;
+      const citation = match[1];
+      pushMarker({
+        citation,
+        key: normalizeKey(citation),
+        line: idx,
+        start: line.start,
+      });
+    });
+  }
+
+  const markers = semanticMarkers.sort((a, b) => a.start - b.start);
 
   if (!markers.length) {
     const citation = `${part}`;
@@ -155,13 +297,13 @@ function buildRegulationModel(doc) {
 
   const blocks = markers.map((marker, idx) => {
     const next = markers[idx + 1]?.start ?? text.length;
-    const raw = text.slice(marker.start, next).trim();
+    const raw = cleanDisplayChrome(text.slice(marker.start, next), doc);
     const section = parseParts(marker.citation).section;
     return {
       ...marker,
       blockKey: `${marker.key}-${idx}`,
       text: raw,
-      heading: getPreview(lines, marker.line, sectionTitles.get(section), nodeLabel(marker.citation)),
+      heading: marker.heading || getPreview(lines, marker.line, sectionTitles.get(section), nodeLabel(marker.citation)),
     };
   });
 
@@ -203,31 +345,6 @@ function buildRegulationModel(doc) {
       const citation = citationFromParts(section, tokens.slice(0, i));
       ensureNode(citation, i === tokens.length ? block : null, i !== tokens.length);
     }
-  });
-
-  blocks.forEach(block => {
-    const { section, tokens } = parseParts(block.citation);
-    let stack = [...tokens];
-    const blockLines = [...block.text.matchAll(/^.*$/gm)];
-    blockLines.forEach(lineMatch => {
-      const line = lineMatch[0].trim();
-      const match = line.match(/^\(([A-Za-z]+|\d+)\)\s+(.{3,})/);
-      if (!match) return;
-      const [, token, rest] = match;
-      const nextStack = advanceOutlineStack(stack, token);
-      if (!nextStack) return;
-      stack = nextStack;
-      const citation = citationFromParts(section, stack);
-      if (normalizeKey(citation) === block.key) return;
-      const offset = block.start + lineMatch.index;
-      ensureNode(citation, {
-        ...block,
-        citation,
-        key: normalizeKey(citation),
-        start: offset,
-        heading: compactHeading(rest, nodeLabel(citation)),
-      }, false);
-    });
   });
 
   for (const node of nodeMap.values()) {

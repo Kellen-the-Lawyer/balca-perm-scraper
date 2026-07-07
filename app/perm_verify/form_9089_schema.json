@@ -1,0 +1,200 @@
+{
+  "form": "ETA-9089",
+  "edition": "FLAG (OMB 1205-0451, exp 02/28/2029)",
+  "sections": {
+    "A_employer": {
+      "legal_business_name": {"type": "str", "required": true},
+      "dba": {"type": "str", "conditional": true},
+      "address1": {"type": "str", "required": true, "constraint": "physical location, no PO Box"},
+      "address2": {"type": "str", "conditional": true},
+      "city": {"type": "str", "required": true},
+      "state": {"type": "str", "required": true},
+      "postal_code": {"type": "str", "required": true},
+      "country": {"type": "str", "required": true},
+      "province": {"type": "str", "conditional": true},
+      "phone": {"type": "str", "required": true},
+      "extension": {"type": "str", "conditional": true},
+      "fein": {"type": "str", "required": true, "constraint": "9-digit FEIN, not SSN"},
+      "naics_code": {"type": "str", "required": true, "constraint": "4-digit min, describes employer not job"},
+      "num_employees_in_area": {"type": "int", "required": true},
+      "year_commenced_business": {"type": "int", "required": true, "format": "YYYY"},
+      "closely_held_ownership_interest": {"type": "yn", "required": true},
+      "familial_relationship": {"type": "yn", "required": true}
+    },
+    "B_poc": {
+      "last_name": {"type": "str", "required": true},
+      "first_name": {"type": "str", "required": true},
+      "middle_name": {"type": "str", "conditional": true},
+      "job_title": {"type": "str", "required": true},
+      "address1": {"type": "str", "required": true},
+      "address2": {"type": "str", "conditional": true},
+      "city": {"type": "str", "required": true},
+      "state": {"type": "str", "required": true},
+      "postal_code": {"type": "str", "required": true},
+      "country": {"type": "str", "required": true},
+      "province": {"type": "str", "conditional": true},
+      "phone": {"type": "str", "required": true},
+      "extension": {"type": "str", "conditional": true},
+      "email": {"type": "str", "required": true, "constraint": "must differ from Section C attorney contact info unless attorney is employer's employee"}
+    },
+    "C_attorney_agent": {
+      "representation_type": {"type": "enum", "values": ["Attorney", "Agent", "None"], "required": true},
+      "last_name": {"type": "str", "conditional": true},
+      "first_name": {"type": "str", "conditional": true},
+      "middle_name": {"type": "str", "conditional": true},
+      "address1": {"type": "str", "conditional": true},
+      "address2": {"type": "str", "conditional": true},
+      "city": {"type": "str", "conditional": true},
+      "state": {"type": "str", "conditional": true},
+      "postal_code": {"type": "str", "conditional": true},
+      "country": {"type": "str", "conditional": true},
+      "province": {"type": "str", "conditional": true},
+      "phone": {"type": "str", "conditional": true},
+      "extension": {"type": "str", "conditional": true},
+      "email": {"type": "str", "conditional": true},
+      "law_firm_name": {"type": "str", "conditional": true},
+      "law_firm_fein": {"type": "str", "conditional": true},
+      "state_bar_number": {"type": "str", "conditional": "required if Attorney (or Attorney-as-Agent)"},
+      "state_of_good_standing": {"type": "str", "conditional": "same"},
+      "highest_court_name": {"type": "str", "conditional": "same"}
+    },
+    "D_foreign_worker_flags": {
+      "appendix_a_attached": {"type": "yn", "required": true, "constraint": "No = denial"},
+      "dual_representation": {"type": "yn", "required": true}
+    },
+    "E_job_wage": {
+      "pwd_case_number": {"type": "str", "required": true, "format": "P-100-xxxxx-xxxxxx (14-digit)"},
+      "supervised_recruitment_9141_attached": {"type": "ynna", "conditional": true},
+      "offered_wage_from": {"type": "decimal", "required": true},
+      "offered_wage_to": {"type": "decimal", "conditional": true},
+      "wage_per": {"type": "enum", "values": ["Hour", "Week", "Bi-Weekly", "Month", "Year"], "required": true},
+      "wage_conditions": {"type": "str", "conditional": true, "max_chars": 500}
+    },
+    "F_worksite": {
+      "worksite_type": {"type": "enum", "values": ["business_premises", "employer_household", "employee_residence", "no_specific_worksite"], "required": true},
+      "address1": {"type": "str", "required": true, "constraint": "no PO Box"},
+      "address2": {"type": "str", "conditional": true},
+      "city": {"type": "str", "required": true},
+      "county": {"type": "str", "required": true},
+      "state": {"type": "str", "required": true},
+      "postal_code": {"type": "str", "required": true},
+      "msa_oes_area_code": {"type": "str", "required": true},
+      "msa_oes_area_title": {"type": "str", "required": true},
+      "additional_worksites": {"type": "yn", "required": true},
+      "appendix_b_attached": {"type": "ynna", "conditional": "required if additional_worksites=Yes"},
+      "other_geographic_areas": {"type": "str", "conditional": true, "max_chars": 1500}
+    },
+    "G_job_info": {
+      "full_time_35hrs": {"type": "yn", "required": true},
+      "live_in_domestic": {"type": "yn", "required": true},
+      "live_in_1yr_experience": {"type": "ynna", "conditional": true},
+      "live_in_contract_executed": {"type": "ynna", "conditional": true},
+      "live_in_contract_copy_provided": {"type": "ynna", "conditional": true},
+      "accept_foreign_degree_equivalent": {"type": "ynna", "required": true},
+      "fw_currently_employed": {"type": "yn", "required": true},
+      "fw_qualifies_only_by_alternative_reqs": {"type": "ynna", "conditional": "if G.4=Yes"},
+      "kellogg_suitable_combination": {"type": "enum", "values": ["I ACCEPT", "I DO NOT ACCEPT"], "conditional": "if G.4=Yes and G.4a=Yes"},
+      "relying_solely_on_experience_with_employer": {"type": "yn", "required": true},
+      "experience_substantially_comparable": {"type": "ynna", "conditional": "if G.5=Yes"},
+      "employer_paid_training": {"type": "ynna", "conditional": "if G.5=Yes"},
+      "live_on_premises": {"type": "yn", "required": true, "appendix_c_if_yes": "G.6"},
+      "combination_of_occupations": {"type": "yn", "required": true, "appendix_c_if_yes": "G.7"},
+      "foreign_language": {"type": "yn", "required": true, "appendix_c_if_yes": "G.8"},
+      "exceeds_svp": {"type": "ynna", "required": true, "appendix_c_if_yes": "G.9"},
+      "credentialing_service": {"type": "ynna", "required": true, "appendix_c_if_yes": "G.10"},
+      "employer_received_payment": {"type": "yn", "required": true, "appendix_c_if_yes": "G.11"},
+      "layoff_6mo": {"type": "yn", "required": true, "appendix_c_if_yes": "G.12"}
+    },
+    "H_recruitment": {
+      "supervised_recruitment": {"type": "yn", "required": true},
+      "occupation_type": {"type": "enum", "values": ["1a_professional", "1b_nonprofessional", "1c_college_university_teacher", "1d_schedule_a_sheepherder", "1e_professional_athlete"], "required": true},
+      "swa_job_order_start": {"type": "date", "conditional": "if 1a or 1b"},
+      "swa_job_order_end": {"type": "date", "conditional": "same"},
+      "sunday_edition_exists": {"type": "yn", "conditional": "same"},
+      "ad1_newspaper_name": {"type": "str", "conditional": "same"},
+      "ad1_date": {"type": "date", "conditional": "same"},
+      "ad2_type": {"type": "enum", "values": ["Newspaper of general circulation", "Professional journal", "N/A"], "conditional": "same"},
+      "ad2_name": {"type": "str", "conditional": "same"},
+      "ad2_date": {"type": "date", "conditional": "same"},
+      "additional_steps": {
+        "type": "array",
+        "conditional": "if 1a: minimum 3 required",
+        "items": ["job_fair", "employer_website", "job_search_website", "on_campus", "trade_org", "private_firm", "employee_referral", "campus_placement", "local_ethnic_newspaper", "radio_tv"],
+        "each": {"from_date": "date", "to_date": "date"}
+      },
+      "notice_of_posting": {
+        "type": "multi_flag",
+        "values": ["1a_bargaining_rep", "1b_physical_notice", "1c_electronic_notice", "1d_inhouse_media", "1e_private_household", "1f_did_not_post"],
+        "constraint": "1c/1d only valid with 1b; 1a/1e/1f exclusive; 1f = denial"
+      }
+    },
+    "I_attestations": {
+      "certify_labor_condition_statements": {"type": "yn", "required": true, "constraint": "No = denial"}
+    },
+    "J_preparer": {
+      "last_name": {"type": "str", "conditional": true},
+      "first_name": {"type": "str", "conditional": true},
+      "middle_name": {"type": "str", "conditional": true},
+      "fein": {"type": "str", "conditional": true},
+      "business_name": {"type": "str", "conditional": true},
+      "email": {"type": "str", "conditional": true}
+    },
+    "appendix_A": {
+      "contact": {
+        "last_name": {"type": "str", "required": true},
+        "first_name": {"type": "str", "required": true},
+        "middle_name": {"type": "str", "required": true},
+        "address1": {"type": "str", "required": true},
+        "address2": {"type": "str", "conditional": true},
+        "city": {"type": "str", "required": true},
+        "state": {"type": "str", "required": true},
+        "postal_code": {"type": "str", "required": true},
+        "country": {"type": "str", "required": true},
+        "province": {"type": "str", "conditional": true},
+        "dob": {"type": "date", "required": true},
+        "class_of_admission": {"type": "str", "required": true},
+        "a_number": {"type": "str", "required": true, "note": "0 if none"},
+        "country_of_birth": {"type": "str", "required": true},
+        "country_of_citizenship": {"type": "str", "required": true}
+      },
+      "education": {"type": "array", "max_sets_paper": 5, "each": {
+        "degree": {"type": "enum", "values": ["None", "High School/GED", "Associate", "Bachelor's", "Master's", "Doctorate", "Other"]},
+        "other_degree_specify": {"type": "str", "conditional": true},
+        "majors": {"type": "str"},
+        "institution": {"type": "str"},
+        "country": {"type": "str"},
+        "month_year_attained": {"type": "str", "format": "MM/YYYY"}
+      }},
+      "training": {"type": "array", "max_sets_paper": 3, "each": {
+        "provider": "str", "training_name": "str", "licenses_attained": "str",
+        "start": "MM/YYYY", "end": "MM/YYYY", "awarded": "MM/YYYY"
+      }},
+      "skills": {"type": "array", "max_sets_paper": 2, "each": {
+        "provider": "str", "country": "str", "state": "str",
+        "description": {"type": "str", "max_chars": 1500}
+      }},
+      "work_experience": {"type": "array", "each": {
+        "employer_name": "str", "address1": "str", "address2": "str",
+        "city": "str", "postal_code": "str", "country": "str", "state": "str",
+        "job_title": "str", "start": "MM/YYYY", "end": "MM/YYYY",
+        "present": "yn", "hours_per_week": "int",
+        "duties": {"type": "str", "max_chars": 3500}
+      }}
+    },
+    "appendix_B": {"worksites": {"type": "array", "each": {"county": "str", "state": "str", "msa_oes_code": "str", "msa_oes_title": "str"}}},
+    "appendix_C": {"entries": {"type": "array", "each": {
+      "section_item": {"type": "enum", "values": ["G.6", "G.7", "G.8", "G.9", "G.10", "G.11", "G.12"]},
+      "category": "str",
+      "explanation": {"type": "str", "max_chars": 1500}
+    }}},
+    "appendix_D": {
+      "selection_date": {"type": "date", "required": true},
+      "publications": {"type": "array", "min": 1, "each": {"name": "str", "start_date": "date"}},
+      "additional_recruitment": {"type": "str", "max_chars": 3500}
+    },
+    "meta": {
+      "filing_date": {"type": "date", "note": "anchor for all 30/180-day window checks; from case number or user input"},
+      "pwd_data": {"note": "linked 9141 data: prevailing wage(s), SOC code, requirements — needed for cross-checks"}
+    }
+  }
+}

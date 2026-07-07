@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { API } from "./apiBase";
 
 export const OUTCOME = {
-  Affirmed:  { bg: "var(--green-dim)",  text: "var(--green)",  dot: "#34d399" },
-  Reversed:  { bg: "var(--red-dim)",    text: "var(--red)",    dot: "#f87171" },
-  Remanded:  { bg: "var(--yellow-dim)", text: "#fbbf24",       dot: "#fbbf24" },
+  Affirmed:  { bg: "var(--green-dim)",  text: "var(--green)",  dot: "#27815f" },
+  Reversed:  { bg: "var(--red-dim)",    text: "var(--red)",    dot: "#bf4b4b" },
+  Remanded:  { bg: "var(--yellow-dim)", text: "#b47718",       dot: "#b47718" },
   Dismissed: { bg: "var(--bg4)",        text: "var(--text2)",  dot: "#5a5a68" },
 };
 
@@ -298,10 +298,10 @@ export function HighlightedText({ text, activeDocQ, matchIndex, resetMatches, re
           <mark key={i}
             ref={el => registerRef(idx, el)}
             style={{
-              background: isActive ? "#2dd4bf" : "#2dd4bf44",
+              background: isActive ? "#315f7c" : "#315f7c44",
               color: isActive ? "#000" : "inherit",
               borderRadius: 2,
-              outline: isActive ? "2px solid #2dd4bf" : "none",
+              outline: isActive ? "2px solid #315f7c" : "none",
             }}>
             {part}
           </mark>
@@ -312,7 +312,7 @@ export function HighlightedText({ text, activeDocQ, matchIndex, resetMatches, re
 }
 
 export function RegBadge({ label }) {
-  return <span style={{ background: "var(--amber-dim)", color: "var(--amber)", border: "1px solid #2dd4bf33", fontSize: 10, fontWeight: 500, padding: "2px 7px", borderRadius: 4 }}>{label}</span>;
+  return <span style={{ background: "var(--amber-dim)", color: "var(--amber)", border: "1px solid #315f7c33", fontSize: 10, fontWeight: 500, padding: "2px 7px", borderRadius: 4 }}>{label}</span>;
 }
 
 export function useFetch(url) {
@@ -337,7 +337,7 @@ export function Spinner() {
 
 // ── Search view — owns all search + detail state ──────────────────────────────
 
-export const PROJECT_COLORS_INLINE = ["#2dd4bf","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];
+export const PROJECT_COLORS_INLINE = ["#315f7c","#27815f","#315f7c","#bf4b4b","#a78bfa","#fb7185","#4ade80","#38bdf8"];
 
 export function SaveToProject({ decisionId, searchQuery, small }) {
   const [projects, setProjects] = useState(null);
@@ -414,7 +414,7 @@ export function SaveToProject({ decisionId, searchQuery, small }) {
         height: "auto",
         background: isSaved ? "var(--blue-dim)" : "var(--bg3)",
         color: isSaved ? "var(--blue)" : "var(--text3)",
-        border: isSaved ? "1px solid #60a5fa44" : "1px solid var(--border)",
+        border: isSaved ? "1px solid #315f7c44" : "1px solid var(--border)",
         borderRadius: 4,
       }}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -504,4 +504,4 @@ export function SaveToProject({ decisionId, searchQuery, small }) {
 
 // ── Projects view ─────────────────────────────────────────────────────────────
 
-export const PROJECT_COLORS = ["#2dd4bf","#34d399","#60a5fa","#f87171","#a78bfa","#fb7185","#4ade80","#38bdf8"];
+export const PROJECT_COLORS = ["#315f7c","#27815f","#315f7c","#bf4b4b","#a78bfa","#fb7185","#4ade80","#38bdf8"];

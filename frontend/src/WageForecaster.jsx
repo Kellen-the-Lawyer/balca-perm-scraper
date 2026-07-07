@@ -302,8 +302,8 @@ function WageForecaster() {
     setCurArea(entry ? { code: entry[0], name: entry[1] } : null);
   }, [county, stateVal, geo]);
 
-  const dl = new Date("2026-06-30");
-  const daysLeft = Math.ceil((dl - new Date()) / 86400000);
+  const dl = null; // July 1 has passed
+  const daysLeft = 0;
 
   const curEntry = curArea && wageData ? wageData[curArea.code] : null;
   const cur = curEntry?.slice(0, 4);
@@ -325,10 +325,10 @@ function WageForecaster() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 12 }}>
           <div>
             <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 20, color: "var(--text)", marginBottom: 4 }}>
-              Upcoming wage estimator
+              July 1, 2026 Wage Update
             </div>
             <div style={{ fontSize: 12, color: "var(--text3)" }}>
-              {meta ? `${Object.keys(meta).length} occupation codes` : "Loading…"} · 530 metro areas · OFLC 2025-26 floors + ECI-calibrated July 2026 estimates
+              {meta ? `${Object.keys(meta).length} occupation codes` : "Loading…"} · 530 metro areas · Actual 2026-27 OFLC ALC prevailing wages effective July 1, 2026
             </div>
           </div>
           {daysLeft > 0 && (
@@ -337,11 +337,6 @@ function WageForecaster() {
               <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>days to June 30</div>
             </div>
           )}
-        </div>
-
-        {/* NPRM warning */}
-        <div style={{ padding: "8px 12px", background: "var(--amber-dim)", borderLeft: "3px solid var(--amber)", borderRadius: "0 var(--radius) var(--radius) 0", fontSize: 12, color: "var(--text2)", lineHeight: 1.55, marginBottom: "1.25rem" }}>
-          <strong style={{ fontWeight: 500 }}>NPRM ETA-2026-0001 pending</strong> — DOL proposed raising wage percentile methodology (comment period closed May 26). If finalized before July 1, these estimates will not apply. File before June 30 to lock in current rates regardless.
         </div>
 
         {/* Selectors */}

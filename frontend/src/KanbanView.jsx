@@ -13,20 +13,20 @@ function kanbanFetch(path, opts = {}) {
 
 const COLS = [
   { id: "todo",       label: "To Do",      accent: "#a4a4b3" },
-  { id: "inprogress", label: "In Progress", accent: "#60a5fa" },
-  { id: "review",     label: "Review",      accent: "#2dd4bf" },
-  { id: "done",       label: "Done",        accent: "#34d399" },
+  { id: "inprogress", label: "In Progress", accent: "#315f7c" },
+  { id: "review",     label: "Review",      accent: "#315f7c" },
+  { id: "done",       label: "Done",        accent: "#27815f" },
 ];
 
 const PRIORITY = {
-  high: { label: "High",   bg: "#f8717118", text: "#f87171", dot: "#f87171" },
-  med:  { label: "Medium", bg: "#2dd4bf18", text: "#2dd4bf", dot: "#2dd4bf" },
-  low:  { label: "Low",    bg: "#34d39918", text: "#34d399", dot: "#34d399" },
+  high: { label: "High",   bg: "#bf4b4b18", text: "#bf4b4b", dot: "#bf4b4b" },
+  med:  { label: "Medium", bg: "#315f7c18", text: "#315f7c", dot: "#315f7c" },
+  low:  { label: "Low",    bg: "#27815f18", text: "#27815f", dot: "#27815f" },
 };
 
 const PROJECT = {
   graphite: { label: "Graphite", bg: "#a78bfa18", text: "#a78bfa", dot: "#a78bfa" },
-  casebase: { label: "Casebase", bg: "#34d39918", text: "#34d399", dot: "#34d399" },
+  casebase: { label: "Casebase", bg: "#27815f18", text: "#27815f", dot: "#27815f" },
 };
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
@@ -486,7 +486,7 @@ export function KanbanView() {
   if (!authed) return <TokenGate onAuthenticated={() => setAuthed(true)} />;
 
   const projectTabs = [
-    { id: "casebase", label: "Casebase", dot: "#34d399" },
+    { id: "casebase", label: "Casebase", dot: "#27815f" },
     { id: "graphite", label: "Graphite", dot: "#a78bfa" },
     { id: "all",      label: "All",      dot: "var(--text3)" },
   ];

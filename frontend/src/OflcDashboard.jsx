@@ -96,16 +96,16 @@ const STATUS_COLORS = {
   "Certified":            "#22c55e",
   "Certified-Expired":    "#86efac",
   "Certified - Expired":  "#86efac",
-  "Withdrawn":            "#2dd4bf",
+  "Withdrawn":            "#315f7c",
   "Denied":               "#ef4444",
-  "Certified - Withdrawn":"#fbbf24",
+  "Certified - Withdrawn":"#b47718",
   "Determination Issued": "#22c55e",
   "Redetermination Affirmed": "#86efac",
-  "Redetermination Modified": "#2dd4bf",
+  "Redetermination Modified": "#315f7c",
   "Center Director Review Affirmed Determination": "#86efac",
-  "Center Director Review Modified Determination": "#2dd4bf",
+  "Center Director Review Modified Determination": "#315f7c",
 };
-const FALLBACK_COLORS = ["#6366f1","#8b5cf6","#a78bfa","#c4b5fd","#60a5fa","#34d399"];
+const FALLBACK_COLORS = ["#6366f1","#8b5cf6","#a78bfa","#c4b5fd","#315f7c","#27815f"];
 
 function PieChart({ rows, labelKey, valueKey }) {
   const raw = (rows || []).map(r => ({ label: String(r[labelKey] ?? "—"), value: parseFloat(r[valueKey]) || 0 }));

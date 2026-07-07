@@ -138,7 +138,7 @@ export function SearchView({ externalDecisionId, externalQuery, onViewGraph }) {
                 fontSize: 11, padding: "3px 10px", height: "auto",
                 background: advOpen || advancedCount > 0 ? "var(--amber-dim)" : "var(--bg3)",
                 color: advOpen || advancedCount > 0 ? "var(--amber)" : "var(--text3)",
-                border: advOpen || advancedCount > 0 ? "1px solid #2dd4bf44" : "1px solid var(--border)",
+                border: advOpen || advancedCount > 0 ? "1px solid #315f7c44" : "1px solid var(--border)",
                 borderRadius: 20, display: "flex", alignItems: "center", gap: 5,
               }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

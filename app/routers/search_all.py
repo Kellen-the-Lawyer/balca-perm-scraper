@@ -121,6 +121,23 @@ async def search_all(
 
             UNION ALL
 
+            -- GovInfo bulk/package documents
+            SELECT
+                'govinfo'::text,
+                d.id,
+                d.title,
+                COALESCE(d.collection_label, d.collection),
+                d.date_issued::text,
+                NULL,
+                ts_rank(d.search_vector, websearch_to_tsquery('english', :q)),
+                ts_headline('english', d.full_text,
+                    websearch_to_tsquery('english', :q),
+                    'MaxWords=25, MinWords=12, StartSel=<mark>, StopSel=</mark>')
+            FROM govinfo_docs d
+            WHERE d.search_vector @@ websearch_to_tsquery('english', :q)
+
+            UNION ALL
+
             -- INA sections
             SELECT
                 'ina'::text,
@@ -244,6 +261,8 @@ async def search_all(
         ) + (
             SELECT COUNT(*) FROM policy_docs WHERE search_vector @@ websearch_to_tsquery('english', :q)
         ) + (
+            SELECT COUNT(*) FROM govinfo_docs WHERE search_vector @@ websearch_to_tsquery('english', :q)
+        ) + (
             SELECT COUNT(DISTINCT source_id) FROM rag_chunks
             WHERE corpus = 'ina'
               AND to_tsvector('english', chunk_text) @@ websearch_to_tsquery('english', :q)
@@ -276,4 +295,3 @@ async def search_all(
 
 
 # ── Citation Graph ────────────────────────────────────────────────────────────
-

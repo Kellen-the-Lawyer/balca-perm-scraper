@@ -122,6 +122,28 @@ async def visa_bulletin_history(
     return result
 
 
+def _theil_sen_slope(pairs):
+    """Median of pairwise slopes for (bulletin_date, priority_date) pairs.
+
+    Returns PD-days advanced per calendar day. Robust to ~29% anomalous
+    bulletins (retrogressions, data errors), so a single bulletin cannot
+    materially move the estimate. O(n^2) pairs; n <= 61 -> <= 1,830 slopes.
+    """
+    slopes = []
+    n = len(pairs)
+    for i in range(n):
+        for j in range(i + 1, n):
+            dx = (pairs[j][0] - pairs[i][0]).days
+            if dx == 0:
+                continue
+            slopes.append((pairs[j][1] - pairs[i][1]).days / dx)
+    if not slopes:
+        return None
+    slopes.sort()
+    m = len(slopes)
+    return slopes[m // 2] if m % 2 else (slopes[m // 2 - 1] + slopes[m // 2]) / 2
+
+
 @router.get("/api/visa-bulletin/backlog")
 async def visa_bulletin_backlog(
     preference:    str           = Query(..., description="e.g. EB2, EB3"),
@@ -151,47 +173,77 @@ async def visa_bulletin_backlog(
     if not current:
         raise HTTPException(status_code=404, detail="No data found")
 
-    # Last 13 months for advancement calc
+    # Up to 61 months of history for robust (Theil-Sen) slope estimation.
+    # Excludes Current and Unavailable rows (priority_date IS NULL for both).
     history = await database.fetch_all(text("""
-        SELECT bulletin_date, priority_date, is_current, is_unavailable
+        SELECT bulletin_date, priority_date
         FROM visa_bulletin
         WHERE preference = :preference
           AND chargeability = :chargeability
           AND date_type = :date_type
           AND priority_date IS NOT NULL
           AND is_current = FALSE
-        ORDER BY bulletin_date DESC LIMIT 13
+        ORDER BY bulletin_date DESC LIMIT 61
     """).bindparams(**params))
+    hist = [(r["bulletin_date"], r["priority_date"]) for r in reversed(history)]
 
-    avg_monthly_days = None
-    if len(history) >= 2:
-        movements = []
-        for i in range(len(history) - 1):
-            delta = (history[i]["priority_date"] - history[i+1]["priority_date"]).days
-            movements.append(delta)
-        avg_monthly_days = sum(movements) / len(movements) if movements else None
+    # Cut-off fallback: if the latest bulletin is Current/Unavailable, measure
+    # backlog from the most recent bulletin that published a cut-off date.
+    effective_cut_off = current["priority_date"]
+    cut_off_as_of     = current["bulletin_date"]
+    if effective_cut_off is None and hist:
+        cut_off_as_of, effective_cut_off = hist[-1]
 
     backlog_days = None
-    years_to_wait = None
-    if current["priority_date"]:
-        backlog_days = (_date.today() - current["priority_date"]).days
-        if avg_monthly_days and avg_monthly_days > 0:
-            months_to_wait = backlog_days / avg_monthly_days
-            years_to_wait  = round(months_to_wait / 12, 1)
+    if effective_cut_off is not None and not current["is_current"]:
+        backlog_days = (_date.today() - effective_cut_off).days
+
+    # Naive 12-month pace (legacy, calendar-day aware): net movement over the
+    # actual calendar span of the trailing 13 published bulletins.
+    avg_monthly_days = None
+    w = hist[-13:]
+    if len(w) >= 2:
+        span_days = (w[-1][0] - w[0][0]).days
+        if span_days > 0:
+            avg_monthly_days = (w[-1][1] - w[0][1]).days / span_days * 30.44
+
+    methods = {}
+    est_values = []
+    for label, months in (("theil_sen_36mo", 36), ("theil_sen_60mo", 60)):
+        window = hist[-(months + 1):]
+        slope = _theil_sen_slope(window)          # PD-days per calendar-day
+        est = None
+        retrogressing = slope is not None and slope <= 0
+        if slope and slope > 0 and backlog_days is not None:
+            est = round(backlog_days / slope / 365.25, 1)
+            est_values.append(est)
+        methods[label] = {
+            "slope_days_per_month": round(slope * 30.44, 1) if slope is not None else None,
+            "est_years":            est,
+            "retrogressing":        retrogressing,
+            "bulletins_in_window":  len(window),
+        }
+
+    headline = methods["theil_sen_36mo"]["est_years"]
 
     return {
         "preference":         preference.upper(),
         "chargeability":      chargeability.upper(),
         "date_type":          date_type,
         "latest_bulletin":    current["bulletin_date"],
-        "current_cut_off":    current["priority_date"],
+        "current_cut_off":    effective_cut_off,
+        "cut_off_as_of":      cut_off_as_of,
+        "latest_is_stale":    current["priority_date"] is None and effective_cut_off is not None,
         "is_current":         current["is_current"],
         "is_unavailable":     current["is_unavailable"],
         "raw_value":          current["raw_value"],
         "backlog_days":       backlog_days,
-        "backlog_years":      round(backlog_days / 365.25, 1) if backlog_days else None,
-        "avg_monthly_advance_days": round(avg_monthly_days, 1) if avg_monthly_days else None,
-        "est_years_to_current":     years_to_wait,
+        "backlog_years":      round(backlog_days / 365.25, 1) if backlog_days is not None else None,
+        "avg_monthly_advance_days": round(avg_monthly_days, 1) if avg_monthly_days is not None else None,
+        "methods":            methods,
+        "est_years_to_current": headline,
+        "est_years_low":      min(est_values) if est_values else None,
+        "est_years_high":     max(est_values) if est_values else None,
     }
 
 

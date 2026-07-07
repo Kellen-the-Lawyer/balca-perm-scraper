@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { API } from "./apiBase";
 import { Spinner } from "./common";
 
-export const GRAPH_OUTCOME_COLOR = {
-  Affirmed:  "#34d399",
-  Reversed:  "#f87171",
-  Remanded:  "#fbbf24",
-  Dismissed: "#5a5a68",
+const GRAPH_OUTCOME_COLOR = {
+  Affirmed:  "var(--graph-affirmed)",
+  Reversed:  "var(--graph-reversed)",
+  Remanded:  "var(--graph-remanded)",
+  Dismissed: "var(--graph-dismissed)",
 };
 
 export function CitationGraphView({ onNavigate, initialQuery }) {
@@ -76,7 +76,7 @@ export function CitationGraphView({ onNavigate, initialQuery }) {
     // ── Arrow markers ─────────────────────────────────────────────────────
     const defs = svg.append("defs");
     // One marker per outcome color
-    const markerColors = { default: "#4a4a6a", Affirmed: "#34d399", Reversed: "#f87171", Remanded: "#fbbf24", Dismissed: "#5a5a68" };
+    const markerColors = { default: "var(--border2)", ...GRAPH_OUTCOME_COLOR };
     Object.entries(markerColors).forEach(([key, color]) => {
       defs.append("marker")
         .attr("id", `arrow-${key}`)
@@ -119,7 +119,7 @@ export function CitationGraphView({ onNavigate, initialQuery }) {
       .data(edges).join("line")
       .attr("stroke", d => {
         const src = nodeById[d.source.id ?? d.source];
-        return GRAPH_OUTCOME_COLOR[src?.outcome] ?? "#4a4a6a";
+        return GRAPH_OUTCOME_COLOR[src?.outcome] ?? "var(--border2)";
       })
       .attr("stroke-width", 1.5)
       .attr("stroke-opacity", 0.45)
@@ -149,11 +149,9 @@ export function CitationGraphView({ onNavigate, initialQuery }) {
     // Circle
     node.append("circle")
       .attr("r", nodeRadius)
-      .attr("fill", n => {
-        const base = GRAPH_OUTCOME_COLOR[n.outcome] ?? "#5a5a68";
-        return n.tier === "secondary" ? base + "55" : base + "cc";
-      })
-      .attr("stroke", n => GRAPH_OUTCOME_COLOR[n.outcome] ?? "#5a5a68")
+      .attr("fill", n => GRAPH_OUTCOME_COLOR[n.outcome] ?? "var(--graph-dismissed)")
+      .attr("fill-opacity", n => n.tier === "secondary" ? 0.34 : 0.82)
+      .attr("stroke", n => GRAPH_OUTCOME_COLOR[n.outcome] ?? "var(--graph-dismissed)")
       .attr("stroke-width", n => n.tier === "primary" ? 2 : 1)
       .attr("stroke-opacity", 0.9);
 
@@ -311,7 +309,14 @@ export function CitationGraphView({ onNavigate, initialQuery }) {
       </div>
 
       {/* ── Graph canvas ── */}
-      <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "hidden", background: "var(--bg)" }}>
+      <div ref={containerRef} style={{
+        flex: 1,
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "var(--bg)",
+        backgroundImage: "linear-gradient(var(--graph-grid) 1px, transparent 1px), linear-gradient(90deg, var(--graph-grid) 1px, transparent 1px)",
+        backgroundSize: "40px 40px",
+      }}>
 
         {/* Empty state */}
         {!graphData && !loading && (
@@ -383,7 +388,7 @@ export function CitationGraphView({ onNavigate, initialQuery }) {
         {selectedNode && (
           <div style={{
             position: "absolute", top: 16, right: 16, zIndex: 10,
-            background: "var(--bg2)", border: `1px solid ${GRAPH_OUTCOME_COLOR[selectedNode.outcome] ?? "var(--border2)"}44`,
+            background: "var(--bg2)", border: "1px solid var(--border2)",
             borderRadius: "var(--radius-lg)", padding: "16px 18px", width: 270,
             boxShadow: "0 8px 28px #00000066", animation: "fadeUp 0.15s ease",
           }}>
@@ -499,7 +504,13 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
     const g = svg.append("g");
 
     const defs = svg.append("defs");
-    const markerColors = { default: "#4a4a6a", Dismissed: "#5a5a68", Sustained: "#34d399", Remanded: "#fbbf24", Withdrawn: "#a78bfa" };
+    const markerColors = {
+      default: "var(--border2)",
+      Dismissed: "var(--graph-dismissed)",
+      Sustained: "var(--graph-affirmed)",
+      Remanded: "var(--graph-remanded)",
+      Withdrawn: "var(--text3)",
+    };
     Object.entries(markerColors).forEach(([key, color]) => {
       defs.append("marker")
         .attr("id", `aao-arrow-${key}`)
@@ -525,16 +536,18 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
       .alphaDecay(0.02);
     simRef.current = sim;
 
-    const outcomeColor = (o) => ({ Dismissed: "#5a5a68", Sustained: "#34d399", Remanded: "#fbbf24", Withdrawn: "#a78bfa" }[o] || "#60a5fa");
-    const nodeColor = (n) => n.node_type === "precedent" ? "#2dd4bf" : outcomeColor(n.outcome);
-    const nodeFill  = (n) => n.node_type === "precedent"
-      ? (n.tier === "primary" ? "#2dd4bf" : "#2dd4bf88")
-      : (n.tier === "primary" ? outcomeColor(n.outcome) : outcomeColor(n.outcome) + "66");
+    const outcomeColor = (o) => ({
+      Dismissed: "var(--graph-dismissed)",
+      Sustained: "var(--graph-affirmed)",
+      Remanded: "var(--graph-remanded)",
+      Withdrawn: "var(--text3)",
+    }[o] || "var(--blue)");
+    const nodeColor = (n) => n.node_type === "precedent" ? "var(--accent)" : outcomeColor(n.outcome);
 
     const link = g.append("g").selectAll("line").data(edges).join("line")
       .attr("stroke", d => {
         const tgt = nodeById[d.target?.id ?? d.target];
-        return tgt?.node_type === "precedent" ? "#2dd4bf" : outcomeColor(tgt?.outcome);
+        return tgt?.node_type === "precedent" ? "var(--accent)" : outcomeColor(tgt?.outcome);
       })
       .attr("stroke-opacity", 0.35).attr("stroke-width", 1.5)
       .attr("marker-end", d => {
@@ -563,8 +576,9 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
 
     node.append("circle")
       .attr("r", nodeRadius)
-      .attr("fill", nodeFill)
-      .attr("stroke", d => d.tier === "primary" ? (d.node_type === "precedent" ? "#fde68a" : "#fff") : "none")
+      .attr("fill", nodeColor)
+      .attr("fill-opacity", d => d.tier === "primary" ? 0.86 : 0.42)
+      .attr("stroke", d => d.tier === "primary" ? (d.node_type === "precedent" ? "var(--accent2)" : "var(--bg2)") : "none")
       .attr("stroke-width", d => d.tier === "primary" ? 2 : 0)
       .attr("opacity", d => d.tier === "primary" ? 1 : 0.65);
 
@@ -590,7 +604,7 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
     return () => sim.stop();
   }, [graphData, d3Ready]);
 
-  const accent = "#60a5fa";
+  const accent = "var(--blue)";
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)" }} ref={containerRef}>
@@ -622,7 +636,14 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
       </div>
 
       {/* Graph canvas */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      <div style={{
+        flex: 1,
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "var(--bg)",
+        backgroundImage: "linear-gradient(var(--graph-grid) 1px, transparent 1px), linear-gradient(90deg, var(--graph-grid) 1px, transparent 1px)",
+        backgroundSize: "40px 40px",
+      }}>
         {!graphData && !loading && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, opacity: 0.5 }}>
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="12" x2="17" y2="6"/><line x1="7" y1="12" x2="17" y2="18"/></svg>
@@ -641,7 +662,7 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
           <div style={{ position: "absolute", bottom: 16, left: 16, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", maxWidth: 300, pointerEvents: "none" }}>
             {hovered.node_type === "precedent" ? (
               <>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#2dd4bf", marginBottom: 3 }}>{hovered.party_name}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", marginBottom: 3 }}>{hovered.party_name}</div>
                 <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 3 }}>{hovered.citation} · {hovered.year}</div>
                 <div style={{ fontSize: 11, color: "var(--text3)" }}>Cited by {hovered.cited_by_count} decisions in graph · I&N Dec. precedent</div>
               </>
@@ -657,9 +678,9 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
 
         {/* Selected node panel */}
         {selectedNode && (
-          <div style={{ position: "absolute", top: 16, right: 16, width: 280, background: "var(--bg2)", border: `1px solid ${accent}44`, borderRadius: 10, padding: "14px 16px" }}>
+          <div style={{ position: "absolute", top: 16, right: 16, width: 280, background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: selectedNode.node_type === "precedent" ? "#2dd4bf" : "var(--text)", flex: 1, paddingRight: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: selectedNode.node_type === "precedent" ? "var(--accent)" : "var(--text)", flex: 1, paddingRight: 8 }}>
                 {selectedNode.node_type === "precedent" ? selectedNode.party_name : (selectedNode.form_type || selectedNode.filename)}
               </div>
               <button onClick={() => setSelectedNode(null)} style={{ background: "none", border: "none", color: "var(--text3)", cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
@@ -669,7 +690,7 @@ export function AAOCitationGraphView({ onNavigate, onOpenPrecedent, initialQuery
                 <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 4 }}>{selectedNode.citation} · {selectedNode.year}</div>
                 <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 12 }}>Cited by {selectedNode.cited_by_count} decisions in this graph</div>
                 {onOpenPrecedent && <button onClick={() => onOpenPrecedent(selectedNode.prec_id)}
-                  style={{ width: "100%", padding: "7px 0", background: "#2dd4bf22", color: "#2dd4bf", border: "1px solid #2dd4bf44", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
+                  style={{ width: "100%", padding: "7px 0", background: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--border2)", borderRadius: 6, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
                   Open precedent →
                 </button>}
               </>

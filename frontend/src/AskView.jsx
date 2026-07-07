@@ -156,7 +156,7 @@ export function AskView({ onNavigate }) {
 
         {notReady && (
           <div style={{ marginTop: 8, fontSize: 12, color: "var(--amber)",
-            background: "var(--amber-dim,#2dd4bf22)", padding: "6px 10px", borderRadius: "var(--radius)" }}>
+            background: "var(--amber-dim,#315f7c22)", padding: "6px 10px", borderRadius: "var(--radius)" }}>
             RAG index is empty. Run <code>python3 ingest_rag.py --corpus regulation --corpus policy</code> to get started.
           </div>
         )}
@@ -165,7 +165,7 @@ export function AskView({ onNavigate }) {
       {/* Results area */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
         {error && (
-          <div style={{ color: "var(--red,#f87171)", background: "var(--red-dim,#f8717122)",
+          <div style={{ color: "var(--red,#bf4b4b)", background: "var(--red-dim,#bf4b4b22)",
             padding: "10px 14px", borderRadius: "var(--radius)", marginBottom: 16, fontSize: 13 }}>
             {error}
           </div>
@@ -218,8 +218,8 @@ export function AskView({ onNavigate }) {
                           {cc.label}
                         </span>
                         {src.outcome && (
-                          <span style={{ fontSize: 10, color: src.outcome === "Affirmed" ? "#34d399" :
-                            src.outcome === "Reversed" ? "#f87171" : "var(--text3)" }}>
+                          <span style={{ fontSize: 10, color: src.outcome === "Affirmed" ? "#27815f" :
+                            src.outcome === "Reversed" ? "#bf4b4b" : "var(--text3)" }}>
                             {src.outcome}
                           </span>
                         )}

@@ -45,7 +45,7 @@ async def ask(request: Request):
     Request body:
       {
         "question": "...",
-        "corpus_filter": ["balca","aao","regulation","policy"],  // optional
+        "corpus_filter": ["balca","aao","regulation","policy","govinfo"],  // optional
         "top_k": 12,   // optional, default 12
         "stream": true // optional, default true
       }
@@ -142,7 +142,7 @@ async def ask(request: Request):
 
     # 4. Synthesize a cited answer — prefer Anthropic Claude, fall back to local Ollama
     system_prompt = """You are a legal AI assistant specializing in PERM labor certification and U.S. immigration law.
-You are given retrieved excerpts from BALCA decisions, AAO decisions, federal regulations (CFR), and USCIS/FAM policy manuals.
+You are given retrieved excerpts from BALCA decisions, AAO decisions, federal regulations (CFR), GovInfo federal legal materials, and USCIS/FAM policy manuals.
 Follow all formatting instructions exactly. Be concise and precise.
 Answer the question accurately using ONLY the provided sources.
 
@@ -150,7 +150,7 @@ Rules:
 - Cite every factual claim with the source reference number in brackets, e.g. [3] or [1][4].
 - When citing a regulation, include the CFR citation if available (e.g., 20 CFR § 656.17).
 - When citing a case decision, include the case label and outcome where relevant.
-- If sources conflict, note the conflict and explain which is more authoritative (regulations > policy > case decisions).
+- If sources conflict, note the conflict and explain which is more authoritative (statutes/public laws > regulations > policy > case decisions).
 - If the sources do not contain enough information to answer, say so clearly — do not speculate.
 - Write in plain legal English. Be precise but readable.
 - Structure longer answers with short paragraphs. Do not use bullet points unless listing distinct requirements."""
@@ -264,4 +264,3 @@ async def ask_stats():
 # OFLC Disclosure Data Endpoints
 # PERM, LCA (H-1B/H-1B1/E-3), and Prevailing Wage — FY2020–FY2026
 # ══════════════════════════════════════════════════════════════════════════════
-

@@ -95,3 +95,10 @@ tests/OALJ*
 eval_mistral.py
 reorganize.sh
 Antigravity/
+
+# ============================================================
+# Runtime logs / PID files
+# ============================================================
+logs/
+*.log
+*.pid

@@ -5,10 +5,10 @@ import { cfrTitleLabel } from "./cfrTitles";
 import { AdaptiveRegulationReader } from "./RegulationNavPrototype";
 
 const AGENCY_COLORS = {
-  "DHS / USCIS":      { accent: "#34d399", dim: "#34d39922" },
-  "DOL / ETA":        { accent: "#34d399", dim: "#34d39922" },
+  "DHS / USCIS":      { accent: "#27815f", dim: "#27815f22" },
+  "DOL / ETA":        { accent: "#27815f", dim: "#27815f22" },
   "DOL / WHD":        { accent: "#4ade80", dim: "#4ade8022" },
-  "State Department": { accent: "#60a5fa", dim: "#60a5fa22" },
+  "State Department": { accent: "#315f7c", dim: "#315f7c22" },
 };
 
 function BrowseRegulations({ docs = [], selectedTitle, selectedId, compact = false, onSelectTitle, onOpenDoc }) {
@@ -76,15 +76,15 @@ function BrowseRegulations({ docs = [], selectedTitle, selectedId, compact = fal
                     height: "auto",
                     textAlign: "left",
                     padding: "8px 10px",
-                    border: isSelected ? "1px solid #60a5fa88" : "1px solid var(--border)",
-                    borderLeft: isSelected ? "3px solid #60a5fa" : "3px solid transparent",
+                    border: isSelected ? "1px solid #315f7c88" : "1px solid var(--border)",
+                    borderLeft: isSelected ? "3px solid #315f7c" : "3px solid transparent",
                     borderRadius: 6,
                     background: isSelected ? "var(--bg3)" : "transparent",
                     color: "var(--text)",
                   }}
                 >
                   <span style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 3 }}>
-                    <span style={{ fontFamily: "'DM Mono', monospace", color: isSelected ? "#60a5fa" : "var(--text3)", fontSize: 10 }}>{doc.title}</span>
+                    <span style={{ fontFamily: "'DM Mono', monospace", color: isSelected ? "#315f7c" : "var(--text3)", fontSize: 10 }}>{doc.title}</span>
                     {doc.page_count && <span style={{ marginLeft: "auto", color: "var(--text3)", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>{doc.page_count}pp</span>}
                   </span>
                   <span style={{ display: "block", color: "var(--text)", fontSize: 11, fontWeight: 520, lineHeight: 1.35 }}>
@@ -131,8 +131,8 @@ function BrowseRegulations({ docs = [], selectedTitle, selectedId, compact = fal
                   height: "auto",
                   display: "block",
                   padding: compact ? "8px 10px" : "11px 12px",
-                  border: isActive ? "1px solid #34d39977" : "1px solid var(--border)",
-                  borderLeft: isActive ? "3px solid #34d399" : "3px solid transparent",
+                  border: isActive ? "1px solid #27815f77" : "1px solid var(--border)",
+                  borderLeft: isActive ? "3px solid #27815f" : "3px solid transparent",
                   borderRadius: 6,
                   background: isActive ? "var(--bg3)" : "var(--bg2)",
                   color: "var(--text)",
@@ -169,15 +169,15 @@ function BrowseRegulations({ docs = [], selectedTitle, selectedId, compact = fal
                       height: "auto",
                       textAlign: "left",
                       padding: compact ? "8px 10px" : "10px 12px",
-                      border: isSelected ? "1px solid #60a5fa88" : "1px solid var(--border)",
-                      borderLeft: isSelected ? "3px solid #60a5fa" : "3px solid transparent",
+                      border: isSelected ? "1px solid #315f7c88" : "1px solid var(--border)",
+                      borderLeft: isSelected ? "3px solid #315f7c" : "3px solid transparent",
                       borderRadius: 6,
                       background: isSelected ? "var(--bg3)" : "transparent",
                       color: "var(--text)",
                     }}
                   >
                     <span style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: 3 }}>
-                      <span style={{ fontFamily: "'DM Mono', monospace", color: isSelected ? "#60a5fa" : "var(--text3)", fontSize: compact ? 10 : 11 }}>{doc.title}</span>
+                      <span style={{ fontFamily: "'DM Mono', monospace", color: isSelected ? "#315f7c" : "var(--text3)", fontSize: compact ? 10 : 11 }}>{doc.title}</span>
                       {doc.page_count && <span style={{ marginLeft: "auto", color: "var(--text3)", fontFamily: "'DM Mono', monospace", fontSize: 10 }}>{doc.page_count}pp</span>}
                     </span>
                     <span style={{ display: "block", color: "var(--text)", fontSize: compact ? 11 : 12, fontWeight: 520, lineHeight: 1.35 }}>
@@ -387,7 +387,7 @@ export function RegulationDetail({ docId, query, docs = [], onSelectDoc }) {
 // ── Policy Manuals View ───────────────────────────────────────────────────────
 
 const SOURCE_COLORS = {
-  "FAM":      { accent: "#60a5fa", dim: "#60a5fa22", label: "Foreign Affairs Manual" },
+  "FAM":      { accent: "#315f7c", dim: "#315f7c22", label: "Foreign Affairs Manual" },
   "USCIS_PM": { accent: "#a78bfa", dim: "#a78bfa22", label: "USCIS Policy Manual" },
 };
 

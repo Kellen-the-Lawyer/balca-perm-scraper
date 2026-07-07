@@ -367,7 +367,7 @@ export function ExpHighlightedText({text,keywords}){
     <span>
       {parts.map((p,i)=>
         p.hl
-          ?<mark key={i} style={{background:'#2dd4bf44',color:'var(--amber)',borderRadius:3,padding:'0 2px',fontWeight:600}}>{p.text}</mark>
+          ?<mark key={i} style={{background:'#315f7c44',color:'var(--amber)',borderRadius:3,padding:'0 2px',fontWeight:600}}>{p.text}</mark>
           :<span key={i}>{p.text}</span>
       )}
     </span>
@@ -455,7 +455,7 @@ export function ExperienceVerificationModal({pwdText,requirementsText,letters,on
               <strong style={{color:'var(--green)'}}>{(totalSavedMonths/12).toFixed(1)} yrs</strong> saved across {letters.filter(l=>l.saved).length} letter{letters.filter(l=>l.saved).length!==1?'s':''}
             </div>}
             <input ref={fileRef} type="file" accept="application/pdf" style={{display:'none'}} onChange={e=>uploadLetter(e.target.files[0])}/>
-            <button onClick={()=>fileRef.current?.click()} disabled={uploading} style={{fontSize:11,padding:'5px 14px',background:uploading?'var(--bg3)':'var(--green-dim)',color:uploading?'var(--text3)':'var(--green)',border:uploading?'1px solid var(--border)':'1px solid #34d39944',borderRadius:20,cursor:uploading?'default':'pointer',display:'flex',alignItems:'center',gap:6}}>
+            <button onClick={()=>fileRef.current?.click()} disabled={uploading} style={{fontSize:11,padding:'5px 14px',background:uploading?'var(--bg3)':'var(--green-dim)',color:uploading?'var(--text3)':'var(--green)',border:uploading?'1px solid var(--border)':'1px solid #27815f44',borderRadius:20,cursor:uploading?'default':'pointer',display:'flex',alignItems:'center',gap:6}}>
               {uploading?<><div style={{width:10,height:10,border:'1.5px solid currentColor',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.7s linear infinite'}}/>  Extracting…</>:<>+ Upload Letter</>}
             </button>
             <button onClick={onClose} style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text2)',cursor:'pointer',padding:'5px 12px',fontSize:12}}>✕ Close</button>
@@ -467,7 +467,7 @@ export function ExperienceVerificationModal({pwdText,requirementsText,letters,on
         {letters.length>0&&(
           <div style={{display:'flex',gap:6,padding:'10px 24px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0,overflowX:'auto'}}>
             {letters.map((l,i)=>(
-              <button key={i} onClick={()=>switchLetter(i)} style={{fontSize:11,padding:'4px 14px',borderRadius:20,cursor:'pointer',whiteSpace:'nowrap',background:activeIdx===i?'var(--amber-dim)':'var(--bg3)',color:activeIdx===i?'var(--amber)':'var(--text3)',border:activeIdx===i?'1px solid #2dd4bf44':'1px solid var(--border)',fontWeight:activeIdx===i?600:400}}>
+              <button key={i} onClick={()=>switchLetter(i)} style={{fontSize:11,padding:'4px 14px',borderRadius:20,cursor:'pointer',whiteSpace:'nowrap',background:activeIdx===i?'var(--amber-dim)':'var(--bg3)',color:activeIdx===i?'var(--amber)':'var(--text3)',border:activeIdx===i?'1px solid #315f7c44':'1px solid var(--border)',fontWeight:activeIdx===i?600:400}}>
                 {l.employerName||l.fileName||`Letter ${i+1}`}{l.months!=null&&<span style={{marginLeft:6,opacity:.7}}>{l.months}mo</span>}{l.saved&&<span style={{marginLeft:4,color:'var(--green)'}}>✓</span>}
               </button>
             ))}
@@ -503,13 +503,13 @@ export function ExperienceVerificationModal({pwdText,requirementsText,letters,on
                   <div><div style={{fontSize:10,color:'var(--text3)',marginBottom:2}}>Employer</div><div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{activeLetter.employerName||'—'}</div></div>
                   <div><div style={{fontSize:10,color:'var(--text3)',marginBottom:2}}>Title</div><div style={{fontSize:13,color:'var(--text)'}}>{activeLetter.jobTitle||'—'}</div></div>
                   <div><div style={{fontSize:10,color:'var(--text3)',marginBottom:2}}>Period</div><div style={{fontSize:13,color:'var(--text)'}}>{activeLetter.startDate||'?'} – {activeLetter.endDate||'?'}</div></div>
-                  {activeLetter.months!=null&&<div style={{padding:'4px 14px',borderRadius:20,background:'var(--amber-dim)',border:'1px solid #2dd4bf44',color:'var(--amber)',fontSize:12,fontWeight:600}}>{activeLetter.months} mo ({(activeLetter.months/12).toFixed(1)} yrs)</div>}
+                  {activeLetter.months!=null&&<div style={{padding:'4px 14px',borderRadius:20,background:'var(--amber-dim)',border:'1px solid #315f7c44',color:'var(--amber)',fontSize:12,fontWeight:600}}>{activeLetter.months} mo ({(activeLetter.months/12).toFixed(1)} yrs)</div>}
                   <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
                     {!activeLetter.saved
-                      ?<button onClick={()=>onSaveLetter({...activeLetter,saved:true},activeIdx)} style={{fontSize:11,padding:'5px 14px',background:'var(--green-dim)',color:'var(--green)',border:'1px solid #34d39944',borderRadius:20,cursor:'pointer'}}>✓ Save Time</button>
+                      ?<button onClick={()=>onSaveLetter({...activeLetter,saved:true},activeIdx)} style={{fontSize:11,padding:'5px 14px',background:'var(--green-dim)',color:'var(--green)',border:'1px solid #27815f44',borderRadius:20,cursor:'pointer'}}>✓ Save Time</button>
                       :<span style={{fontSize:11,padding:'5px 10px',color:'var(--green)'}}>✓ Time saved</span>
                     }
-                    <button onClick={()=>{onRemoveLetter(activeIdx);setActiveIdx(Math.max(0,activeIdx-1));}} style={{fontSize:11,padding:'5px 10px',background:'var(--red-dim)',color:'var(--red)',border:'1px solid #f8717144',borderRadius:20,cursor:'pointer'}}>✕</button>
+                    <button onClick={()=>{onRemoveLetter(activeIdx);setActiveIdx(Math.max(0,activeIdx-1));}} style={{fontSize:11,padding:'5px 10px',background:'var(--red-dim)',color:'var(--red)',border:'1px solid #bf4b4b44',borderRadius:20,cursor:'pointer'}}>✕</button>
                   </div>
                 </div>
 
@@ -523,7 +523,7 @@ export function ExperienceVerificationModal({pwdText,requirementsText,letters,on
                           fontSize:11,padding:'2px 10px',borderRadius:20,fontWeight:500,
                           background:found?'var(--green-dim)':'var(--red-dim)',
                           color:found?'var(--green)':'var(--red)',
-                          border:found?'1px solid #34d39944':'1px solid #f8717144',
+                          border:found?'1px solid #27815f44':'1px solid #bf4b4b44',
                         }}>
                           {found?'✓':'✗'} {word}
                         </span>
@@ -748,20 +748,20 @@ export function EptCard({ stateVal, city, telecommute, wageFrom, wageTo }) {
           <div style={{fontSize:10, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>Posting Requirement</div>
           <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>{ept.postingReq}</div>
         </div>
-        <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background: hasRange?'var(--green-dim)':'var(--amber-dim)', border:`1px solid ${hasRange?'#34d39944':'#2dd4bf44'}`}}>
+        <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background: hasRange?'var(--green-dim)':'var(--amber-dim)', border:`1px solid ${hasRange?'#27815f44':'#315f7c44'}`}}>
           <div style={{fontSize:10, fontWeight:600, color: hasRange?'var(--green)':'var(--amber)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>
             Wage Range Requirement {hasRange ? '✓ Range entered' : '⚠ No range entered yet'}
           </div>
           <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>{ept.wagReq}</div>
         </div>
         {ept.benefitsReq && (
-          <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background:'var(--amber-dim)', border:'1px solid #2dd4bf44'}}>
+          <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background:'var(--amber-dim)', border:'1px solid #315f7c44'}}>
             <div style={{fontSize:10, fontWeight:600, color:'var(--amber)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>⚠ Benefits Description Required</div>
             <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>This state requires a general description of benefits and other compensation in job postings, not just a wage range.</div>
           </div>
         )}
         {ept.longArm && (
-          <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background:'var(--red-dim)', border:'1px solid #f8717144'}}>
+          <div style={{padding:'10px 12px', borderRadius:'var(--radius)', background:'var(--red-dim)', border:'1px solid #bf4b4b44'}}>
             <div style={{fontSize:10, fontWeight:600, color:'var(--red)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:4}}>⚠ Long-Arm Reach</div>
             <div style={{fontSize:12, color:'var(--text2)', lineHeight:1.6}}>{ept.longArmNote}</div>
           </div>
@@ -1103,7 +1103,7 @@ export function PermComparer(){
   })();
 
   const pillBtn=(label,active,onClick)=>(
-    <button onClick={onClick} style={{fontSize:11,padding:'3px 10px',height:'auto',background:active?'var(--amber-dim)':'var(--bg3)',color:active?'var(--amber)':'var(--text3)',border:active?'1px solid #2dd4bf44':'1px solid var(--border)',borderRadius:20,fontWeight:active?500:400,cursor:'pointer'}}>{label}</button>
+    <button onClick={onClick} style={{fontSize:11,padding:'3px 10px',height:'auto',background:active?'var(--amber-dim)':'var(--bg3)',color:active?'var(--amber)':'var(--text3)',border:active?'1px solid #315f7c44':'1px solid var(--border)',borderRadius:20,fontWeight:active?500:400,cursor:'pointer'}}>{label}</button>
   );
 
   const grid2={display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,alignItems:'start'};
@@ -1152,7 +1152,7 @@ export function PermComparer(){
             {mode==='diff'&&pillBtn('Ignore Formatting',ignoreFmt,()=>setIgnoreFmt(v=>!v))}
             {mode==='diff'&&pillBtn('Strict Mode',strict,()=>setStrict(v=>!v))}
             <input ref={pwdInputRef} type="file" accept="application/pdf" style={{display:'none'}} onChange={e=>loadPwd(e.target.files[0])}/>
-          <button onClick={()=>pwdInputRef.current?.click()} disabled={pwdLoading} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:pwdLoading?'var(--bg3)':'var(--green-dim)',color:pwdLoading?'var(--text3)':'var(--green)',border:pwdLoading?'1px solid var(--border)':'1px solid #34d39944',borderRadius:20,cursor:pwdLoading?'default':'pointer',opacity:pwdLoading?0.6:1}}>
+          <button onClick={()=>pwdInputRef.current?.click()} disabled={pwdLoading} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:pwdLoading?'var(--bg3)':'var(--green-dim)',color:pwdLoading?'var(--text3)':'var(--green)',border:pwdLoading?'1px solid var(--border)':'1px solid #27815f44',borderRadius:20,cursor:pwdLoading?'default':'pointer',opacity:pwdLoading?0.6:1}}>
             {pwdLoading?<><div style={{width:10,height:10,border:'1.5px solid currentColor',borderTopColor:'transparent',borderRadius:'50%',animation:'spin 0.7s linear infinite'}}/>{' Extracting…'}</>:<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>{' Load PWD'}</>}
           </button>
           {mode==='diff'&&<button onClick={()=>{
@@ -1160,7 +1160,7 @@ export function PermComparer(){
               setExpLetters(prev=>[...prev,droppedLetter]);
             }
             setShowExpModal(true);
-          }} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:'var(--bg3)',color:(expLetters.length>0||droppedLetter)?'var(--amber)':'var(--text2)',border:(expLetters.length>0||droppedLetter)?'1px solid #2dd4bf44':'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>
+          }} style={{fontSize:11,padding:'5px 14px',height:'auto',display:'flex',alignItems:'center',gap:6,background:'var(--bg3)',color:(expLetters.length>0||droppedLetter)?'var(--amber)':'var(--text2)',border:(expLetters.length>0||droppedLetter)?'1px solid #315f7c44':'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             {' Verify Experience'}{expLetters.length>0&&<span style={{marginLeft:4,padding:'1px 6px',background:'var(--amber)',color:'var(--bg)',borderRadius:10,fontSize:10,fontWeight:700}}>{expLetters.length}</span>}
           </button>}

@@ -327,6 +327,7 @@ CORPUS_LABELS = {
     "aao":        "AAO Decision",
     "regulation": "Federal Regulation",
     "policy":     "USCIS/FAM Policy",
+    "govinfo":    "GovInfo Document",
 }
 
 

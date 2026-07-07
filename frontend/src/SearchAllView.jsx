@@ -3,10 +3,11 @@ import { API } from "./apiBase";
 import { Spinner } from "./common";
 
 export const CORPUS_META = {
-  balca:      { label: "BALCA",       accent: "var(--amber)",  dim: "var(--amber-dim)",  dot: "#2dd4bf" },
-  aao:        { label: "AAO",         accent: "var(--blue)",   dim: "var(--blue-dim)",   dot: "#60a5fa" },
-  regulation: { label: "Regulations", accent: "var(--green)",  dim: "var(--green-dim)",  dot: "#34d399" },
+  balca:      { label: "BALCA",       accent: "var(--amber)",  dim: "var(--amber-dim)",  dot: "#315f7c" },
+  aao:        { label: "AAO",         accent: "var(--blue)",   dim: "var(--blue-dim)",   dot: "#315f7c" },
+  regulation: { label: "Regulations", accent: "var(--green)",  dim: "var(--green-dim)",  dot: "#27815f" },
   policy:     { label: "Policy",      accent: "#a78bfa",       dim: "#a78bfa22",         dot: "#a78bfa" },
+  govinfo:    { label: "GovInfo",     accent: "#38bdf8",       dim: "#38bdf822",         dot: "#38bdf8" },
 };
 
 export function SearchAllView({ onNavigate, initialQuery }) {
@@ -60,7 +61,7 @@ export function SearchAllView({ onNavigate, initialQuery }) {
           <div style={{ marginBottom: 28, textAlign: "center" }}>
             <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: "var(--text)", marginBottom: 6 }}>Search All</div>
             <div style={{ fontSize: 13, color: "var(--text3)" }}>
-              Search across BALCA decisions, AAO decisions, regulations, and policy manuals simultaneously
+              Search across BALCA decisions, AAO decisions, regulations, GovInfo, and policy manuals simultaneously
             </div>
             <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
               {Object.values(CORPUS_META).map(m => (
