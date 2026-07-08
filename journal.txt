@@ -1961,3 +1961,40 @@ DEPLOY GOTCHAS RESOLVED:
 - The string `postgresql://perm:perm_local_pw@localhost:5432/...` DOES NOT
   WORK (verified: FATAL password auth failed). perm_local_pw is stale and
   matches neither DB. Do not use.
+
+=== 2026-07-07 — Graphite <-> Casebase PERM verifier integration ===
+Casebase:
+- engine.py: added verify_data(form, filing_date, cite, cite_top_k, pwd) — rules
+  tiers over a structured 9089 dict, no PDFs; verify() now extracts then delegates.
+- routers/perm_verify.py: POST /api/perm-verify/verify-data (JSON intake for
+  Graphite), GET /schema (form_9089_schema.json), GET /drafting-rules
+  (required fields, step keys, timing constants, RULES_INVENTORY.md).
+- app/requirements.txt: added psycopg2-binary (container was missing it; O*NET
+  + citation paths need it). NOTE: deploy api/requirements.txt is synced from
+  app/requirements.txt — edit dev, never deploy.
+- sync-from-dev.sh: sed fixup extended to perm_verify/citations.py
+  (app.embed -> embed); citations previously broke in Docker with cite=true.
+- Deployed via sync + docker compose up --build -d. verify-data live on :8080.
+OPEN DECISION: citations in Docker need either sentence-transformers baked into
+the image (local nano, big image) or VOYAGE_API_KEY in casebase-app/.env
+(external API — needs approval). Until decided, cite defaults False for Graphite.
+
+Graphite (Antigravity):
+- core/services/casebase_client.py: verify_perm / get_form_schema /
+  get_drafting_rules; CASEBASE_API_URL env (default http://localhost:8080).
+- core/services/perm_9089_builder.py: Graphite models -> Casebase 9089 dict +
+  9141 pwd dict. Recruitment field map covers all 10 additional-step types;
+  occupation_type inferred from PERM_Degree_Primary unless passed explicitly.
+- models_reports.py: PermVerificationReport (migration 0094) archives every run
+  with red/yellow counts + filing window.
+- views_perm_verify.py + urls: POST /api/perm-verify/<profile_id>/run/,
+  GET .../reports/, GET /api/perm-verify/drafting-rules/.
+- E2E verified on seeded DS160-SAMPLE-001 (seed_perm_verify_test.py): timing
+  tiers pass, window computed, 19 RED are all T1 completeness = data-gap report.
+Known Graphite data gaps surfaced by T1: F.a.5 county, F.a.8 MSA/OES code,
+G.1/G.2/G.5-G.12 questions, H.a.1, I.1, Appendix A worker bio fields.
+CORRECTION (Kellen, 7/7): The T1 completeness gaps (county, MSA/OES, G
+questions, H.a.1, I.1, Appendix A bio) are NOT a data-model task — those
+sections get mapped when the FLAG PERM filling process is mapped in Graphite.
+Expect ~19 T1 REDs on every verification run until that task lands; they are
+known noise, not open work.

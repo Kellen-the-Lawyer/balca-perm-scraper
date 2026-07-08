@@ -18,13 +18,26 @@ from .rules import tier1, tier2, tier4_form_only, filing_window, RED, YELLOW
 
 def verify(pdf_path, filing_date=None, cite=False, cite_top_k=3, pwd_pdf=None):
     form = extract(pdf_path)
-    fd = filing_date or date.today()
-    flags = tier1(form) + tier2(form, fd) + tier4_form_only(form)
     pwd = None
     if pwd_pdf:
         from .extract_9141 import extract as extract_pwd
-        from .rules_tier3 import tier3
         pwd = extract_pwd(pwd_pdf)
+    return verify_data(form, filing_date, cite=cite,
+                       cite_top_k=cite_top_k, pwd=pwd)
+
+
+def verify_data(form, filing_date=None, cite=False, cite_top_k=3, pwd=None):
+    """Run all rule tiers over an already-structured ETA-9089 dict.
+
+    `form` follows the extract_9089 section layout (A_employer, B_poc, ...,
+    H_recruitment, appendix_A); `pwd` optionally follows the extract_9141
+    flat layout (pwd_case_number, pw_minimum, soc_code, ...). No PDFs are
+    touched — this is the entry point for structured callers (Graphite).
+    """
+    fd = filing_date or date.today()
+    flags = tier1(form) + tier2(form, fd) + tier4_form_only(form)
+    if pwd:
+        from .rules_tier3 import tier3
         flags += tier3(form, pwd, fd)
         from .rules_onet import onet_checks
         flags += onet_checks(form, pwd)
