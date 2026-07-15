@@ -2138,3 +2138,16 @@ meta.ignored_extra_files. PermVerifyView 9089 drop zone is multi-file
 (chips w/ per-file remove, dedup by name+size); 9141 stays single.
 Verified live on :8080 (two-file POST -> variant final, 1 extra noted).
 Deployed via sync + rebuild.
+
+=== 2026-07-15 (later) — Cross-file beneficiary guard (T1-021) ===
+Draft extractor now reads the foreign worker's name (APX A.A items 1/2,
+case-normalized) from EACH uploaded file separately; if files disagree,
+meta.beneficiary_mismatch records {file, last_name, first_name} per file
+and tier1 fires RED T1-021 ("documents name different foreign workers —
+files appear mixed across cases; re-upload one case"). Catches the
+paralegal error of uploading two PERMs for the same employer in one
+review. Negative control on real BHARGAVA files: no flag; E2E still
+0 RED / 2 YELLOW. Added to RULES_INVENTORY.md. Deployed (rebuild 7).
+Note: guard is name-based per Kellen's spec; files lacking Appendix A.A
+(e.g. per-section exports without appendices) contribute no name and
+cannot mismatch.
