@@ -255,6 +255,18 @@ def tier1(form):
                f"Wage range top ({wt}) is below bottom ({wf}).",
                "typo", "ETA-9089 Instructions §E.3"))
 
+    # Cross-file identity guard: uploaded documents name different foreign
+    # workers (e.g. two PERMs for the same employer mixed into one upload).
+    mism = _get(form, "meta.beneficiary_mismatch")
+    if mism:
+        who = "; ".join(f"{m['file']}: {m['last_name']}, {m['first_name']}"
+                        for m in mism)
+        F(Flag(RED, "T1-021", "AppA.A.1",
+               f"Uploaded documents name DIFFERENT foreign workers ({who}) — "
+               f"the files appear to belong to different cases and this "
+               f"review merged them. Re-upload one case's documents only.",
+               "data_check", "cross-file consistency"))
+
     emp = _get(form, "A_employer.num_employees_in_area")
     try:
         if emp is not None and int(str(emp)) == 0:

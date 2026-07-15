@@ -31,6 +31,7 @@ citation_type ∈ {typo, completeness, regulation, form_instructions, balca, faq
 | T1-018 | RED | Appendix A worker info identical to Section B/C contact (unless live-in domestic) | Instructions Appendix A note |
 | T1-019 | YELLOW | Appendix A education year attained after any experience start that presupposes the degree | consistency |
 | T1-020 | RED | E.3 wage range: To < From | typo |
+| T1-021 | RED | Multi-file upload names different foreign workers (documents mixed across cases) | data_check; cross-file consistency |
 
 ## Tier 2 — Regulatory timing & recruitment rules (deterministic, needs filing_date)
 

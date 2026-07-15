@@ -2126,3 +2126,15 @@ contains it).
 - NOTE: drafts show PWD case number but NOT the wage — Tier 3 requires
   the 9141 uploaded separately, always.
 Deployed via sync + rebuild; live on :8080.
+
+=== 2026-07-15 (later) — Multi-document PERM intake ===
+/api/perm-verify/run now accepts MULTIPLE form_9089 files (repeated
+multipart field). engine.verify() takes a path or list: if ANY file is a
+FLAG Print Summary draft, the whole set parses through the draft
+extractor (main print + appendices + per-section exports all combine,
+appendix dedupe already handles overlap); otherwise first file is
+treated as the final certified form and extras are noted in
+meta.ignored_extra_files. PermVerifyView 9089 drop zone is multi-file
+(chips w/ per-file remove, dedup by name+size); 9141 stays single.
+Verified live on :8080 (two-file POST -> variant final, 1 extra noted).
+Deployed via sync + rebuild.

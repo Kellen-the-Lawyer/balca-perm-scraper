@@ -18,16 +18,27 @@ from .rules import tier1, tier2, tier4_form_only, filing_window, RED, YELLOW
 
 def verify(pdf_path, filing_date=None, cite=False, cite_top_k=3, pwd_pdf=None,
            appendix_pdfs=None):
+    """Verify an ETA-9089 from PDF(s).
+
+    pdf_path may be a single path or a list of paths — FLAG Print Summary
+    drafts often arrive as several documents (main print, appendices,
+    per-section exports). If ANY supplied document is a draft print, the
+    whole set is parsed with the draft extractor. Otherwise the first
+    path is treated as the final certified form (a single PDF) and the
+    geometry extractor is used.
+    """
     from .extract_9089_draft import looks_like_draft, extract as extract_draft
-    if looks_like_draft(pdf_path):
-        paths = [pdf_path] + list(appendix_pdfs or [])
+    if isinstance(pdf_path, (list, tuple)):
+        paths = list(pdf_path)
+    else:
+        paths = [pdf_path]
+    paths += list(appendix_pdfs or [])
+    if any(looks_like_draft(p) for p in paths):
         form = extract_draft(paths)
     else:
-        form = extract(pdf_path)
-        if appendix_pdfs:
-            # Final-form appendix pages are part of the main PDF; extra
-            # appendix files only apply to FLAG Print Summary drafts.
-            pass
+        form = extract(paths[0])
+        if len(paths) > 1:
+            form.setdefault("meta", {})["ignored_extra_files"] = len(paths) - 1
     pwd = None
     if pwd_pdf:
         from .extract_9141 import extract as extract_pwd

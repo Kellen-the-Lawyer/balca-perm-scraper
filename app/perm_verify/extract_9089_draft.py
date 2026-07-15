@@ -346,10 +346,49 @@ def _dedupe(form):
     return form
 
 
+def _beneficiary_name(fields):
+    """(last, first) of the foreign worker from one file's parsed fields."""
+    last = first = None
+    for f in fields:
+        sec = (f.get("section") or "")
+        if not sec.startswith("APX A.A"):
+            continue
+        item = _item_no(f["label"])
+        v = _norm(f["value"])
+        if item == "1" and v:
+            last = v
+        elif item == "2" and v:
+            first = v
+        if last and first:
+            break
+    if last or first:
+        return ((last or "").strip().upper(), (first or "").strip().upper())
+    return None
+
+
 def extract(paths):
     """Extract a FLAG Print Summary draft (one or more PDFs) into the
-    standard 9089 form dict consumed by engine.verify_data()."""
+    standard 9089 form dict consumed by engine.verify_data().
+
+    When multiple files are supplied, the foreign worker's name is read
+    from each file that contains Appendix A.A; if the files disagree, the
+    mismatch is recorded in meta.beneficiary_mismatch so the rules engine
+    can flag documents mixed across cases (same employer, different
+    worker is the classic paralegal upload error)."""
+    import os
     if isinstance(paths, (str, bytes)) or hasattr(paths, "__fspath__"):
         paths = [paths]
-    form, _ = to_form(parse_fields(paths))
+    all_fields, per_file_names = [], []
+    for p in paths:
+        f = parse_fields([p])
+        all_fields.extend(f)
+        nm = _beneficiary_name(f)
+        if nm:
+            per_file_names.append(
+                {"file": os.path.basename(str(p)),
+                 "last_name": nm[0], "first_name": nm[1]})
+    form, _ = to_form(all_fields)
+    distinct = {(n["last_name"], n["first_name"]) for n in per_file_names}
+    if len(distinct) > 1:
+        form.setdefault("meta", {})["beneficiary_mismatch"] = per_file_names
     return _dedupe(form)

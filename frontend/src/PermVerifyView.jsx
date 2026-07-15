@@ -11,9 +11,29 @@ const fmtMoney = (v) =>
   v == null ? "—" : `$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 const fmtDate = (s) => (s ? s : "—");
 
-function FileDrop({ label, hint, file, setFile, required }) {
+function FileDrop({ label, hint, file, setFile, required, multiple }) {
   const inputRef = useRef(null);
   const [over, setOver] = useState(false);
+  const files = multiple ? (file || []) : (file ? [file] : []);
+  const has = files.length > 0;
+  const addFiles = (list) => {
+    const pdfs = Array.from(list || [])
+      .filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+    if (!pdfs.length) return;
+    if (multiple) {
+      setFile((prev) => {
+        const cur = prev || [];
+        const seen = new Set(cur.map((f) => `${f.name}:${f.size}`));
+        return [...cur, ...pdfs.filter((f) => !seen.has(`${f.name}:${f.size}`))];
+      });
+    } else {
+      setFile(pdfs[0]);
+    }
+  };
+  const removeAt = (i) => {
+    if (multiple) setFile((prev) => (prev || []).filter((_, j) => j !== i));
+    else setFile(null);
+  };
   return (
     <div
       onClick={() => inputRef.current?.click()}
@@ -21,42 +41,56 @@ function FileDrop({ label, hint, file, setFile, required }) {
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
         e.preventDefault(); setOver(false);
-        const f = e.dataTransfer.files?.[0];
-        if (f && f.name.toLowerCase().endsWith(".pdf")) setFile(f);
+        addFiles(e.dataTransfer.files);
       }}
       style={{
         flex: 1, minWidth: 260, cursor: "pointer", borderRadius: 10,
-        border: `1.5px dashed ${over ? "var(--accent)" : file ? "var(--green)" : "var(--bg4)"}`,
+        border: `1.5px dashed ${over ? "var(--accent)" : has ? "var(--green)" : "var(--bg4)"}`,
         background: over ? "var(--bg3)" : "var(--bg2)",
         padding: "18px 16px", transition: "border-color .15s, background .15s",
       }}
     >
-      <input ref={inputRef} type="file" accept="application/pdf" style={{ display: "none" }}
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <input ref={inputRef} type="file" accept="application/pdf"
+        multiple={!!multiple} style={{ display: "none" }}
+        onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-          stroke={file ? "var(--green)" : "var(--ink3, #888)"} strokeWidth="1.5">
-          {file
+          stroke={has ? "var(--green)" : "var(--ink3, #888)"} strokeWidth="1.5">
+          {has
             ? <path d="M20 6L9 17l-5-5" />
             : <><path d="M12 3v12" /><path d="M7 8l5-5 5 5" /><path d="M4 21h16" /></>}
         </svg>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>
             {label}{required && <span style={{ color: "var(--red)" }}> *</span>}
+            {multiple && has && (
+              <span style={{ opacity: 0.6, fontWeight: 400 }}>
+                {" "}· {files.length} file{files.length > 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-          <div style={{ fontSize: 12, opacity: 0.65, overflow: "hidden",
-            textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {file ? file.name : hint}
-          </div>
+          {!has && (
+            <div style={{ fontSize: 12, opacity: 0.65, overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {hint}
+            </div>
+          )}
+          {has && files.map((f, i) => (
+            <div key={`${f.name}:${f.size}`}
+              style={{ fontSize: 12, opacity: 0.8, display: "flex",
+                alignItems: "center", gap: 6, marginTop: i === 0 ? 2 : 1 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis",
+                whiteSpace: "nowrap" }}>{f.name}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); removeAt(i); }}
+                style={{ border: "none", background: "none",
+                  color: "var(--red)", cursor: "pointer", fontSize: 11,
+                  padding: 0, flexShrink: 0 }}>
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
-        {file && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setFile(null); }}
-            style={{ marginLeft: "auto", border: "none", background: "none",
-              color: "var(--red)", cursor: "pointer", fontSize: 12 }}>
-            clear
-          </button>
-        )}
       </div>
     </div>
   );
@@ -156,7 +190,7 @@ function FlagCard({ flag }) {
 
 /* ------------------------------------------------------------- main view */
 export function PermVerifyView() {
-  const [f9089, setF9089] = useState(null);
+  const [f9089, setF9089] = useState([]);
   const [f9141, setF9141] = useState(null);
   const [filingDate, setFilingDate] = useState("");
   const [cite, setCite] = useState(false);
@@ -191,10 +225,10 @@ export function PermVerifyView() {
   };
 
   const run = async () => {
-    if (!f9089) return;
+    if (!f9089.length) return;
     setBusy(true); setError(null); setResult(null);
     const body = new FormData();
-    body.append("form_9089", f9089);
+    f9089.forEach((f) => body.append("form_9089", f));
     if (f9141) body.append("form_9141", f9141);
     if (filingDate) body.append("filing_date", filingDate);
     body.append("cite", cite ? "true" : "false");
@@ -230,8 +264,8 @@ export function PermVerifyView() {
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <FileDrop label="ETA-9089" required file={f9089} setFile={setF9089}
-          hint="Drop the FLAG-printed 9089 PDF, or click to browse" />
+        <FileDrop label="ETA-9089" required multiple file={f9089} setFile={setF9089}
+          hint="Drop the 9089 PDF(s) — final form, or FLAG draft print + appendices" />
         <FileDrop label="ETA-9141 (optional)" file={f9141} setFile={setF9141}
           hint="PWD determination — enables Tier 3 wage checks" />
       </div>
@@ -253,10 +287,10 @@ export function PermVerifyView() {
             onChange={(e) => setCite(e.target.checked)} />
           Cite sources (regs · instructions · BALCA)
         </label>
-        <button onClick={run} disabled={!f9089 || busy}
+        <button onClick={run} disabled={!f9089.length || busy}
           style={{ marginLeft: "auto", padding: "9px 22px", borderRadius: 8,
-            border: "none", cursor: f9089 && !busy ? "pointer" : "default",
-            background: f9089 && !busy ? "var(--accent)" : "var(--bg4)",
+            border: "none", cursor: f9089.length && !busy ? "pointer" : "default",
+            background: f9089.length && !busy ? "var(--accent)" : "var(--bg4)",
             color: "#fff", fontWeight: 700, fontSize: 13.5 }}>
           {busy ? "Verifying…" : "Run verification"}
         </button>

@@ -15,7 +15,7 @@ import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Body, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -99,7 +99,7 @@ def _save_upload(upload: UploadFile, tmpdir: str) -> str:
 
 @router.post("/run")
 async def run_verification(
-    form_9089: UploadFile = File(...),
+    form_9089: List[UploadFile] = File(...),
     form_9141: Optional[UploadFile] = File(None),
     appendix_a: Optional[UploadFile] = File(None),
     filing_date: Optional[str] = Form(None),
@@ -115,12 +115,12 @@ async def run_verification(
 
     tmpdir = tempfile.mkdtemp(prefix="permverify_")
     try:
-        p9089 = _save_upload(form_9089, tmpdir)
+        paths_9089 = [_save_upload(f, tmpdir) for f in form_9089]
         p9141 = _save_upload(form_9141, tmpdir) if form_9141 else None
-        papx = [_save_upload(appendix_a, tmpdir)] if appendix_a else None
+        papx = [_save_upload(appendix_a, tmpdir)] if appendix_a else []
         try:
             result = await run_in_threadpool(
-                verify, p9089, fd, cite, 3, p9141, papx)
+                verify, paths_9089, fd, cite, 3, p9141, papx or None)
         except Exception as exc:  # extraction/rule errors -> readable 500
             raise HTTPException(500, f"Verification failed: {exc}")
         if render:
@@ -129,7 +129,7 @@ async def run_verification(
             if not is_draft:
                 from perm_verify.layout import build_overlay
                 result["overlay"] = await run_in_threadpool(
-                    build_overlay, result, p9089)
+                    build_overlay, result, paths_9089[0])
         return result
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
