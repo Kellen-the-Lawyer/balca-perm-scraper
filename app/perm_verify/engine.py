@@ -16,8 +16,18 @@ from .extract_9089 import extract
 from .rules import tier1, tier2, tier4_form_only, filing_window, RED, YELLOW
 
 
-def verify(pdf_path, filing_date=None, cite=False, cite_top_k=3, pwd_pdf=None):
-    form = extract(pdf_path)
+def verify(pdf_path, filing_date=None, cite=False, cite_top_k=3, pwd_pdf=None,
+           appendix_pdfs=None):
+    from .extract_9089_draft import looks_like_draft, extract as extract_draft
+    if looks_like_draft(pdf_path):
+        paths = [pdf_path] + list(appendix_pdfs or [])
+        form = extract_draft(paths)
+    else:
+        form = extract(pdf_path)
+        if appendix_pdfs:
+            # Final-form appendix pages are part of the main PDF; extra
+            # appendix files only apply to FLAG Print Summary drafts.
+            pass
     pwd = None
     if pwd_pdf:
         from .extract_9141 import extract as extract_pwd

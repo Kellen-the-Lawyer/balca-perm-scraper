@@ -236,7 +236,31 @@ def iter_api_packages(
             url = f"{BASE_API}/collections/{collection}/{encoded_start}?{urlencode(params)}"
             params = None
 
-        resp = session.get(url, params=params, timeout=60)
+        resp = None
+        for attempt in range(5):
+            try:
+                resp = session.get(url, params=params, timeout=(10, 30))
+                break
+            except requests.RequestException as exc:
+                if attempt == 4:
+                    log.error(
+                        "discovery request failed for %s after %s attempts: %s",
+                        collection,
+                        attempt + 1,
+                        exc,
+                    )
+                    return
+                delay = min(60, 2 ** attempt)
+                log.warning(
+                    "discovery request failed for %s (attempt %s/5): %s; retrying in %ss",
+                    collection,
+                    attempt + 1,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+        if resp is None:
+            return
         try:
             resp.raise_for_status()
         except requests.HTTPError as exc:

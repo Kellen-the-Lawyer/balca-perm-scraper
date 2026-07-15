@@ -14,6 +14,7 @@ const VIEW_PATHS = {
   "visa-bulletin":      "/visa-bulletin",
   "wage-forecaster":    "/wage-forecaster",
   "wage-dashboard":     "/wage-dashboard",
+  "wage-level":         "/wage-level",
   "eb-inventory":       "/eb-inventory",
   "projects":           "/projects",
   "oflc":               "/oflc",
@@ -39,6 +40,7 @@ import { SearchAllView } from "./SearchAllView";
 import { useFetch } from "./common";
 import { WageForecaster } from "./WageForecaster";
 import { WageDashboard } from "./WageDashboard";
+import { WageLevelView } from "./WageLevelView";
 import { EbInventoryView } from "./EbInventoryView";
 
 function LandingPage({ onNavigate }) {
@@ -58,6 +60,7 @@ function LandingPage({ onNavigate }) {
     { id: "visa-bulletin", label: "Visa Bulletin", description: "Monthly DOS priority dates — track cutoffs, retrogression, and backlog estimates for EB and family categories", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, available: true },
     { id: "wage-dashboard", label: "July 1 Wage Comparer", description: "2026-27 vs 2025-26 prevailing wage changes — US heat map, metro-level SOC comparisons, top movers, and employer exposure analysis", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, available: true },
     { id: "wage-forecaster", label: "Upcoming Wage Estimator", description: "July 2026 prevailing wage projections — all 619 H-1B/PERM occupation codes across 530 metro areas, current OFLC 2025-26 floors and ECI-calibrated estimates", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>, available: true },
+    { id: "wage-level", label: "Wage Level Tool", description: "NPWHC 2009 worksheet — SOC code, degree, and experience in; OES wage level (I–IV) out, with the point-by-point rationale and prevailing wage dollars.", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>, available: true },
     { id: "oflc", label: "DOL Performance Data", description: "PERM, LCA, and Prevailing Wage disclosure data — 1.4M+ records across FY2020–FY2026. Dashboards, templates, and pivot builder.", accent: "var(--accent)", accentDim: "var(--accent-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>, available: true },
     { id: "eb-inventory", label: "EB Inventory", description: "Priority date queue analysis — 74K observations across 5 countries and 7 categories. Tier 1 forecaster for Philippines/Mexico, regime monitor for India/China, queue position for all.", accent: "var(--blue)", accentDim: "var(--blue-dim)", icon: <svg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.5'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>, available: true },
     { id: "ask", label: "Ask AI", description: "Ask a research question — get a cited answer synthesized across cases, regulations, and policy", accent: "#f472b6", accentDim: "#f472b622", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, available: false, comingSoon: true },
@@ -224,6 +227,7 @@ export default function App() {
       { type: "item", id: "perm-verify",    label: "PERM Verify",        icon: icon.tool  },
       { type: "item", id: "wage-forecaster", label: "Upcoming Wage Estimator", icon: icon.cal },
       { type: "item", id: "wage-dashboard",   label: "July 1 Wage Comparer",    icon: icon.cal },
+      { type: "item", id: "wage-level",       label: "Wage Level Tool",          icon: icon.tool },
       { type: "sep" },
       { type: "item", id: "letter-assist",  label: "Letter Assist",      icon: icon.letter, disabled: true },
     ]},
@@ -252,6 +256,7 @@ export default function App() {
       { id: "perm-comparer",  label: "PERM Comparer",  icon: icon.tool   },
       { id: "perm-verify",    label: "PERM Verify",    icon: icon.tool   },
       { id: "wage-forecaster", label: "Upcoming Wage Estimator", icon: icon.cal },
+      { id: "wage-level",     label: "Wage Level Tool", icon: icon.tool   },
     ]},
     { section: "Data", items: [
       { id: "oflc",           label: "DOL Data",       icon: icon.table  },      { id: "eb-inventory",   label: "EB Inventory",   icon: icon.table  },
@@ -375,6 +380,7 @@ export default function App() {
         {view === "visa-bulletin" && <VisaBulletinView />}
         {view === "wage-forecaster" && <WageForecaster />}
         {view === "wage-dashboard"  && <WageDashboard />}
+        {view === "wage-level" && <WageLevelView />}
         {view === "eb-inventory" && <EbInventoryView />}
         {view === "projects" && <ProjectsView onOpenDecision={openDecision} />}
         {view === "oflc" && <OflcView />}

@@ -1998,3 +1998,131 @@ questions, H.a.1, I.1, Appendix A bio) are NOT a data-model task — those
 sections get mapped when the FLAG PERM filling process is mapped in Graphite.
 Expect ~19 T1 REDs on every verification run until that task lands; they are
 known noise, not open work.
+
+=== 2026-07-14 — Wage Level Determination tool (NPWHC 2009 worksheet) ===
+- NEW app/wage_level_data.py: Appendix D professional-occupation education
+  categories extracted from npwhc_guidance_revised_11_2009.pdf (normalized
+  to base SOC), conservative 2018->2000 SOC crosswalk for high-volume
+  H-1B/PERM codes (15-125x, physicians 29-12xx, psychologists), degree
+  ladder, zone usual-education defaults, Step-2 experience bands per zone
+  derived from onet_job_zone_reference svp_range + DOT SVP scale.
+- NEW app/routers/wage_level.py (registered in api.py):
+  GET /api/wage-level/occupation/{soc} — zone, zone reference, title,
+    Appendix D status (UI prefill)
+  GET /api/wage-level/areas/{state} — area dropdown data
+  POST /api/wage-level/determine — full 5-step worksheet: baseline Level I;
+    Step 2 experience vs zone SVP band (low/high split at midpoint =
+    practitioner convention, flagged in caveats); Step 3 education vs
+    Appendix D category (professional) or zone usual (fallback, source
+    disclosed); Step 4 special-skills points (attorney judgment 0-2) +
+    foreign-language +1, step capped at 2; Step 5 supervisory +1 with
+    customary-supervision exception (SOC 11-xxxx / XX-10XX / title match).
+    Level = min(4, 1+sum). Optional wage $ lookup vs current_oews_wages
+    (state/county or area_code), returns 4-level hourly/annual.
+- NEW frontend/src/WageLevelView.jsx + App.jsx wiring (/wage-level, tile,
+  Tools nav, drawer). Worksheet table shows per-step points + rationale;
+  wage cards highlight determined level.
+- Verified against Homebrew :5433 on port 8002 (killed after):
+  15-1252 MS+3yr Dallas -> Level III, $66.63/hr; 23-1011 JD+0 -> Level I;
+  11-3021 6yr supervisory -> exception fired, Level IV via experience;
+  29-1141 BS+2yr -> Level I (zone fallback path).
+- Uses `.bindparams()` for parameterized text() queries (the databases
+  wrapper rejects the (query, values) form — TextClause has no .values).
+- NOT synced to casebase-app; no git commits. Running dev uvicorn on :8001
+  predates the router — needs a restart to serve /api/wage-level/*.
+- ADDENDUM 7/14: restarted dev uvicorn :8001 (standard nohup pattern,
+  /tmp/uvicorn_8001.log) — /api/wage-level/* now live. Vite :5173 proxy
+  verified headless: /wage-level renders, no console errors.
+- 7/14 (cont.): added informational SVP-equivalency block per Kellen.
+  wage_level_data.py: EDUCATION_SVP_MONTHS (BS=24, MS=48, PhD/JD=84 — labeled
+  contested convention; HS=0, SVP excludes general education) +
+  ZONE_SVP_CEILING_MONTHS. determine response now carries svp_analysis
+  (exp + edu-equiv = combined vs zone ceiling, exceeds flag, notes) — NOT
+  scored, wage level unchanged; framed as G.9/656.17(h)(1) exposure,
+  consistent with rules_onet.py T4-007 declining the conversion for
+  scoring. Zone 5 exceeds reported against SVP-8 120-mo ceiling with
+  open-ended caveat. Frontend SVP panel between wage cards and worksheet.
+  Verified: MS+3yr 15-1252 -> 84/48 EXCEEDS (level unchanged III);
+  BS+2yr -> 48/48 within; JD+8yr 23-1011 -> 180/120 w/ zone-5 note.
+  :8001 restarted; frontend rebuilt.
+- 7/14 (cont.): VALIDATED wage-level engine against DOL PW disclosure
+  (FY2025_Q4, data/raw/oflc/PW/). Test set = 194,140 OEWS (All Industries)
+  determinations w/ PWD_OES_WAGE_LEVEL I-IV ('Level V' = H-2B scheme,
+  excluded). Inputs mapped from REQUIRED_EDUCATION_LEVEL /
+  REQUIRED_EXPERIENCE_MONTHS / SUPERVISE_OTHER_EMP / SPEC_REQ_FOREIGN_LANG
+  vs DOL's own PWD_SOC_CODE + O_NET_CODE; Step-4 skills = 0 (judgment).
+  RESULTS: 82.2% exact, 95.6% within one level, only 1.8% overpredicted —
+  misses are ~all one level LOW where DOL awarded a Step-4 skills point.
+  Per-level recall I 95.5 / II 77.8 / III 58.3 / IV 83.6. PERM 82.3%,
+  H-1B 74.5%. KEY FINDING: auto-+1 when SPECIAL_SKILLS_REQUIREMENTS='Y'
+  craters exact to 50.6% — DOL usually awards NO point for listed skills;
+  skills=Y rows score identically to skills=N (82.1 vs 82.3), so the
+  tool's default skills=0 is empirically correct, and no experience-band
+  recalibration would close the gap (mismatch rows sit BELOW band start).
+  Harness persisted: app/wage_level_validate.py (dev-only, results in
+  docstring). REPL killed. Nothing synced/committed.
+- 7/14 (cont.): surfaced validation findings in the tool. determine
+  response caveats now include the 194K-determination validation stats +
+  "treat as a floor" guidance (misses run one level low = Step-4 skills).
+  UI: subtitle carries the validation line; result badge shows a floor
+  hint when wage_level < 4 and no skills points were entered (~16% of
+  comparable DOL cases land one higher). Rebuilt, :8001 restarted,
+  headless-verified.
+- 7/14 (cont.): LIII miss anatomy + two calibration experiments (FY2025_Q4):
+  LIII misses (11,742 of 28,125): 69% predicted II, 28% predicted I, only
+  2% predicted IV. Zone 4 = 77% of misses. Top profiles: z4 Bachelor's+24mo
+  (1,600; 24 = exactly the range start -> 0 exp pts), z4 Master's+0/12/24mo
+  (~4,100; engine II via edu point), z4 Bachelor's+36mo (1,087; engine II
+  via low-end point). 73% have SPECIAL_SKILLS=Y -> DOL LIII pattern is one
+  deterministic point + one discretionary Step-4 point.
+  EXPERIMENT 1 (alternate reqs): scoring max(primary, ALT_*) is WORSE —
+  77.0% exact, over 9.4%, LIII recall 58.3->47.5, and alt-bearing LIII rows
+  crater 62.5->12.4%. NPWC scores PRIMARY requirements; primary-only test
+  design confirmed.
+  EXPERIMENT 2 (boundary-inclusive Step 2, months >= range start earns
+  low-end point): WORSE — 73.5% exact, LI recall 95.5->73.5, over 13.4%.
+  Exclusive boundary (points only ABOVE range start, per DOT scale) is
+  right. No engine changes warranted. Findings noted in
+  app/wage_level_validate.py docstring.
+- 7/14 (cont.): DEPLOYED wage-level tool to casebase-app per Kellen.
+  Pre-check: Docker DB already has onet_job_zones (923), reference (4),
+  current_oews_wages (4.76M) — no DB work needed. sync-from-dev.sh +
+  docker compose up --build -d (frontend builds in-image, stage 1).
+  Verified on :8080: occupation lookup, full determine w/ Dallas wage
+  lookup against Docker DB ($66.63/hr LIII match w/ Homebrew), SVP
+  analysis, 4 caveats, /wage-level route serves. Public URL verified via
+  Cloudflare tunnel. wage_level_validate.py synced too (dev-only script,
+  inert in container).
+- 7/14 (cont.): DC MCP wedged mid-deploy-verification of the county
+  dropdown (recovered via Cmd+Q relaunch). Post-recovery: verified
+  counties endpoint on Docker (253 TX) + public URL 200. Then per Kellen:
+  wage cards flipped — annual salary is now the large figure, hourly the
+  small secondary line. Rebuilt, synced, compose rebuild, verified
+  Docker + public (/wage-level 200, determine returns $138,590/yr LIII).
+
+=== 2026-07-15 — Draft 9089 (FLAG Print Summary) support ===
+New extractor app/perm_verify/extract_9089_draft.py parses the FLAG
+"Print Summary" draft layout (label/value two-column web print; labels
+ArialMT, values Arial-Black at x>=280; accordion section headers).
+Maps (section, item number) -> the same schema paths extract_9089 emits,
+so verify_data + all 51 rules run unchanged. Handles: Preliminary
+Questions (H.b occupation type, H.a supervised recruitment), sections
+A-J, H.d additional steps, Appendix A contact/education/skills/work
+groups, Appendix C entries (appendix_C.entries w/ section_item for
+T1-011 matching). H.e + Section I appear only as boilerplate in drafts;
+presence maps to ['1b_physical_notice'] / 'Yes' respectively (documented
+assumption). _dedupe collapses appendix duplicates when a standalone
+Appendix A PDF is uploaded alongside the main draft (which already
+contains it).
+- engine.verify() autodetects draft vs final (looks_like_draft: 'Print
+  Summary' text on page 1) and takes appendix_pdfs list.
+- Router /run gains optional appendix_a upload; render/overlay skipped
+  for drafts (no fixed geometry to annotate).
+- Validated against real BHARGAVA draft (Reaktor): 0 RED / 2 YELLOW
+  (T2-010 posting-proof reminder, T4-006 exceeds-SVP w/ Appendix C
+  present), window 7/4/2026 -> 10/28/2026. Draft PDFs live only in the
+  chat sandbox; drop copies into app/perm_verify/test_fixtures/ for an
+  on-Mac regression fixture.
+- NOTE: drafts show PWD case number but NOT the wage — Tier 3 requires
+  the 9141 uploaded separately, always.
+Deployed via sync + rebuild; live on :8080.

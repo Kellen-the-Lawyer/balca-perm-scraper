@@ -101,6 +101,7 @@ def _save_upload(upload: UploadFile, tmpdir: str) -> str:
 async def run_verification(
     form_9089: UploadFile = File(...),
     form_9141: Optional[UploadFile] = File(None),
+    appendix_a: Optional[UploadFile] = File(None),
     filing_date: Optional[str] = Form(None),
     cite: bool = Form(False),
     render: bool = Form(False),
@@ -116,15 +117,19 @@ async def run_verification(
     try:
         p9089 = _save_upload(form_9089, tmpdir)
         p9141 = _save_upload(form_9141, tmpdir) if form_9141 else None
+        papx = [_save_upload(appendix_a, tmpdir)] if appendix_a else None
         try:
             result = await run_in_threadpool(
-                verify, p9089, fd, cite, 3, p9141)
+                verify, p9089, fd, cite, 3, p9141, papx)
         except Exception as exc:  # extraction/rule errors -> readable 500
             raise HTTPException(500, f"Verification failed: {exc}")
         if render:
-            from perm_verify.layout import build_overlay
-            result["overlay"] = await run_in_threadpool(
-                build_overlay, result, p9089)
+            is_draft = (((result.get("form") or {}).get("meta") or {})
+                        .get("form_variant") == "flag_print_summary_draft")
+            if not is_draft:
+                from perm_verify.layout import build_overlay
+                result["overlay"] = await run_in_threadpool(
+                    build_overlay, result, p9089)
         return result
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
