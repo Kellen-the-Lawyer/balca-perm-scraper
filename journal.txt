@@ -2151,3 +2151,65 @@ review. Negative control on real BHARGAVA files: no flag; E2E still
 Note: guard is name-based per Kellen's spec; files lacking Appendix A.A
 (e.g. per-section exports without appendices) contribute no name and
 cannot mismatch.
+
+=== 2026-07-15 — VLM bake-off for audit-pack evidence reading ===
+Test: posting-notice photo (handwritten dates/location/signature) from
+BHARGAVA compliance file, page 15 @ 200dpi. Identical 10-field JSON
+extraction prompt, temp 0, weighted scoring (handwritten fields 3x/2x).
+Harness + results: /Users/Dad/perm_vlm_test/ (run_vlm_test.py,
+results.json, bakeoff*.log).
+
+  100%  ~45s   qwen3-vl-8b (LM Studio, 4bit)  <- WINNER, perfect twice,
+                incl. all handwriting + reference number
+   94%   41s   gemma4:e4b (Ollama)  — one digit wrong in ref number
+   81%   38-55s gemma-4-e2b/e4b (LM Studio) — ref number digit + name
+                misread ('Marcheno'); handwritten dates all correct
+   81%   30s   gemma4:e2b (Ollama)
+    0%   142-246s qwen3.5-9b — hidden reasoning overruns token budget on
+                multi-field prompts; answered a 2-field probe correctly.
+                Impractical latency for this task.
+
+Findings:
+- Every model read the HANDWRITTEN dates (5/4/26, 5/20/26) and location
+  correctly. The failure mode is printed DIGIT strings (ref 00089423
+  misread as 0089423/0080423/0088423) — confirms the review-UI design:
+  show cropped source field next to extracted value for confirmation.
+- LM Studio reasoning models need max_tokens >= 4000; content comes
+  back empty when reasoning eats the budget (first-run 0%s were that).
+- DECISION for audit-pack feature: qwen3-vl-8b as the vision layer
+  (via LM Studio now; pull qwen3-vl:8b into Ollama on the Mac Mini for
+  the deployed path). gemma4:e4b acceptable fallback.
+- Not yet tested: DeepseekOCR baseline (available in LM Studio).
+
+=== 2026-07-15 — Tier 5 audit-pack engine built + full E2E test ===
+New module app/perm_verify/audit_pack.py (local-only, NOT yet deployed):
+segment_pack (per-page fingerprint classification), extract_pack_facts,
+vlm_read_notice (qwen3-vl-8b via LM Studio; AUDIT_VLM_URL/MODEL env),
+crosscheck (T5-001..T5-040), verify_audit_pack. GREEN level added =
+affirmatively verified evidence.
+Full test (BHARGAVA pack + draft 9089 dict at
+/Users/Dad/perm_vlm_test/form_9089_bhargava.json):
+  Tiers 1-4: 0 RED / 2 YELLOW (known practice reminders).
+  Tier 5: 0 RED / 2 YELLOW / 13 GREEN. YELLOWs are real: letter claims
+  filed 9089 in pack but absent; 'Retain until DATE' unfilled.
+  Verified: PWD match+validity (656.40(c) via recruitment-start),
+  wage sufficiency, job order bracketing, both Sunday tear sheets,
+  all 3 additional steps, notice 13 business days, notice salary,
+  signer fuzzy-match (0.93), VLM handwriting corroborated against
+  recruitment report's typed dates (T5-034).
+Negative control: wrong PWD number + wrong ad1 date -> 2 RED. Works.
+Key techniques:
+- NYT tear sheet subset font is chr+16 substitution; _cid_decode
+  recovers masthead dates deterministically (p21 '5/10' needed it).
+- _d2() for 2-digit years (5/4/26); rules._d treats '26' as year 26.
+- Classified-page text interleaves competing ads: NEVER match salary/
+  content at page level on newsprint ($189,592 on p20 is ANOTHER
+  employer's ad). Ad-content checks only on single-ad printouts.
+- Recruitment report (pack p2) states notice dates in type -> free
+  corroboration of VLM handwriting reads.
+LIMITATION: pack copy of 9141 lacks G.5 alternate wage in its text
+layer entirely (flattened) — even cid decode fails. Production path:
+Graphite supplies the standalone 9141 (geometry extractor gets it).
+NEXT: router endpoint + Graphite integration + ollama pull qwen3-vl:8b
+on Mac Mini (keep_alive-managed load/unload), UI with cropped-field
+review for VLM-read values.
