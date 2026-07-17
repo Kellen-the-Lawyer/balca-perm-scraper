@@ -269,8 +269,24 @@ def iter_api_packages(
             raise RuntimeError(f"GovInfo discovery failed for {collection} ({status}): {body}") from None
         data = resp.json()
         packages = data.get("packages", [])
+        ignored_collections: dict[str, int] = {}
         for package in packages:
+            package_id = package_id_from_api(package)
+            if package_id:
+                package_collection = collection_from_package(package_id)
+                if package_collection != collection.upper():
+                    ignored_collections[package_collection] = ignored_collections.get(package_collection, 0) + 1
+                    continue
             yield package
+        if ignored_collections:
+            ignored = ", ".join(
+                f"{name}={count}" for name, count in sorted(ignored_collections.items())
+            )
+            log.warning(
+                "ignored mixed-collection packages while discovering %s: %s",
+                collection.upper(),
+                ignored,
+            )
 
         page += 1
         if max_pages and page >= max_pages:
