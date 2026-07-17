@@ -159,28 +159,49 @@ def _patch_nano_modeling():
     )
     for fpath in glob.glob(pattern):
         txt = open(fpath).read()
+        changed = False
+        # Patch 1: create_causal_mask() no longer accepts cache_position
         if "cache_position=dummy_cache_position," in txt:
             needle = '                cache_position=dummy_cache_position,\n'
             txt = txt.replace(needle, '')
+            changed = True
+        # Patch 2 (transformers 5.x): AutoModel.register() reads
+        # model_class.config_class.__name__ unguarded; remote code never
+        # sets config_class, so the inherited None raises AttributeError.
+        if "config_class = Qwen3Config" not in txt:
+            txt = txt.replace(
+                "from transformers import PreTrainedModel, Qwen3Model",
+                "from transformers import PreTrainedModel, Qwen3Model, Qwen3Config")
+            txt = txt.replace(
+                "class Qwen3BidirectionalModel(PreTrainedModel):\n",
+                "class Qwen3BidirectionalModel(PreTrainedModel):\n"
+                "    config_class = Qwen3Config\n")
+            changed = True
+        if changed:
             open(fpath, "w").write(txt)
             log.info(f"Auto-patched {fpath}")
 
 _patch_nano_modeling()
 
 # Lazy singleton for local nano model
+import threading
 _nano_model = None
+_nano_lock = threading.Lock()
 
 def _load_nano():
     global _nano_model
     if _nano_model is not None:
         return _nano_model
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError as exc:
-        raise ImportError("sentence-transformers required: pip install sentence-transformers") from exc
-    log.info(f"Loading local {VOYAGE_NANO_HF_ID} (first call only)...")
-    _nano_model = SentenceTransformer(VOYAGE_NANO_HF_ID, trust_remote_code=True, truncate_dim=EMBED_DIM)
-    log.info("Local nano model loaded.")
+    with _nano_lock:
+        if _nano_model is not None:   # another thread won the race
+            return _nano_model
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise ImportError("sentence-transformers required: pip install sentence-transformers") from exc
+        log.info(f"Loading local {VOYAGE_NANO_HF_ID} (first call only)...")
+        _nano_model = SentenceTransformer(VOYAGE_NANO_HF_ID, trust_remote_code=True, truncate_dim=EMBED_DIM)
+        log.info("Local nano model loaded.")
     return _nano_model
 
 

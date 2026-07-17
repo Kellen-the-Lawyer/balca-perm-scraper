@@ -1,20 +1,57 @@
 import { useState, useEffect, useRef } from "react";
 import { API } from "./apiBase";
 
+const CORPUS_COLORS = {
+  balca:      { color: "var(--accent)", label: "BALCA" },
+  aao:        { color: "var(--blue)", label: "AAO" },
+  regulation: { color: "var(--green)", label: "Regulation" },
+  policy:     { color: "#a78bfa", label: "Policy" },
+  ina:        { color: "var(--amber)", label: "INA" },
+};
+
+// Survives unmount/remount so navigating to a source and back doesn't
+// blank the results or force a re-query. Backed by sessionStorage so
+// results also survive a page refresh (cleared when the tab closes).
+const CACHE_KEY = "askview_cache_v1";
+const askCache = (() => {
+  const empty = { question: "", askedQuestion: "", answer: "", sources: null,
+                  corpusFilter: [], savedRefs: {} };
+  try { return { ...empty, ...JSON.parse(sessionStorage.getItem(CACHE_KEY) || "{}") }; }
+  catch { return empty; }
+})();
+const persistCache = () => {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(askCache)); } catch {}
+};
+
 export function AskView({ onNavigate }) {
-  const [question, setQuestion]         = useState("");
-  const [corpusFilter, setCorpusFilter] = useState([]);
+  const [question, setQuestion]         = useState(askCache.question);
+  const [corpusFilter, setCorpusFilter] = useState(askCache.corpusFilter);
   const [loading, setLoading]           = useState(false);
-  const [sources, setSources]           = useState(null);
-  const [answer, setAnswer]             = useState("");
+  const [sources, setSources]           = useState(askCache.sources);
+  const [answer, setAnswer]             = useState(askCache.answer);
   const [ragStats, setRagStats]         = useState(null);
   const [error, setError]               = useState(null);
+  const [askedQuestion, setAskedQuestion] = useState(askCache.askedQuestion);
+  const [popover, setPopover]           = useState(null);   // { ref, top, left }
+  const [projects, setProjects]         = useState(null);   // lazy-loaded list
+  const [savedRefs, setSavedRefs]       = useState(askCache.savedRefs);     // ref -> project name
+  const [copied, setCopied]             = useState(false);
   const inputRef  = useRef(null);
   const answerRef = useRef(null);
+  const abortRef  = useRef(null);
+  const popoverTimer = useRef(null);
+  const resultsRef   = useRef(null);
+
+  // Keep the module cache current so results survive navigation and refresh.
+  useEffect(() => {
+    Object.assign(askCache, { question, askedQuestion, answer, sources, corpusFilter, savedRefs });
+    if (!loading) persistCache();   // skip per-token writes during streaming
+  }, [question, askedQuestion, answer, sources, corpusFilter, savedRefs, loading]);
 
   useEffect(() => {
     inputRef.current?.focus();
     fetch(`${API}/ask/stats`).then(r => r.json()).then(setRagStats).catch(() => {});
+    return () => abortRef.current?.abort();   // navigating away mid-stream: stop cleanly, keep partial
   }, []);
 
   const toggleCorpus = (c) =>
@@ -26,11 +63,16 @@ export function AskView({ onNavigate }) {
     setSources(null);
     setAnswer("");
     setError(null);
+    setPopover(null);
+    setSavedRefs({});
+    setAskedQuestion(question.trim());
+    abortRef.current = new AbortController();
 
     try {
       const res = await fetch(`${API}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortRef.current.signal,
         body: JSON.stringify({
           question: question.trim(),
           corpus_filter: corpusFilter,
@@ -69,29 +111,115 @@ export function AskView({ onNavigate }) {
         }
       }
     } catch (e) {
-      setError(e.message || "Request failed");
+      if (e.name !== "AbortError") setError(e.message || "Request failed");
     }
     setLoading(false);
   };
 
-  const renderAnswer = (text) => {
-    const parts = text.split(/(\[\d+\])/g);
-    return parts.map((part, i) => {
-      const m = part.match(/^\[(\d+)\]$/);
-      if (!m) return part;
-      const ref = parseInt(m[1]);
-      const src = sources?.find(s => s.ref === ref);
-      return (
-        <span key={i}
-          title={src ? `${src.source_label}${src.cfr_citation ? ` — ${src.cfr_citation}` : ""}` : ""}
-          style={{ display: "inline-block", padding: "0 4px", fontSize: 11, fontWeight: 600,
-                   background: src ? `${CORPUS_COLORS[src.corpus]?.color}22` : "var(--bg2)",
-                   color: src ? CORPUS_COLORS[src.corpus]?.color : "var(--text3)",
-                   borderRadius: 4, cursor: src ? "pointer" : "default", margin: "0 1px" }}
-          onClick={() => src && onNavigate && onNavigate(src.corpus, src.source_id)}
-        >{part}</span>
-      );
+  const stopGeneration = () => { abortRef.current?.abort(); setLoading(false); };
+
+  // ── Citation hover popover ──────────────────────────────────────────────
+  const openPopover = (ref, el) => {
+    clearTimeout(popoverTimer.current);
+    const rect = el.getBoundingClientRect();
+    const cont = resultsRef.current?.getBoundingClientRect();
+    if (!cont) return;
+    setPopover({
+      ref,
+      top:  rect.bottom - cont.top + resultsRef.current.scrollTop + 6,
+      left: Math.min(Math.max(rect.left - cont.left - 140, 8),
+                     cont.width - 380),
     });
+    if (projects === null)
+      fetch(`${API}/projects`).then(r => r.json()).then(setProjects).catch(() => setProjects([]));
+  };
+  const scheduleClosePopover = () => {
+    clearTimeout(popoverTimer.current);
+    popoverTimer.current = setTimeout(() => setPopover(null), 250);
+  };
+  const cancelClosePopover = () => clearTimeout(popoverTimer.current);
+
+  const saveToProject = async (src, projectId, projectName) => {
+    try {
+      const r = await fetch(`${API}/projects/${projectId}/research`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          corpus: src.corpus, source_id: src.source_id,
+          source_label: src.source_label, cfr_citation: src.cfr_citation,
+          excerpt: src.excerpt, question: askedQuestion,
+        }),
+      });
+      if (r.ok) setSavedRefs(s => ({ ...s, [src.ref]: projectName }));
+    } catch {}
+  };
+
+  const copyAnswer = () => {
+    let out = answer;
+    if (sources?.length) {
+      out += "\n\nSources:\n" + sources.map(s =>
+        `[${s.ref}] ${s.source_label}${s.cfr_citation ? ` — ${s.cfr_citation}` : ""}`).join("\n");
+    }
+    navigator.clipboard.writeText(out).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  };
+
+  // ── Inline pieces: citations + light markdown ───────────────────────────
+  const renderInline = (text, keyBase) => {
+    const parts = text.split(/(\[\d+\]|\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) => {
+      const cite = part.match(/^\[(\d+)\]$/);
+      if (cite) {
+        const ref = parseInt(cite[1]);
+        const src = sources?.find(s => s.ref === ref);
+        return (
+          <span key={`${keyBase}-${i}`}
+            onMouseEnter={e => src && openPopover(ref, e.currentTarget)}
+            onMouseLeave={scheduleClosePopover}
+            onClick={() => src && onNavigate && onNavigate(src.corpus, src.source_id)}
+            style={{ display: "inline-block", padding: "0 4px", fontSize: 11, fontWeight: 600,
+                     background: src ? `${(CORPUS_COLORS[src.corpus]?.color) || "#888"}22` : "var(--bg2)",
+                     color: src ? (CORPUS_COLORS[src.corpus]?.color || "#888") : "var(--text3)",
+                     borderRadius: 4, cursor: src ? "pointer" : "default", margin: "0 1px" }}
+          >{part}</span>
+        );
+      }
+      const bold = part.match(/^\*\*([^*]+)\*\*$/);
+      if (bold) return <strong key={`${keyBase}-${i}`}>{bold[1]}</strong>;
+      return part;
+    });
+  };
+
+  const renderAnswer = (text) => {
+    const blocks = [];
+    const lines = text.split("\n");
+    lines.forEach((line, li) => {
+      const h = line.match(/^(#{1,3})\s+(.*)/);
+      if (h) {
+        blocks.push(
+          <div key={li} style={{ fontWeight: 600, color: "var(--text)",
+            fontSize: h[1].length === 1 ? 15 : h[1].length === 2 ? 14 : 13,
+            margin: `${li === 0 ? 0 : 14}px 0 6px` }}>
+            {renderInline(h[2], li)}
+          </div>);
+        return;
+      }
+      const bullet = line.match(/^\s*[-•]\s+(.*)/);
+      const numbered = line.match(/^\s*(\d+)\.\s+(.*)/);
+      if (bullet || numbered) {
+        blocks.push(
+          <div key={li} style={{ display: "flex", gap: 8, margin: "3px 0", paddingLeft: 6 }}>
+            <span style={{ color: "var(--text3)", flexShrink: 0 }}>{numbered ? `${numbered[1]}.` : "•"}</span>
+            <span>{renderInline(bullet ? bullet[1] : numbered[2], li)}</span>
+          </div>);
+        return;
+      }
+      if (!line.trim()) { blocks.push(<div key={li} style={{ height: 8 }} />); return; }
+      blocks.push(<div key={li}>{renderInline(line, li)}</div>);
+    });
+    return blocks;
   };
 
   const notReady = ragStats && ragStats.total_embedded === 0;
@@ -163,7 +291,7 @@ export function AskView({ onNavigate }) {
       </div>
 
       {/* Results area */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+      <div ref={resultsRef} style={{ flex: 1, overflowY: "auto", padding: "20px 24px", position: "relative" }}>
         {error && (
           <div style={{ color: "var(--red,#bf4b4b)", background: "var(--red-dim,#bf4b4b22)",
             padding: "10px 14px", borderRadius: "var(--radius)", marginBottom: 16, fontSize: 13 }}>
@@ -181,12 +309,88 @@ export function AskView({ onNavigate }) {
         {/* Answer */}
         {answer && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 13, lineHeight: 1.75, color: "var(--text)", whiteSpace: "pre-wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)",
+                textTransform: "uppercase", letterSpacing: "0.06em" }}>Answer</span>
+              {loading && (
+                <button onClick={stopGeneration} style={{ fontSize: 11, padding: "2px 10px",
+                  borderRadius: 12, border: "1px solid var(--border)", background: "transparent",
+                  color: "var(--text3)", cursor: "pointer" }}>■ Stop</button>
+              )}
+              {!loading && (
+                <button onClick={copyAnswer} style={{ fontSize: 11, padding: "2px 10px",
+                  borderRadius: 12, border: "1px solid var(--border)", background: "transparent",
+                  color: copied ? "var(--green)" : "var(--text3)", cursor: "pointer" }}>
+                  {copied ? "✓ Copied" : "Copy answer"}
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 13, lineHeight: 1.75, color: "var(--text)" }}>
               {renderAnswer(answer)}
             </div>
             <div ref={answerRef} />
           </div>
         )}
+
+        {/* Citation hover popover */}
+        {popover && (() => {
+          const src = sources?.find(s => s.ref === popover.ref);
+          if (!src) return null;
+          const cc = CORPUS_COLORS[src.corpus] || { color: "#888", label: src.corpus };
+          const saved = savedRefs[src.ref];
+          return (
+            <div onMouseEnter={cancelClosePopover} onMouseLeave={scheduleClosePopover}
+              style={{ position: "absolute", top: popover.top, left: popover.left, width: 360,
+                zIndex: 40, background: "var(--bg)", border: "1px solid var(--border2, var(--border))",
+                borderRadius: "var(--radius-lg)", boxShadow: "0 8px 28px rgba(0,0,0,0.35)",
+                padding: "12px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 10,
+                  background: `${cc.color}22`, color: cc.color, fontWeight: 600 }}>{cc.label}</span>
+                <span style={{ fontSize: 10, color: "var(--text3)", marginLeft: "auto" }}>
+                  {Math.round(src.similarity * 100)}% match
+                </span>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>
+                {src.source_label}{src.cfr_citation ? ` — ${src.cfr_citation}` : ""}
+              </div>
+              <div style={{ fontSize: 12, lineHeight: 1.6, color: "var(--text2)", maxHeight: 150,
+                overflowY: "auto", background: "var(--bg2)", borderRadius: "var(--radius)",
+                padding: "8px 10px", marginBottom: 10, whiteSpace: "pre-wrap" }}>
+                {src.excerpt || "No preview available."}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {src.corpus !== "regulation" && src.corpus !== "policy" && src.corpus !== "ina" && (
+                  <button onClick={() => onNavigate && onNavigate(src.corpus, src.source_id)}
+                    style={{ fontSize: 11, padding: "3px 10px", borderRadius: 12, cursor: "pointer",
+                      border: `1px solid ${cc.color}55`, background: "transparent", color: cc.color }}>
+                    Open source
+                  </button>
+                )}
+                {saved ? (
+                  <span style={{ fontSize: 11, color: "var(--green)", marginLeft: "auto" }}>✓ Saved to {saved}</span>
+                ) : (
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 11, color: "var(--text3)" }}>Save to:</span>
+                    {projects === null && <span style={{ fontSize: 11, color: "var(--text3)" }}>…</span>}
+                    {projects?.length === 0 && <span style={{ fontSize: 11, color: "var(--text3)" }}>no projects yet</span>}
+                    {projects?.slice(0, 3).map(p => (
+                      <button key={p.id} onClick={() => saveToProject(src, p.id, p.name)}
+                        title={`Save to ${p.name}`}
+                        style={{ fontSize: 11, padding: "3px 10px", borderRadius: 12, cursor: "pointer",
+                          border: "1px solid var(--border)", background: "var(--bg2)",
+                          color: "var(--text2)", maxWidth: 110, overflow: "hidden",
+                          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%",
+                          background: p.color, marginRight: 5 }} />{p.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Sources */}
         {sources && sources.length > 0 && (
@@ -226,6 +430,14 @@ export function AskView({ onNavigate }) {
                         <span style={{ fontSize: 10, color: "var(--text3)", marginLeft: "auto" }}>
                           {Math.round(src.similarity * 100)}% match
                         </span>
+                        <button
+                          onClick={e => { e.stopPropagation(); openPopover(src.ref, e.currentTarget); }}
+                          onMouseLeave={scheduleClosePopover}
+                          title={savedRefs[src.ref] ? `Saved to ${savedRefs[src.ref]}` : "Preview & save to project"}
+                          style={{ fontSize: 11, background: "none", border: "none", cursor: "pointer",
+                            color: savedRefs[src.ref] ? "var(--green)" : "var(--text3)", padding: "0 2px" }}>
+                          {savedRefs[src.ref] ? "✓" : "⤷ save"}
+                        </button>
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

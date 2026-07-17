@@ -124,6 +124,7 @@ async def ask(request: Request):
             "form_type":    chunk["form_type"],
             "similarity":   round(float(chunk["similarity"]), 3),
             "is_new_source": is_new_source,
+            "excerpt":      chunk["chunk_text"],
         }
         sources.append(source)
 
@@ -182,7 +183,7 @@ Answer (cite sources with [N] notation):"""
                         "content-type": "application/json",
                     },
                     json={
-                        "model": "claude-sonnet-4-20250514",
+                        "model": ASK_AI_MODEL,
                         "max_tokens": 1500,
                         "stream": True,
                         "system": system_prompt,

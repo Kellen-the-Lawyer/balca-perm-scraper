@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { OflcLanding } from "./OflcLanding";
 import { OflcTemplates } from "./OflcTemplates";
 import { OflcDashboard } from "./OflcDashboard";
+import { ProcessingTimesView } from "./ProcessingTimesView";
 import { API } from "./apiBase";
 
 // ── Field catalogs per dataset ────────────────────────────────────────────────
@@ -763,6 +764,7 @@ export function OflcView() {
   };
 
   if (screen === "landing")   return <OflcLanding onNavigate={setScreen} />;
+  if (screen === "processing-times") return <ProcessingTimesView onBack={() => setScreen("landing")} />;
   if (screen === "dashboard") return <OflcDashboard onBack={() => setScreen("landing")} />;
   if (screen === "templates") return <OflcTemplates onBack={() => setScreen("landing")} onOpenInBuilder={openInBuilder} />;
   return <OflcPivot onBack={() => setScreen("landing")} templateOverride={templateOverride} onTemplateClear={() => setTemplateOverride(null)} />;

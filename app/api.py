@@ -17,8 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from core import database, ensure_operational_schema
 import kanban as kanban_module
 from routers import (aao, balca, checklists, eb_inventory, extraction, govinfo, ina,
-                     oflc, perm_verify, policy, projects, rag, regulations,
-                     search_all, visa_bulletin, wage_level, wages)
+                     oflc, perm_verify, policy, processing_times, projects, rag, regulations,
+                     search_all, soc_suggest, visa_bulletin, wage_level, wages)
 
 
 @asynccontextmanager
@@ -34,8 +34,10 @@ app = FastAPI(title="PERM Decisions Research API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(kanban_module.register_routes(database))
 for _r in (balca, projects, aao, regulations, policy, govinfo, search_all, extraction,
-           ina, checklists, rag, oflc, visa_bulletin, eb_inventory, wages, wage_level, perm_verify):
+           ina, checklists, rag, oflc, visa_bulletin, eb_inventory, wages, wage_level,
+           perm_verify, soc_suggest):
     app.include_router(_r.router)
+app.include_router(processing_times.router)
 
 FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
 
@@ -54,4 +56,9 @@ if FRONTEND_DIST.exists():
         if full_path and requested_file.is_file():
             return FileResponse(requested_file)
 
-        return FileResponse(FRONTEND_DIST / "index.html")
+        # index.html must never be cached — it references content-hashed
+        # bundles, and a stale copy points browsers at deleted JS after deploys.
+        return FileResponse(
+            FRONTEND_DIST / "index.html",
+            headers={"Cache-Control": "no-cache"},
+        )

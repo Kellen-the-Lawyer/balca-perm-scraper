@@ -316,7 +316,9 @@ def _extract_pdf_text_source(local_path: str | None, gcs_object: str | None) -> 
 
 import json as _json
 
-OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "mistral:7b-instruct")
+OLLAMA_CHAT_MODEL = os.environ.get("OLLAMA_CHAT_MODEL", "gemma4:e4b")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ASK_AI_MODEL      = os.environ.get("ASK_AI_MODEL", "claude-haiku-4-5-20251001")
 EMBED_DIM         = int(os.environ.get("EMBED_DIM", "1024"))
 
 # Query embedding: local voyage-4-nano via sentence-transformers (no API call at query time)
@@ -333,6 +335,8 @@ CORPUS_LABELS = {
 
 __all__ = [
     "AAO_BASE_PATH",
+    "ANTHROPIC_API_KEY",
+    "ASK_AI_MODEL",
     "CORPUS_LABELS",
     "DATABASE_URL",
     "EMBED_DIM",

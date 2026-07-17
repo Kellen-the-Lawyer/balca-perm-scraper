@@ -2213,3 +2213,121 @@ Graphite supplies the standalone 9141 (geometry extractor gets it).
 NEXT: router endpoint + Graphite integration + ollama pull qwen3-vl:8b
 on Mac Mini (keep_alive-managed load/unload), UI with cropped-field
 review for VLM-read values.
+
+=== 2026-07-15 — Ask AI feature activated ===
+/api/ask + AskView.jsx already existed; feature was dead because
+ANTHROPIC_API_KEY was never defined in core.py (NameError at request
+time). Fixes (dev repo only):
+- core.py: added ANTHROPIC_API_KEY, ASK_AI_MODEL (default
+  claude-haiku-4-5-20251001, env-overridable); OLLAMA_CHAT_MODEL
+  fallback default mistral:7b-instruct -> gemma4:e4b (text-RAG bench:
+  gemma e4b best citation grounding of 8 local models; mistral sloppy
+  attribution; devstral/ministral fabricated citations; qwen3.5-9b
+  reasoning-overrun). Bench: /tmp/askai_results.json.
+- rag.py: stale model string claude-sonnet-4-20250514 -> ASK_AI_MODEL.
+- ANTHROPIC_API_KEY added to Casebase/.env and casebase-app/.env
+  (deploy .env untouched by sync). Key verified live (HTTP 200).
+E2E test passed: NOF 8-day question -> 10 BALCA sources retrieved,
+cited answer w/ 656.10(d)(1)(ii), business-day defn, 656.24(g)(2).
+Cost ~ $0.005-0.01/query on Haiku.
+VENV FIX: venv under Documents was iCloud-evicted (dataless files, no
+.icloud placeholders; imports hung in kernel read()). Rebuilt at
+/Users/Dad/venvs/casebase-venv (python3.14, requirements.txt +
+sentence-transformers + voyageai); Casebase/venv is now a symlink to
+it. Old venv kept at venv_icloud_old — delete when convenient.
+DEPLOY NOTES (when ready): Docker Ask AI needs embed_query at query
+time -> either VOYAGE_API_KEY in casebase-app/.env (voyage-4-lite API
+fallback) or sentence-transformers baked into image (same blocker as
+citation attachment). Restart compose to pick up ANTHROPIC_API_KEY.
+
+=== 2026-07-15 (cont) — Ask AI deployed to casebase-app ===
+Deploy done: voyage key + ASK_AI_MODEL passthrough added to
+docker-compose.yml environment; voyageai added to app/requirements.txt
+(DEV side — api/requirements.txt is sync-managed, deploy edits get
+overwritten); frontend build + sync + compose --build.
+RETRIEVAL BUG: Docker HNSW index had terrible recall (junk regs at
+0.31 sim while exact scan found balca at 0.43). REINDEX under default
+maintenance_work_mem (64MB) did not fix — graph builds are low quality
+when memory-starved on 684K x 1024-dim. FIX: ALTER DATABASE
+perm_decisions SET hnsw.ef_search = 400 (persisted, all connections).
+Verified live: NOF question -> balca/aao sources, cited answer.
+OPTIONAL LATER: rebuild index with maintenance_work_mem=4GB+ for a
+higher-quality graph, then ef_search can come back down. Also note
+Docker govinfo lags (424 vs 4637 chunks, unembedded in both — no
+retrieval impact).
+
+=== 2026-07-16 — Ask AI frontend fixes + query-model TODO ===
+Ungated Ask AI in App.jsx (card available:true, header chat button
+uncommented, added to Tools dropdown). Fixed AskView crash: stranded
+CORPUS_COLORS const lived unexported in App.jsx — moved into
+AskView.jsx. Check letter-assistant for same pattern when ungating.
+Added Cache-Control: no-cache on index.html catch-all in api.py —
+stale cached index.html was pointing browsers at deleted hashed
+bundles after deploys.
+TODO — query embedding model upgrade: Docker embeds queries via
+Voyage API voyage-4-lite (no sentence-transformers in image; dev uses
+local nano). Lite retrieves relevant results but at lower sims than
+voyage-4-large queries (0.43 vs 0.51 same question, different top-k
+order). When ready: set VOYAGE_QUERY_MODEL=voyage-4-large in
+casebase-app/.env + compose passthrough, A/B a question set vs lite
+first. Cost negligible (one short text per query). Should also help
+ef_search recall since true neighbors land at higher sims.
+
+=== 2026-07-16 — INA statute ingested + embedded ===
+ina_full.json (scraped Apr 21, ~/ina_data/) → ingest_ina.py --ingest
+into Homebrew :5433 (env-override; script .env points at :5432/Docker
+— untouched). 210 sections / 5 subchapters → 579 chunks, corpus='ina'.
+Embedded via voyage-4-large API (embed_documents, /tmp/embed_ina.py
+pattern), 42s. NOTE: ingest_ina.py --embed still calls Ollama — do not
+use; embed via app.embed.embed_documents.
+RANKING NOTE: statute text ranks ~#112 globally for conceptual
+inadmissibility queries (commentary corpora outscore it); fine for
+direct statutory queries. Strengthens case for corpus-boost /
+re-ranker (query-type detection → boost ina, like balca_issue_tags).
+REGRESSION: new venv broke local nano query embedding ("'NoneType'
+object has no attribute '__name__'" — transformers version vs
+cache_position auto-patch in embed.py). Dev silently falls back to
+voyage-4-lite API. Works; fix = pin transformers or update patch.
+PENDING: Docker doesn't have ina chunks yet (Homebrew only) — carry
+over with next pg_dump refresh or re-run ingest+embed against :5432.
+govinfo (4,637) still unembedded in both.
+
+=== 2026-07-16 — Ask AI results UX: citation popovers + save-to-project ===
+Backend: rag.py sources now include "excerpt" (full chunk_text = the
+quoted section). projects.py: new project_research table (idempotent
+CREATE on first use; UNIQUE project_id+corpus+source_id+excerpt) with
+POST/GET/DELETE /api/projects/{id}/research; cross-corpus (works for
+regulation/policy/ina, unlike project_cases which is balca/aao-only).
+Frontend AskView: [N] citations get hover popover — corpus chip,
+label+CFR cite, % match, scrollable excerpt, Open source (balca/aao),
+Save to: project buttons (lazy-loads project list; saved state shows
+✓ Saved to <name>). Hover-intent timers keep popover open crossing
+the gap. Source cards got a "⤷ save" button reusing the popover.
+Also: markdown-lite renderer (answers were showing literal #/## and
+**), Copy answer button (appends numbered source list — for memos),
+Stop button (AbortController) during streaming.
+ProjectsViews: new Research tab (corpus badge, label, originating
+question, excerpt, delete). Deployed + headless-verified (0 JS errs),
+live API serving excerpts. Backend CRUD round-trip tested on :8001.
+
+=== FUTURE (scoped, not started) — Ask AI multi-turn chatbot ===
+~1 session for MVP: /api/ask accepts messages[] history (stateless,
+client resends); AskView becomes thread layout (streaming/markdown/
+popovers/save all carry over per-message; per-message citation
+numbering). KEY PIECE: query condensation — cheap Haiku pre-call
+rewrites follow-ups into standalone questions before embedding
+(~$0.001/turn); this makes or breaks follow-up retrieval. Trim history
+to ~6 turns + prompt caching. Phase 2 (separate session, optional):
+persisted conversations table + sidebar/resume.
+
+=== 2026-07-16 — Ask AI results persist across navigation + refresh ===
+Bug: clicking a source unmounted AskView → results blanked, users
+re-ran searches. Fix: askCache module singleton hydrates all result
+state (question, askedQuestion, answer, sources, corpusFilter,
+savedRefs) on mount; useEffect mirrors state back; backed by
+sessionStorage (key askview_cache_v1, ~40KB payload, cleared on tab
+close; per-token writes skipped during streaming). Unmount mid-stream
+aborts fetch, keeps partial answer. New-tab option rejected: corpus
+viewers lack per-document deep-link URLs (would land on corpus front
+page). FUTURE: deep links (/balca/<case>) would enable open-in-new-tab
++ shareable citation URLs.

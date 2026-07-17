@@ -191,3 +191,70 @@ async def decision_projects(decision_id: int):
 
 # ── AAO Search & Decisions ────────────────────────────────────────────────────
 
+
+
+# ── Ask AI Research (saved sources, cross-corpus) ────────────────────────────
+
+_research_table_ready = False
+
+async def _ensure_research_table():
+    global _research_table_ready
+    if _research_table_ready:
+        return
+    await database.execute(text("""
+        CREATE TABLE IF NOT EXISTS project_research (
+            id          SERIAL PRIMARY KEY,
+            project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            corpus      TEXT NOT NULL,
+            source_id   TEXT,
+            source_label TEXT NOT NULL,
+            cfr_citation TEXT,
+            excerpt     TEXT,
+            question    TEXT,
+            added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (project_id, corpus, source_id, excerpt)
+        )
+    """))
+    _research_table_ready = True
+
+
+@router.post("/api/projects/{project_id}/research")
+async def save_research(project_id: int, data: dict):
+    """Save an Ask AI source (any corpus) to a project."""
+    await _ensure_research_table()
+    row = await database.fetch_one(q("""
+        INSERT INTO project_research
+            (project_id, corpus, source_id, source_label, cfr_citation, excerpt, question)
+        VALUES (:pid, :corpus, :sid, :label, :cfr, :excerpt, :question)
+        ON CONFLICT (project_id, corpus, source_id, excerpt)
+        DO UPDATE SET question = EXCLUDED.question
+        RETURNING id, added_at::text""",
+        pid=project_id,
+        corpus=data["corpus"],
+        sid=str(data.get("source_id") or ""),
+        label=data.get("source_label") or data["corpus"],
+        cfr=data.get("cfr_citation"),
+        excerpt=(data.get("excerpt") or "")[:4000],
+        question=(data.get("question") or "")[:1000]))
+    await database.execute(q("UPDATE projects SET updated_at=NOW() WHERE id=:id", id=project_id))
+    return dict(row)
+
+
+@router.get("/api/projects/{project_id}/research")
+async def list_research(project_id: int):
+    await _ensure_research_table()
+    rows = await database.fetch_all(q("""
+        SELECT id, corpus, source_id, source_label, cfr_citation,
+               excerpt, question, added_at::text
+        FROM project_research WHERE project_id=:pid ORDER BY added_at DESC""",
+        pid=project_id))
+    return [dict(r) for r in rows]
+
+
+@router.delete("/api/projects/{project_id}/research/{research_id}")
+async def delete_research(project_id: int, research_id: int):
+    await _ensure_research_table()
+    await database.execute(q(
+        "DELETE FROM project_research WHERE id=:rid AND project_id=:pid",
+        rid=research_id, pid=project_id))
+    return {"ok": True}

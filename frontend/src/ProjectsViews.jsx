@@ -122,15 +122,22 @@ export function ProjectDetail({ projectId, onBack, onOpenDecision }) {
   const [newNote, setNewNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [readLater, setReadLater] = useState([]);
+  const [research, setResearch] = useState([]);
 
   const load = () => {
     setLoading(true);
     Promise.all([
       fetch(`${API}/projects/${projectId}`).then(r => r.json()),
       fetch(`${API}/projects/${projectId}/read-later`).then(r => r.ok ? r.json() : []),
-    ]).then(([d, rl]) => { setProject(d); setReadLater(Array.isArray(rl) ? rl : []); setLoading(false); });
+      fetch(`${API}/projects/${projectId}/research`).then(r => r.ok ? r.json() : []),
+    ]).then(([d, rl, rs]) => { setProject(d); setReadLater(Array.isArray(rl) ? rl : []); setResearch(Array.isArray(rs) ? rs : []); setLoading(false); });
   };
   useEffect(() => { load(); }, [projectId]);
+
+  const deleteResearch = async (id) => {
+    await fetch(`${API}/projects/${projectId}/research/${id}`, { method: "DELETE" });
+    setResearch(r => r.filter(x => x.id !== id));
+  };
 
   const addNote = async () => {
     if (!newNote.trim()) return;
@@ -178,6 +185,7 @@ export function ProjectDetail({ projectId, onBack, onOpenDecision }) {
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg2)", padding: "0 28px", flexShrink: 0 }}>
         {[
           { id: "cases", label: "Cases", count: project.cases?.length },
+          { id: "research", label: "Research", count: research.length },
           { id: "read-later", label: "Read Later", count: readLater.length },
           { id: "notes", label: "Notes", count: project.notes?.length },
         ].map(t => (
@@ -267,6 +275,50 @@ export function ProjectDetail({ projectId, onBack, onOpenDecision }) {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {activeTab === "research" && (
+          <div style={{ padding: "16px 28px" }}>
+            {research.length === 0 && (
+              <p style={{ color: "var(--text3)", fontSize: 13 }}>
+                No saved research yet. In Ask AI, hover a citation and choose a project to save the source here.
+              </p>
+            )}
+            {research.map(r => (
+              <div key={r.id} style={{ padding: "12px 14px", marginBottom: 8, background: "var(--bg2)",
+                border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", fontSize: 13, lineHeight: 1.6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 10,
+                    background: "var(--bg4)", color: "var(--text2)", fontWeight: 600, textTransform: "uppercase" }}>
+                    {r.corpus}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+                    {r.source_label}{r.cfr_citation ? ` — ${r.cfr_citation}` : ""}
+                  </span>
+                </div>
+                {r.question && (
+                  <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6, fontStyle: "italic" }}>
+                    re: “{r.question}”
+                  </div>
+                )}
+                {r.excerpt && (
+                  <div style={{ fontSize: 12, color: "var(--text2)", background: "var(--bg)",
+                    border: "1px solid var(--border)", borderRadius: "var(--radius)",
+                    padding: "8px 10px", marginBottom: 8, maxHeight: 120, overflowY: "auto",
+                    whiteSpace: "pre-wrap" }}>
+                    {r.excerpt}
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "'DM Mono', monospace" }}>
+                    {new Date(r.added_at).toLocaleDateString()}
+                  </span>
+                  <button onClick={() => deleteResearch(r.id)} style={{ fontSize: 11, color: "var(--red)",
+                    background: "none", border: "none", padding: 0, cursor: "pointer" }}>Delete</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

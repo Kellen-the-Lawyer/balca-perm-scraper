@@ -3,6 +3,14 @@ import { API } from "./apiBase";
 
 const CARDS = [
   {
+    id: "processing-times",
+    icon: "↗",
+    label: "Processing Times",
+    description: "Historical USCIS and DOL timelines, including I-129 H-1B versus O category detail, percentiles, volume, and RFE context.",
+    color: "#a78bfa",
+    cta: "Explore Timelines",
+  },
+  {
     id: "dashboard",
     icon: "▨",
     label: "Dashboards",
@@ -64,7 +72,7 @@ export function OflcLanding({ onNavigate }) {
         <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text3)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12 }}>DOL Performance Data</div>
         <div style={{ fontSize: 26, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, marginBottom: 12 }}>What would you like to do?</div>
         <div style={{ fontSize: 13, color: "var(--text3)", lineHeight: 1.7 }}>
-          Explore PERM, LCA, and Prevailing Wage disclosure data across 1.4M+ records from FY2020–FY2026.
+          Explore USCIS and DOL performance data, from petition processing times to PERM, LCA, and Prevailing Wage disclosures.
         </div>
       </div>
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", maxWidth: 900, width: "100%" }}>

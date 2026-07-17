@@ -360,7 +360,8 @@ async def wage_level_determine(req: DetermineRequest):
         if req.state_ab:
             where.append("state_ab = :st"); params["st"] = req.state_ab.upper()
         if req.county_name:
-            where.append("county_name ILIKE :cn"); params["cn"] = req.county_name
+            where.append("county_name ILIKE :cn")
+            params["cn"] = f"%{req.county_name.strip()}%"
         wrow = await database.fetch_one(text(f"""
             SELECT DISTINCT ON (soc_code) area_code, area_name, county_name,
                    level_i, level_ii, level_iii, level_iv, level_mean, wage_year
