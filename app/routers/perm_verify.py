@@ -11,6 +11,7 @@ POST /api/perm-verify/run
 Returns the full engine result: extracted form, extracted PWD, filing window,
 flags (with citations/support), and summary counts.
 """
+import json
 import shutil
 import tempfile
 from datetime import datetime
@@ -95,6 +96,144 @@ def _save_upload(upload: UploadFile, tmpdir: str) -> str:
     with dest.open("wb") as f:
         shutil.copyfileobj(upload.file, f)
     return str(dest)
+
+
+def _save_named_upload(upload: UploadFile, tmpdir: str, prefix: str) -> str:
+    """Save an upload under a unique, traversal-safe temporary filename."""
+    filename = Path(upload.filename or "upload").name
+    dest = Path(tmpdir) / f"{prefix}-{filename}"
+    with dest.open("wb") as f:
+        shutil.copyfileobj(upload.file, f)
+    if dest.stat().st_size > 30 * 1024 * 1024:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(413, f"{filename} exceeds the 30 MB file limit")
+    return str(dest)
+
+
+@router.post("/evl-pwd-options")
+async def extract_evl_pwd_options(form_9141: UploadFile = File(...)):
+    """Read a PWD and return its selectable education/experience routes."""
+    if Path(form_9141.filename or "").suffix.lower() != ".pdf":
+        raise HTTPException(422, "The prevailing wage determination must be a PDF")
+    tmpdir = tempfile.mkdtemp(prefix="evloptions_")
+    try:
+        pwd_path = _save_named_upload(form_9141, tmpdir, "pwd")
+        from perm_verify.evl_compare import VLMError, pwd_route_options
+        try:
+            result = await run_in_threadpool(pwd_route_options, pwd_path)
+        except VLMError as exc:
+            raise HTTPException(503, str(exc))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        result.setdefault("pwd", {}).setdefault("meta", {})["source_pdf"] = (
+            Path(form_9141.filename or "ETA-9141.pdf").name)
+        return result
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+@router.post("/compare-evls")
+async def compare_evl_requirements(
+    form_9141: UploadFile = File(...),
+    evl_files: List[UploadFile] = File(...),
+    selected_route_id: Optional[str] = Form(None),
+    beneficiary_degree: Optional[str] = Form(None),
+    beneficiary_field: Optional[str] = Form(None),
+    extracted_pwd_json: Optional[str] = Form(None),
+):
+    """Compare explicit EVL language with current ETA-9141 requirements."""
+    if Path(form_9141.filename or "").suffix.lower() != ".pdf":
+        raise HTTPException(422, "The prevailing wage determination must be a PDF")
+    if not evl_files:
+        raise HTTPException(422, "Upload at least one experience verification letter")
+    if len(evl_files) > 20:
+        raise HTTPException(422, "A comparison can include at most 20 letters")
+    supported = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".txt", ".md"}
+    unsupported = [Path(f.filename or "").name for f in evl_files
+                   if Path(f.filename or "").suffix.lower() not in supported]
+    if unsupported:
+        raise HTTPException(422, "Unsupported EVL format: " + ", ".join(unsupported))
+
+    tmpdir = tempfile.mkdtemp(prefix="evlcompare_")
+    try:
+        pwd_path = _save_named_upload(form_9141, tmpdir, "pwd")
+        saved_evls = []
+        for index, upload in enumerate(evl_files, 1):
+            path = _save_named_upload(upload, tmpdir, f"evl-{index}")
+            saved_evls.append((path, Path(upload.filename or f"EVL-{index}").name))
+        from perm_verify.evl_compare import RouteSelectionError, VLMError, compare_files
+        extracted_pwd = None
+        if extracted_pwd_json:
+            try:
+                extracted_pwd = json.loads(extracted_pwd_json)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(422, f"extracted_pwd_json is invalid JSON: {exc}")
+            if not isinstance(extracted_pwd, dict):
+                raise HTTPException(422, "extracted_pwd_json must be a JSON object")
+        beneficiary_education = None
+        if beneficiary_degree:
+            beneficiary_education = {
+                "degree": beneficiary_degree,
+                "field_of_study": beneficiary_field,
+            }
+        try:
+            result = await run_in_threadpool(
+                compare_files, pwd_path, saved_evls, selected_route_id,
+                beneficiary_education, extracted_pwd)
+        except RouteSelectionError as exc:
+            raise HTTPException(422, str(exc))
+        except VLMError as exc:
+            raise HTTPException(503, str(exc))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(500, f"EVL comparison failed: {exc}")
+        # Do not expose a temporary local path that is deleted after this request.
+        result.setdefault("pwd", {}).setdefault("meta", {})["source_pdf"] = (
+            Path(form_9141.filename or "ETA-9141.pdf").name)
+        return result
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+@router.post("/compare-evls-data")
+async def compare_evl_requirements_data(payload: dict = Body(...)):
+    """Structured EVL comparison entry point for Graphite.
+
+    Body: {
+      "pwd": {"requirements": {...}},
+      "beneficiary_education": {"degree": "Master's", "field_of_study": "..."},
+      "selected_route_id": null,
+      "letters": [{"id": "...", "filename": "...", "text": "OCR text..."}]
+    }
+    """
+    pwd = payload.get("pwd")
+    letters = payload.get("letters")
+    education = payload.get("beneficiary_education")
+    if not isinstance(pwd, dict):
+        raise HTTPException(422, "payload must include a structured 'pwd' object")
+    if not isinstance(letters, list) or not letters:
+        raise HTTPException(422, "payload must include a non-empty 'letters' array")
+    if len(letters) > 20:
+        raise HTTPException(422, "A comparison can include at most 20 letters")
+    if education is not None and not isinstance(education, (dict, str)):
+        raise HTTPException(422, "beneficiary_education must be an object or degree string")
+    from perm_verify.evl_compare import (
+        RouteSelectionError, VLMError, compare_structured,
+    )
+    try:
+        return await run_in_threadpool(
+            compare_structured, pwd, letters, payload.get("selected_route_id"), education)
+    except RouteSelectionError as exc:
+        raise HTTPException(422, str(exc))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    except VLMError as exc:
+        raise HTTPException(503, str(exc))
+    except Exception as exc:
+        raise HTTPException(500, f"EVL comparison failed: {exc}")
 
 
 @router.post("/run")
