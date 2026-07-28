@@ -27,6 +27,7 @@ export function AskView({ onNavigate }) {
   const [question, setQuestion]         = useState(askCache.question);
   const [corpusFilter, setCorpusFilter] = useState(askCache.corpusFilter);
   const [loading, setLoading]           = useState(false);
+  const [statusMsg, setStatusMsg]       = useState(null);
   const [sources, setSources]           = useState(askCache.sources);
   const [answer, setAnswer]             = useState(askCache.answer);
   const [ragStats, setRagStats]         = useState(null);
@@ -60,6 +61,7 @@ export function AskView({ onNavigate }) {
   const submit = async () => {
     if (!question.trim() || loading) return;
     setLoading(true);
+    setStatusMsg(null);
     setSources(null);
     setAnswer("");
     setError(null);
@@ -103,7 +105,9 @@ export function AskView({ onNavigate }) {
           try {
             const evt = JSON.parse(line);
             if (evt.type === "sources") setSources(evt.sources);
+            else if (evt.type === "status") setStatusMsg(evt.text);
             else if (evt.type === "token") {
+              setStatusMsg(null);
               setAnswer(a => a + evt.text);
               setTimeout(() => answerRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 0);
             }
@@ -113,10 +117,11 @@ export function AskView({ onNavigate }) {
     } catch (e) {
       if (e.name !== "AbortError") setError(e.message || "Request failed");
     }
+    setStatusMsg(null);
     setLoading(false);
   };
 
-  const stopGeneration = () => { abortRef.current?.abort(); setLoading(false); };
+  const stopGeneration = () => { abortRef.current?.abort(); setStatusMsg(null); setLoading(false); };
 
   // ── Citation hover popover ──────────────────────────────────────────────
   const openPopover = (ref, el) => {
@@ -302,7 +307,7 @@ export function AskView({ onNavigate }) {
         {loading && !answer && (
           <div style={{ color: "var(--text3)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
-            Searching {ragStats?.total_embedded?.toLocaleString()} chunks…
+            {statusMsg || <>Searching {ragStats?.total_embedded?.toLocaleString()} chunks…</>}
           </div>
         )}
 
@@ -328,6 +333,13 @@ export function AskView({ onNavigate }) {
             <div style={{ fontSize: 13, lineHeight: 1.75, color: "var(--text)" }}>
               {renderAnswer(answer)}
             </div>
+            {loading && statusMsg && (
+              <div style={{ color: "var(--text3)", fontSize: 12, display: "flex",
+                alignItems: "center", gap: 8, marginTop: 10 }}>
+                <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
+                {statusMsg}
+              </div>
+            )}
             <div ref={answerRef} />
           </div>
         )}

@@ -181,11 +181,26 @@ function VisaBulletinView() {
       {/* ── Top bar ── */}
       <div style={{ padding: "11px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
         <div>
-          <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 16, color: "var(--text)" }}>
-            Visa Bulletin — {bulletinTitle}
+          <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 16, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
+            <span>Visa Bulletin — {bulletinTitle}</span>
+            {currentEntry?.in_effect === false && (
+              <span style={{
+                fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: 0.4,
+                textTransform: "uppercase", padding: "2px 6px", borderRadius: 3,
+                background: "var(--warnBg, #4a3b12)", color: "var(--warnText, #f0c674)",
+                border: "1px solid var(--warnBorder, #6b5518)", whiteSpace: "nowrap",
+              }}>
+                Not yet in effect
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-            {index ? `${index.length} bulletins loaded · FY2016–FY2026 · showing currently active bulletin` : "Loading…"}
+            {!index ? "Loading…"
+              : currentEntry?.in_effect === false
+                ? `${index.length} bulletins loaded · published in advance — takes effect ${fmtMonthYear(currentEntry.bulletin_date)} 1`
+                : currentEntry?.is_current_bulletin
+                  ? `${index.length} bulletins loaded · FY2016–FY2026 · showing currently active bulletin`
+                  : `${index.length} bulletins loaded · FY2016–FY2026 · showing historical bulletin`}
           </div>
         </div>
 

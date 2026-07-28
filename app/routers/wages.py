@@ -335,6 +335,71 @@ async def wages_matrix(n_socs: int = Query(14), n_areas: int = Query(12)):
     return {"socs": list(socs.values()), "areas": list(areas.values()), "cells": cells}
 
 
+# ── Area search: autocomplete for the custom matrix builder ──────────────────
+@router.get("/api/wages/area-search")
+async def wages_area_search(q: str = Query(..., min_length=2)):
+    rows = await database.fetch_all(text("""
+        SELECT DISTINCT ON (area_code) area_code, area_name, state_ab
+        FROM mv_wage_yoy
+        WHERE area_name ILIKE :pat
+        ORDER BY area_code, area_name
+        LIMIT 12
+    """).bindparams(pat=f"%{q}%"))
+    out = [{"area_code": r["area_code"], "area_name": r["area_name"],
+            "state": r["state_ab"]} for r in rows]
+    out.sort(key=lambda a: a["area_name"])
+    return out
+
+
+# ── Custom matrix: user-selected SOCs × user-selected areas ───────────────────
+# Same response shape as /api/wages/matrix so the frontend table is reusable.
+@router.get("/api/wages/matrix/custom")
+async def wages_matrix_custom(socs: str = Query(...), areas: str = Query(...)):
+    soc_list = [s.strip() for s in socs.split(",") if s.strip()][:20]
+    area_list = [a.strip() for a in areas.split(",") if a.strip()][:20]
+    if not soc_list or not area_list:
+        return {"socs": [], "areas": [], "cells": {}}
+
+    title_rows = await database.fetch_all(text("""
+        SELECT soc_code, soc_title FROM mv_soc_titles
+        WHERE soc_code = ANY(:socs)
+    """).bindparams(socs=soc_list))
+    titles = {r["soc_code"]: r["soc_title"] for r in title_rows}
+
+    name_rows = await database.fetch_all(text("""
+        SELECT DISTINCT ON (area_code) area_code, area_name
+        FROM current_oews_wages
+        WHERE area_code = ANY(:areas)
+        ORDER BY area_code, county_name
+    """).bindparams(areas=area_list))
+    names = {r["area_code"]: r["area_name"] for r in name_rows}
+
+    cell_rows = await database.fetch_all(text("""
+        SELECT soc_code, soc_title, area_code, area_name,
+               cur_i, prior_i, ROUND(chg::numeric, 1) AS chg
+        FROM mv_wage_yoy
+        WHERE soc_code = ANY(:socs) AND area_code = ANY(:areas)
+    """).bindparams(socs=soc_list, areas=area_list))
+
+    cells = {}
+    for r in cell_rows:
+        titles.setdefault(r["soc_code"], r["soc_title"])
+        names.setdefault(r["area_code"], r["area_name"])
+        cells[f'{r["soc_code"]}|{r["area_code"]}'] = {
+            "change_pct":   float(r["chg"])                    if r["chg"]     is not None else None,
+            "cur_annual":   round(float(r["cur_i"]) * 2080)    if r["cur_i"]   is not None else None,
+            "prior_annual": round(float(r["prior_i"]) * 2080)  if r["prior_i"] is not None else None,
+        }
+
+    return {
+        "socs":  [{"soc_code": s, "soc_title": titles.get(s, s), "filings": None}
+                  for s in soc_list],
+        "areas": [{"area_code": a, "area_name": names.get(a, a)}
+                  for a in area_list],
+        "cells": cells,
+    }
+
+
 # ── Treemap drilldown: major group → detailed SOC → metro ────────────────────
 SOC_MAJOR_GROUPS = {
     "11": "Management",

@@ -62,6 +62,130 @@ def _money(m1, m2):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Section-aware checkbox mapping
+#
+# _checked_answers returns (top, x0, answer) but the form repeats the same
+# answer words across F.b (minimum) and F.c (alternative) requirements, so the
+# raw list is ambiguous.  Each checked box is instead bound to the nearest
+# preceding item label by y-coordinate, which splits F.b from F.c and picks up
+# the 5.a sub-items.  Labels print on every determination whether or not the
+# item is answered, so unanswered items (e.g. G.3.d) resolve to None rather
+# than going missing.
+#
+# UNVALIDATED PATHS — no fixture on hand exercises these; the parsing is
+# written but unproven, so confirm against a real determination before any
+# rule relies on them:
+#   * F.b.5.a / F.c.5.a sub-items (i) License, (ii) Foreign language,
+#     (iii) Residency.  Only (iv) appears in the current fixtures, and it is
+#     read correctly, so the mechanism works — the sub-item labels are what
+#     is unproven.
+#   * G.3.d / G.3.e populated (combination of occupations).  The empty case
+#     is validated across all three fixtures.
+#   * training_months_primary / training_months_alternate (F.b.3.a, F.c.3.a).
+# ---------------------------------------------------------------------------
+
+_ANCHOR_RX = [
+    ("F.a.3", r"does this position supervise"),
+    ("F.b.1", r"minimum u\.?\s?s\.? degree required"),
+    ("F.b.2", r"require a second u\.?\s?s\.? degree"),
+    ("F.b.3", r"is training for the job opportunity required"),
+    ("F.b.4", r"is employment experience required"),
+    ("SKILLS", r"special skills or other requirements"),
+    ("F.c.1", r"are alternate sets of education"),
+    ("F.c.2", r"specify the alternate level of education"),
+    ("F.c.3", r"is alternate training for the job"),
+    ("F.c.4", r"is alternate employment experience accepted"),
+    ("F.d.1", r"suggested soc"),
+    ("F.d.3", r"will travel be required"),
+    ("F.e.7", r"will work be performed in any bureau"),
+]
+
+SUBITEM_RX = re.compile(r"^\(i{1,3}v?\)$")
+
+
+def _lines(page):
+    """[(top, line_text)] with words grouped into visual lines."""
+    buckets = {}
+    for w in page.extract_words():
+        buckets.setdefault(round(w["top"] / 3) * 3, []).append(w)
+    return sorted((top, " ".join(x["text"] for x in sorted(ws,
+                                                           key=lambda z: z["x0"])))
+                  for top, ws in buckets.items())
+
+
+def _anchors(pages):
+    """[(page_index, top, item_key)] in document order.
+
+    'Special skills or other requirements' appears verbatim under both F.b.5
+    and F.c.5, so the first occurrence is taken as F.b.5 and the second as
+    F.c.5 — the form always prints them in that order.
+    """
+    found, skills = [], 0
+    for pi, page in enumerate(pages):
+        for top, text in _lines(page):
+            low = text.lower()
+            for key, rx in _ANCHOR_RX:
+                if re.search(rx, low):
+                    if key == "SKILLS":
+                        skills += 1
+                        key = "F.b.5" if skills == 1 else "F.c.5"
+                    found.append((pi, top, key))
+                    break
+    return found
+
+
+def _checks_by_item(pages):
+    """{item_key: [checked answer words]} bound by nearest preceding label."""
+    anchors = _anchors(pages)
+    out = {}
+    for pi, page in enumerate(pages):
+        page_anchors = [(t, k) for p, t, k in anchors if p == pi]
+        if not page_anchors:
+            continue
+        for top, x0, ans in sorted(_checked_answers(page)):
+            cands = [(abs(top - t), k) for t, k in page_anchors if top >= t - 6]
+            if cands:
+                out.setdefault(min(cands)[1], []).append(ans)
+    return out
+
+
+def _addendum(full, section):
+    """Body text of 'Addendum for Section <section>', title stripped."""
+    esc = re.escape(section)
+    m = re.search(r"ADDENDUM\s*Section\s*" + esc + r":\s*(.+?)\s*"
+                  r"Addendum for Section\s*" + esc + r":\s*(.+?)\s*"
+                  r"(?:FOR DEPARTMENT|Page \d+ of)", full)
+    if not m:
+        return None
+    title, body = m.group(1).strip(), m.group(2).strip()
+    if body.startswith(title):
+        body = body[len(title):].strip()
+    return body or None
+
+
+def _degree_of(answers):
+    DEGREES = ["None", "High school/GED", "Associate's", "Bachelor's",
+               "Master's", "Doctorate", "Other"]
+    for ans in answers or []:
+        for d in DEGREES:
+            if d.split("/")[0].rstrip("'s").lower() in ans.lower().replace(
+                    "\u2019", "'"):
+                return d
+    return None
+
+
+def _yesno(answers):
+    for a in answers or []:
+        if a in ("Yes", "No"):
+            return a
+    return None
+
+
+def _subitems(answers):
+    return [a for a in (answers or []) if SUBITEM_RX.match(a)]
+
+
 def extract(pdf_path):
     out = {"meta": {"source_pdf": str(pdf_path), "form": "ETA-9141"}}
     pages_text = []
@@ -70,6 +194,7 @@ def extract(pdf_path):
         for p in pdf.pages:
             pages_text.append(_norm(p.extract_text() or ""))
             checks_by_page.append(_checked_answers(p))
+        items = _checks_by_item(pdf.pages)
     full = " ".join(pages_text)
 
     # ---- footer / meta -----------------------------------------------------
@@ -96,30 +221,65 @@ def extract(pdf_path):
     if m:
         out["naics_code"] = m.group(1)
 
+    # ---- Section F.b minimum vs F.c alternative requirements ---------------
+    out["education_primary"] = _degree_of(items.get("F.b.1"))
+    out["second_degree_required"] = _yesno(items.get("F.b.2"))
+    out["training_required"] = _yesno(items.get("F.b.3"))
+    out["experience_required"] = _yesno(items.get("F.b.4"))
+    out["special_reqs_primary"] = _yesno(items.get("F.b.5"))
+    out["special_reqs_items_primary"] = _subitems(items.get("F.b.5"))
+
+    out["alternate_reqs_accepted"] = _yesno(items.get("F.c.1"))
+    out["education_alternate"] = _degree_of(items.get("F.c.2"))
+    out["training_alternate_accepted"] = _yesno(items.get("F.c.3"))
+    out["experience_alternate_accepted"] = _yesno(items.get("F.c.4"))
+    out["special_reqs_alternate"] = _yesno(items.get("F.c.5"))
+    out["special_reqs_items_alternate"] = _subitems(items.get("F.c.5"))
+
+    # (ii) is the foreign-language sub-item under both 5.a lists
+    out["foreign_language_primary"] = \
+        "(ii)" in out["special_reqs_items_primary"]
+    out["foreign_language_alternate"] = \
+        "(ii)" in out["special_reqs_items_alternate"]
+
+    # months: F.b.4.a (minimum) and F.c.4.a (alternate) — two-column interleave
+    # puts each label adjacent to its own value in the text stream.  When the
+    # field is blank the next thing in the stream is the following item number
+    # ("5. Special skills..."), so reject a digit followed by a period and only
+    # trust the value when its Yes/No parent says the requirement exists.
+    def _months(rx, gate):
+        if gate != "Yes":
+            return None
+        m = re.search(rx + r"\s*.{0,3}?\s*(\d{1,3})\b(?!\s*\.)", full)
+        return int(m.group(1)) if m else None
+
+    out["experience_months_primary"] = _months(
+        r"experience required", out.get("experience_required"))
+    out["experience_months_alternate"] = _months(
+        r"alternate experience accepted", out.get("experience_alternate_accepted"))
+    out["training_months_primary"] = _months(
+        r"of training required", out.get("training_required"))
+    out["training_months_alternate"] = _months(
+        r"alternate training accepted", out.get("training_alternate_accepted"))
+
+
+    # majors / occupation / special-skills text, following addendum pointers
+    out["majors_primary"] = _addendum(full, "F.b.1.b")
+    out["majors_alternate"] = _addendum(full, "F.c.2.b")
+    out["experience_occupation"] = _addendum(full, "F.b.4.b")
+    out["special_skills_text"] = _addendum(full, "F.b.5.a(iv)")
+    out["special_skills_text_alternate"] = _addendum(full, "F.c.5.a(iv)")
+
+    # Back-compat aliases: Tier 3 (T3-020/T3-021) and the O*NET check
+    # (T4-007) still read the un-suffixed keys as "the" requirement.
+    out["education_required"] = out["education_primary"]
+    if out.get("experience_months_primary") is not None:
+        out["experience_months_required"] = out["experience_months_primary"]
+
     # ---- Section F job offer -----------------------------------------------
     m = re.search(r"1\.\s*Job title \*\s*(.+?)\s*2\.\s*Job duties", full)
     if m:
         out["job_title"] = m.group(1).strip()
-    # two-column interleave puts "experience required § <months>" together
-    m = re.search(r"experience required\s*.{0,3}?\s*(\d{1,3})\b", full)
-    if m:
-        out["experience_months_required"] = int(m.group(1))
-    m = re.search(r"Addendum for Section F\.b\.4\.b:?\s*Job Requirements Occupation\s*"
-                  r"(.+?)\s*(?:FOR DEPARTMENT|Page \d)", full)
-    if m:
-        out["experience_occupation"] = m.group(1).strip()
-
-    # education: checked degree box on the Minimum Job Requirements page
-    DEGREES = ["None", "High school/GED", "Associate's", "Bachelor's",
-               "Master's", "Doctorate", "Other"]
-    for pi, txt in enumerate(pages_text):
-        if "Minimum Job Requirements" in txt:
-            for top, x0, ans in checks_by_page[pi]:
-                for d in DEGREES:
-                    if ans.rstrip("'s") and d.split("/")[0].rstrip("'s").lower() \
-                            in ans.lower():
-                        out.setdefault("education_required", d)
-            break
 
     # worksite (F.e)
     m = re.search(r"1\.\s*Worksite address 1 \*\s*(.+?)\s*2\.\s*Address 2", full)
@@ -145,6 +305,22 @@ def extract(pdf_path):
                   full)
     if m:
         out["onet_code"], out["onet_title"] = m.group(1), m.group(2).strip()
+
+    # G.3.d/G.3.e — "other occupations" listed when the job opportunity is a
+    # combination of occupations.  The labels print whether or not they are
+    # answered, so an empty capture is the unanswered case.  The code may be a
+    # 6- or 8-digit SOC/O*NET code; anything that is not blank or N/A counts.
+    m = re.search(r"other occupations\.?\s*d\.\s*O\*NET code:\s*(.*?)\s*"
+                  r"e\.\s*O\*NET occupation title:\s*(.*?)\s*4\.\s*Prevailing wage",
+                  full)
+    if m:
+        code, title = m.group(1).strip(), m.group(2).strip()
+        blank = lambda v: (not v) or v.upper() in ("N/A", "NA", "NONE")
+        out["combination_code"] = None if blank(code) else code
+        out["combination_title"] = None if blank(title) else title
+        out["combination_of_occupations"] = not (blank(code) and blank(title))
+    else:
+        out["combination_of_occupations"] = None
 
     m = re.search(r"4\.\s*Prevailing wage:.*?minimum job requirements for the position\.\s*"
                   + MONEY_RX, full)
@@ -205,12 +381,6 @@ def extract(pdf_path):
         out["determination_date"], out["expiration_date"] = m.group(1), m.group(2)
     out.setdefault("determination_date", out.get("validity_from"))
     out.setdefault("expiration_date", out.get("validity_to"))
-
-    # addendum: special skills text (majors + experience detail)
-    m = re.search(r"Addendum for Section F\.b\.5\.a\(iv\).*?Requirements\s*(.+?)\s*(?:FOR DEPARTMENT|Page \d)",
-                  full)
-    if m:
-        out["special_skills_text"] = m.group(1).strip()
 
     return out
 

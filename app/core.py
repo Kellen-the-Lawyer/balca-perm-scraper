@@ -333,8 +333,57 @@ CORPUS_LABELS = {
 }
 
 
+OFLC_TABLES = {
+    "oflc_perm": {
+        "text_cols": {
+            "case_number","case_status","fiscal_year","source_file","occupation_type",
+            "employer_name","employer_state","employer_city","employer_postal_code",
+            "employer_fein","employer_naics","atty_law_firm","atty_last_name",
+            "atty_first_name","atty_state","job_title","soc_code","soc_title",
+            "wage_per","worksite_city","worksite_state","worksite_postal_code",
+            "worksite_bls_area","pwd_number","fw_currently_employed",
+            "is_multiple_locations","employer_layoff",
+        },
+        "numeric_cols": {"wage_from","wage_to","employer_num_payroll","employer_year_commenced"},
+        "date_cols":    {"received_date","decision_date","ingested_at"},
+    },
+    "oflc_lca": {
+        "text_cols": {
+            "case_number","case_status","fiscal_year","visa_class","source_file",
+            "employer_name","employer_state","employer_city","employer_postal_code",
+            "employer_fein","naics_code","law_firm_name","agent_last_name",
+            "agent_first_name","agent_state","job_title","soc_code","soc_title",
+            "full_time_position","wage_unit","pw_unit","pw_wage_level","pw_oes_year",
+            "worksite_city","worksite_state","worksite_postal_code",
+            "h1b_dependent","willful_violator",
+        },
+        "numeric_cols": {"wage_from","wage_to","prevailing_wage","total_worker_positions"},
+        "date_cols":    {"received_date","decision_date","begin_date","end_date","ingested_at"},
+    },
+    "oflc_pw": {
+        "text_cols": {
+            "case_number","case_status","fiscal_year","visa_class","source_file",
+            "employer_name","employer_state","employer_city","employer_postal_code",
+            "employer_fein","naics_code","law_firm_name","agent_last_name",
+            "agent_first_name","job_title","soc_code","soc_title",
+            "suggested_soc_code","suggested_soc_title",
+            "pwd_soc_code","pwd_soc_title",
+            "emp_soc_codes","emp_soc_titles",
+            "o_net_code","o_net_title",
+            "pwd_unit","pw_wage_level","wage_source","wage_source_requested",
+            "survey_name","bls_area",
+            "alt_pwd_unit","alt_pwd_wage_level","alt_pwd_wage_source",
+            "worksite_city","worksite_state","worksite_postal_code",
+        },
+        "numeric_cols": {"pwd_wage_rate", "alt_pwd_wage_rate"},
+        "date_cols":    {"received_date","determination_date","pwd_wage_expiration_date","ingested_at"},
+    },
+}
+
+
 __all__ = [
     "AAO_BASE_PATH",
+    "OFLC_TABLES",
     "ANTHROPIC_API_KEY",
     "ASK_AI_MODEL",
     "CORPUS_LABELS",

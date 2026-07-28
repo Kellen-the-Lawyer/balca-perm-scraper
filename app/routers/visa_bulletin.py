@@ -15,13 +15,27 @@ from core import *  # noqa: F401,F403 -- shared db, config, helpers
 
 router = APIRouter()
 
+# ── Effective-bulletin gating ────────────────────────────────────────────────
+# DOS publishes each bulletin roughly two weeks before the month it governs, so
+# the newest row in visa_bulletin is routinely NOT the bulletin currently in
+# force. Anything that means "right now" must gate on the first of the current
+# month. A future-dated bulletin then activates on its own the day its month
+# begins — no code change, no redeploy, no manual flip.
+IN_EFFECT_ON = "date_trunc('month', CURRENT_DATE)"
+EFFECTIVE_BULLETIN = (
+    f"(SELECT MAX(bulletin_date) FROM visa_bulletin "
+    f"WHERE bulletin_date <= {IN_EFFECT_ON})"
+)
+
+
 @router.get("/api/visa-bulletin/latest")
 async def visa_bulletin_latest(
     category_type: Optional[str] = Query(None, description="employment or family"),
     date_type:     Optional[str] = Query(None, description="final_action or dates_for_filing"),
 ):
-    """Most recent bulletin's priority dates."""
-    clauses, params = ["bulletin_date = (SELECT MAX(bulletin_date) FROM visa_bulletin)"], {}
+    """Priority dates from the bulletin currently in force (not merely the
+    most recently published one — see EFFECTIVE_BULLETIN)."""
+    clauses, params = [f"bulletin_date = {EFFECTIVE_BULLETIN}"], {}
     if category_type:
         clauses.append("category_type = :category_type")
         params["category_type"] = category_type
@@ -160,13 +174,16 @@ async def visa_bulletin_backlog(
         "date_type":     date_type or "final_action",
     }
 
-    # Latest entry
-    current = await database.fetch_one(text("""
+    # Cut-off currently in force. Must exclude bulletins published for a future
+    # month, or the backlog would be measured against a cut-off that has not
+    # taken effect yet.
+    current = await database.fetch_one(text(f"""
         SELECT bulletin_date, priority_date, is_current, is_unavailable, raw_value
         FROM visa_bulletin
         WHERE preference = :preference
           AND chargeability = :chargeability
           AND date_type = :date_type
+          AND bulletin_date <= {IN_EFFECT_ON}
         ORDER BY bulletin_date DESC LIMIT 1
     """).bindparams(**params))
 
@@ -175,7 +192,7 @@ async def visa_bulletin_backlog(
 
     # Up to 61 months of history for robust (Theil-Sen) slope estimation.
     # Excludes Current and Unavailable rows (priority_date IS NULL for both).
-    history = await database.fetch_all(text("""
+    history = await database.fetch_all(text(f"""
         SELECT bulletin_date, priority_date
         FROM visa_bulletin
         WHERE preference = :preference
@@ -183,6 +200,7 @@ async def visa_bulletin_backlog(
           AND date_type = :date_type
           AND priority_date IS NOT NULL
           AND is_current = FALSE
+          AND bulletin_date <= {IN_EFFECT_ON}
         ORDER BY bulletin_date DESC LIMIT 61
     """).bindparams(**params))
     hist = [(r["bulletin_date"], r["priority_date"]) for r in reversed(history)]
@@ -260,7 +278,7 @@ async def visa_bulletin_compare(
         bdate = bulletin_date
     else:
         row = await database.fetch_one(
-            text("SELECT MAX(bulletin_date) AS d FROM visa_bulletin"))
+            text(f"SELECT {EFFECTIVE_BULLETIN} AS d"))
         bdate = row["d"]
 
     rows = await database.fetch_all(text("""
@@ -285,11 +303,13 @@ async def visa_bulletin_compare(
 @router.get("/api/visa-bulletin/index")
 async def visa_bulletin_index():
     """List all available bulletin months in the DB."""
-    rows = await database.fetch_all(text("""
+    rows = await database.fetch_all(text(f"""
         SELECT bulletin_date, bulletin_title,
                COUNT(*) AS total_rows,
                COUNT(DISTINCT preference) AS preferences,
-               COUNT(DISTINCT date_type) AS date_types
+               COUNT(DISTINCT date_type) AS date_types,
+               (bulletin_date <= {IN_EFFECT_ON})        AS in_effect,
+               (bulletin_date = {EFFECTIVE_BULLETIN})   AS is_current_bulletin
         FROM visa_bulletin
         GROUP BY bulletin_date, bulletin_title
         ORDER BY bulletin_date DESC
@@ -316,51 +336,3 @@ async def visa_bulletin_stats():
 # OFLC Query Engine — append to api.py
 # Supports pivot table mode and raw record mode with dynamic filters
 # ══════════════════════════════════════════════════════════════════════════════
-
-OFLC_TABLES = {
-    "oflc_perm": {
-        "text_cols": {
-            "case_number","case_status","fiscal_year","source_file","occupation_type",
-            "employer_name","employer_state","employer_city","employer_postal_code",
-            "employer_fein","employer_naics","atty_law_firm","atty_last_name",
-            "atty_first_name","atty_state","job_title","soc_code","soc_title",
-            "wage_per","worksite_city","worksite_state","worksite_postal_code",
-            "worksite_bls_area","pwd_number","fw_currently_employed",
-            "is_multiple_locations","employer_layoff",
-        },
-        "numeric_cols": {"wage_from","wage_to","employer_num_payroll","employer_year_commenced"},
-        "date_cols":    {"received_date","decision_date","ingested_at"},
-    },
-    "oflc_lca": {
-        "text_cols": {
-            "case_number","case_status","fiscal_year","visa_class","source_file",
-            "employer_name","employer_state","employer_city","employer_postal_code",
-            "employer_fein","naics_code","law_firm_name","agent_last_name",
-            "agent_first_name","agent_state","job_title","soc_code","soc_title",
-            "full_time_position","wage_unit","pw_unit","pw_wage_level","pw_oes_year",
-            "worksite_city","worksite_state","worksite_postal_code",
-            "h1b_dependent","willful_violator",
-        },
-        "numeric_cols": {"wage_from","wage_to","prevailing_wage","total_worker_positions"},
-        "date_cols":    {"received_date","decision_date","begin_date","end_date","ingested_at"},
-    },
-    "oflc_pw": {
-        "text_cols": {
-            "case_number","case_status","fiscal_year","visa_class","source_file",
-            "employer_name","employer_state","employer_city","employer_postal_code",
-            "employer_fein","naics_code","law_firm_name","agent_last_name",
-            "agent_first_name","job_title","soc_code","soc_title",
-            "suggested_soc_code","suggested_soc_title",
-            "pwd_soc_code","pwd_soc_title",
-            "emp_soc_codes","emp_soc_titles",
-            "o_net_code","o_net_title",
-            "pwd_unit","pw_wage_level","wage_source","wage_source_requested",
-            "survey_name","bls_area",
-            "alt_pwd_unit","alt_pwd_wage_level","alt_pwd_wage_source",
-            "worksite_city","worksite_state","worksite_postal_code",
-        },
-        "numeric_cols": {"pwd_wage_rate", "alt_pwd_wage_rate"},
-        "date_cols":    {"received_date","determination_date","pwd_wage_expiration_date","ingested_at"},
-    },
-}
-

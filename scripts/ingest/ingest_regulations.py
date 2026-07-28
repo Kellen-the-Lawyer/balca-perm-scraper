@@ -14,14 +14,23 @@ log = logging.getLogger(__name__)
 
 DEFAULT_DIR = "/Users/Dad/Library/CloudStorage/OneDrive-KellenPowell,Esq/Resources/Regulations"
 
-# Parse "8 CFR Part 214 (up to date as of 1-09-2026).pdf"
+# Parse "8 CFR Part 214 (up to date as of 1-09-2026).pdf" and
+# "41 CFR Part 301-10 (as of 2026-06-11).txt" (dashed parts) and
+# ISO dates "2026-06-11".
 FILENAME_RE = re.compile(
-    r"^(\d+)\s+CFR\s+Part\s+([\w]+).*?(\d{1,2}[-/]\d{1,2}[-/]\d{4})",
+    r"^(\d+)\s+CFR\s+Part\s+([\w]+(?:-[\w]+)*)\s*\(.*?"
+    r"(\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{4}-\d{2}-\d{2})",
     re.IGNORECASE
 )
 
-# Section headers like "§ 214.1 Requirements for..."
-SECTION_RE = re.compile(r"§\s*(\d+\w*\.\d+\w*)\s+(.+?)(?:\n|$)")
+# Section headers like "§ 214.1 Requirements for..." — anchored to line
+# start (MULTILINE) so mid-sentence cross-references ("under § 1.4 of this
+# chapter") are not mistaken for section headings. Section token must be
+# followed by whitespace, killing glued-word artifacts like "214.1and".
+SECTION_RE = re.compile(
+    r"^\s*§§?\s*(\d+[a-z]?(?:-\d+[a-z]?)?\.\d+[a-z]?(?:-\d+)?)\s+(\S.*)$",
+    re.MULTILINE
+)
 
 AGENCY_MAP = {
     8:  "DHS / USCIS",
@@ -84,7 +93,7 @@ PART_NAMES = {
 }
 
 def parse_date(s):
-    for fmt in ["%m-%d-%Y", "%m/%d/%Y", "%m-%d-%y"]:
+    for fmt in ["%m-%d-%Y", "%m/%d/%Y", "%m-%d-%y", "%Y-%m-%d"]:
         try:
             return datetime.strptime(s.strip(), fmt).date()
         except ValueError:
@@ -133,18 +142,28 @@ def extract_regulation(pdf_path: str) -> dict:
         log.error(f"PDF error {path.name}: {e}")
         return result
 
-    # Extract section index from full text
+    # Extract section index from the FULL text (no 50K cap — § 214.1 alone
+    # nearly fills 50K chars). Filter to the doc's own part when known, so
+    # quoted cross-part references never pollute the index.
+    result["sections"] = extract_sections(result["full_text"], result["cfr_part"])
+    return result
+
+
+def extract_sections(full_text: str, cfr_part: str | None) -> list[dict]:
     seen = set()
-    for sm in SECTION_RE.finditer(result["full_text"][:50000]):
+    sections = []
+    prefix = f"{cfr_part}." if cfr_part else None
+    for sm in SECTION_RE.finditer(full_text):
         sec = sm.group(1)
+        if prefix and not sec.lower().startswith(prefix.lower()):
+            continue
         if sec not in seen:
             seen.add(sec)
-            result["sections"].append({
+            sections.append({
                 "section": sec,
                 "title": sm.group(2).strip()[:120],
             })
-
-    return result
+    return sections
 
 async def main(pdf_dir, db_url):
     conn = await asyncpg.connect(db_url)
@@ -156,6 +175,29 @@ async def main(pdf_dir, db_url):
         data = extract_regulation(str(path))
         try:
             import json
+            # Same part under a DIFFERENT filename (fresh scrape) → replace,
+            # never duplicate. Keep an existing PDF path if the new source is
+            # a .txt (so the "View PDF" button keeps working), and purge the
+            # replaced doc's rag_chunks so retrieval never sees stale text.
+            if data["cfr_title"] is not None and data["cfr_part"]:
+                stale = await conn.fetch("""
+                    SELECT id, pdf_path FROM regulations_docs
+                    WHERE cfr_title = $1 AND lower(cfr_part) = lower($2)
+                      AND filename <> $3
+                """, data["cfr_title"], data["cfr_part"], data["filename"])
+                if stale:
+                    if data["pdf_path"].endswith(".txt"):
+                        for s in stale:
+                            if (s["pdf_path"] or "").lower().endswith(".pdf"):
+                                data["pdf_path"] = s["pdf_path"]
+                                break
+                    ids = [str(s["id"]) for s in stale]
+                    await conn.execute(
+                        "DELETE FROM rag_chunks WHERE corpus='regulation' AND source_id = ANY($1)", ids)
+                    await conn.execute(
+                        "DELETE FROM regulations_docs WHERE id = ANY($1)",
+                        [s["id"] for s in stale])
+                    log.info(f"  ↻ replaced stale doc id(s) {ids} for {data['title']}")
             await conn.execute("""
                 INSERT INTO regulations_docs
                   (filename, pdf_path, title, cfr_title, cfr_part, part_name,

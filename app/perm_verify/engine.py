@@ -58,8 +58,9 @@ def verify_data(form, filing_date=None, cite=False, cite_top_k=3, pwd=None):
     fd = filing_date or date.today()
     flags = tier1(form) + tier2(form, fd) + tier4_form_only(form)
     if pwd:
-        from .rules_tier3 import tier3
+        from .rules_tier3 import tier3, derived_checks
         flags += tier3(form, pwd, fd)
+        flags += derived_checks(form, pwd, fd)
         from .rules_onet import onet_checks
         flags += onet_checks(form, pwd)
     first, last = filing_window(form)

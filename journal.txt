@@ -2331,3 +2331,101 @@ aborts fetch, keeps partial answer. New-tab option rejected: corpus
 viewers lack per-document deep-link URLs (would land on corpus front
 page). FUTURE: deep links (/balca/<case>) would enable open-in-new-tab
 + shareable citation URLs.
+
+── 2026-07-24 · Ask AI tool use (DOL performance data) ──────────────────────
+- FIXED live prod bug: /api/oflc/query 500ing — OFLC_TABLES was stranded in
+  routers/visa_bulletin.py after the router split; oflc.py _safe_col NameError.
+  Moved OFLC_TABLES to core.py (+__all__), removed from visa_bulletin.py.
+- NEW app/routers/ask_tools.py: 3 Anthropic tools for the Ask AI loop —
+  query_oflc_data (whitelisted aggregate queries, top-N ordering),
+  get_dol_processing_times (monthly p25/50/75/90), get_visa_bulletin_current
+  (EFFECTIVE_BULLETIN gating). Results truncated to 6K chars; errors returned
+  to the model as JSON.
+- rag.py /api/ask: generation is now a streaming agentic loop (max 5 rounds).
+  Retrieval + "sources" event unchanged; new {"type":"status"} events emitted
+  per tool call (AskView ignores unknown types — status UI is a later pass).
+  max_tokens 1500→2000. Ollama fallback untouched.
+- Gotcha encoded in tool description: fiscal_year values are 'FY2025' not
+  '2025' (first test hedged on zero rows); case_status has both
+  'Certified-Expired' and 'Certified - Expired' variants.
+- Tested on :8001 via venv/bin/python (.venv lacks uvicorn — use venv/).
+  FY2025 denials answer verified exact vs Homebrew DB (2,615; 1.78% rate).
+- NOT synced to casebase-app yet. No frontend changes required.
+
+── 2026-07-24 · Ask AI follow-ups deployed ──────────────────────────────────
+- AskView.jsx: wired {"type":"status"} events — spinner line shows tool
+  activity ("Querying OFLC disclosure data…") both pre-answer (replaces
+  "Searching N chunks…") and mid-stream below the answer text; cleared on
+  next token / done / stop.
+- ask_tools.py query_oflc_data: added raw-row mode via select_fields
+  (whitelisted columns, ORDER BY received_date DESC, cap 50 rows, returns
+  total_matching + truncated flag). Aggregate mode unchanged.
+- Validated: Microsoft PERM raw-row answer matched Homebrew DB row-for-row;
+  Amazon LCA raw-row answer verified on prod (:8080) post-deploy.
+- Synced + rebuilt casebase-app. Commits still pending (Kellen).
+
+=== 2026-07-24 — Regulations corpus repair: dedupe + section-aware re-chunk ===
+DIAGNOSIS: June 24 CFR re-ingest duplicated 136 parts (April PDFs vs June
+.txt, different filenames; upsert key was filename). June .txt is the
+better text everywhere: April pdfplumber output had glued words
+("DandE") — the source of junk citations (8 CFR 214.1and) — plus
+page-footer bloat; June is clean eCFR text, fresher law (as-of 6/11/26;
+correctly lacks vacated 29 CFR 541.5). Ask AI "only federal register"
+= regulation chunks under-ranked (474/604 Part 214 chunks were tagged
+part-level "8 CFR 214", not their section; coarse June chunks scored
+0.415 vs April 0.456).
+FIXES: ingest_regulations.py — FILENAME_RE handles dashed parts
+(41 CFR 101-11) + ISO dates; SECTION_RE line-anchored MULTILINE with
+part-prefix filter; full-text scan (was first 50K only); ingest now
+replaces same-part-different-filename rows and purges their rag_chunks,
+carrying .pdf pdf_path onto .txt keepers.
+scripts/migrate_dedupe_regulations.py (one-time, applied to Homebrew):
+fixed 171 misparsed cfr_part rows, deleted 126 dup docs + 6,715 stale
+chunks, re-parsed sections for all 8,306 docs. Part 214 → 1 row, 29
+clean sections, PDF path preserved.
+scripts/ingest/rechunk_regulations.py: rebuilt corpus='regulation'
+section-aware — every chunk headed "8 CFR § 214.2 — <title>" and
+cfr_citation = its true section. 400-token target (~1.6K chars,
+empirically better than 800). 614,929 chunks (was 226,829). Part 214:
+487 chunks tagged 8 CFR 214.2 (was 14).
+IN FLIGHT: --embed phase (voyage-4-large, resume-safe on
+embedding IS NULL), nohup PID 42792, log
+/Users/Dad/casebase_cfr/rechunk_regulations.log. ~615K chunks, hours.
+PENDING AFTER EMBED: verify Ask AI ranking for 214.2 queries; consider
+HNSW rebuild; pg_dump sync Homebrew→Docker; deploy; Ask AI corpus-boost
+re-ranker still the structural fix for reg-vs-commentary ranking.
+
+── 2026-07-24 · Pre-commit test pass ────────────────────────────────────────
+- Full matrix on prod (:8080): pure-RAG regression (citations/corpus filter
+  intact, no spurious tool calls), visa bulletin tool (EB-2 India correctly
+  reported Unavailable per July 2026 bulletin), out-of-range FY2015 correctly
+  declined, error-path unit tests all clean (bad table/column/op/tool,
+  injection attempt via select_fields rejected by whitelist).
+- CAUGHT + FIXED: model omitted visa_class='H-1B' filter on oflc_lca —
+  reported 631 (all LCA classes) instead of 616 (H-1B only) for JPMorgan
+  FY2025. Tool description now enumerates visa_class values and mandates the
+  filter for H-1B-specific questions. Redeployed, retested: 616 exact.
+- Known limitations documented in chat (Ollama fallback has no tools; 6K-char
+  tool-result truncation; 50-row raw cap; 5-round loop; single-turn only;
+  employer-name variant matching depends on model ILIKE discipline).
+
+── 2026-07-27 · MAJOR data-quality fix: oflc_perm legacy backfill ────────────
+- User question ("Amazon PERMs last year → 26?") exposed that ALL employer,
+  attorney, worksite, wage, SOC, NAICS, and PWD columns were NULL for
+  FY2020–FY2024 (~515K rows, both DBs). Root cause: map_perm_row in
+  scripts/ingest/ingest_oflc.py only mapped new-format headers
+  (EMP_BUSINESS_NAME etc.); legacy files use EMPLOYER_NAME /
+  EMPLOYER_STATE_PROVINCE / AGENT_ATTORNEY_FIRM_NAME / WAGE_OFFER_FROM /
+  PW_SOC_CODE / PW_TRACK_NUMBER etc. oflc_lca and oflc_pw were unaffected.
+- Fixed mapping with legacy fallback keys (22 fields) — future ingests OK.
+  Legacy atty_last_name now holds the FULL AGENT_ATTORNEY_NAME (legacy files
+  have no first/last split).
+- Backfilled in place via /tmp/backfill_perm_legacy.py (COALESCE updates,
+  re-run-safe) on Homebrew :5433, then TRUNCATE + pg_dump -a sync to Docker.
+  Verified: employer_name 100% populated all years; residual atty_law_firm
+  nulls are pro-se cases.
+- The original "26" answer was coincidentally near-true: Amazon's green-card
+  pause is real in the data (FY2023: 6,714 → FY2025: 15). Post-fix prod
+  answer returns the full corrected series.
+- CAUTION for downstream: any analysis/feature built on oflc_perm
+  employer/wage/attorney fields before 7/27/26 silently excluded FY2020–24.

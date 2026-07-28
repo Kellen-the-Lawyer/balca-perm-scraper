@@ -413,10 +413,10 @@ function TopMoversPanel({ dark }) {
   );
 }
 
-// ── Panel 5: SOC x Metro Change Matrix ────────────────────────────────────────
-function MatrixPanel({ dark }) {
-  const { data, loading } = useFetch(`${API}/wages/matrix?n_socs=14&n_areas=12`);
-  const [hover, setHover] = useState(null); // {socIdx, areaIdx, x, y}
+// ── Shared matrix table: rows=SOCs, cols=areas, diverging change cells ───────
+// Used by both the fixed Wage Change Matrix and the custom matrix builder.
+function MatrixTable({ dark, data }) {
+  const [hover, setHover] = useState(null); // {s, a, cell, x, y}
   const wrapRef = useRef(null);
 
   // Diverging color: red (down) -> neutral -> green (up), scaled to ±10%
@@ -440,16 +440,8 @@ function MatrixPanel({ dark }) {
   const shortSoc  = (title, code) => (title || code).split(",")[0];
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 20 }}>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>Wage Change Matrix — Top Occupations × Top Metros</div>
-        <div style={{ fontSize: 11, color: "var(--text3)" }}>Level I % change, 2025-26 → 2026-27 · rows ranked by H-1B volume · hover any cell for detail</div>
-      </div>
-
-      {loading || !data ? (
-        <div style={{ height: 340, background: "var(--bg3)", borderRadius: "var(--radius)", animation: "pulse 1.4s ease infinite" }} />
-      ) : (
-        <div style={{ overflowX: "auto" }}>
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "separate", borderSpacing: 2, width: "100%" }}>
             <thead>
               <tr>
@@ -465,7 +457,7 @@ function MatrixPanel({ dark }) {
             <tbody>
               {data.socs.map((s, si) => (
                 <tr key={s.soc_code}>
-                  <td title={`${s.soc_code} — ${s.soc_title} · ${s.filings.toLocaleString()} H-1B filings`}
+                  <td title={`${s.soc_code} — ${s.soc_title}${s.filings != null ? ` · ${s.filings.toLocaleString()} H-1B filings` : ""}`}
                       style={{ fontSize: 11, fontWeight: 500, color: "var(--text)", paddingRight: 10, whiteSpace: "nowrap", maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis" }}>
                     {shortSoc(s.soc_title, s.soc_code)}
                   </td>
@@ -499,7 +491,6 @@ function MatrixPanel({ dark }) {
             </tbody>
           </table>
         </div>
-      )}
 
       {hover && (
         <div style={{
@@ -533,6 +524,157 @@ function MatrixPanel({ dark }) {
         <span style={{ fontSize: 10, color: "var(--text3)" }}>+10%</span>
         <span style={{ fontSize: 10, color: "var(--text3)", marginLeft: 10 }}>· = geo tier changed, not comparable</span>
       </div>
+    </div>
+  );
+}
+
+// ── Panel 5: SOC x Metro Change Matrix ────────────────────────────────────────
+function MatrixPanel({ dark }) {
+  const { data, loading } = useFetch(`${API}/wages/matrix?n_socs=14&n_areas=12`);
+  return (
+    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 20 }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>Wage Change Matrix — Top Occupations × Top Metros</div>
+        <div style={{ fontSize: 11, color: "var(--text3)" }}>Level I % change, 2025-26 → 2026-27 · rows ranked by H-1B volume · hover any cell for detail</div>
+      </div>
+      {loading || !data ? (
+        <div style={{ height: 340, background: "var(--bg3)", borderRadius: "var(--radius)", animation: "pulse 1.4s ease infinite" }} />
+      ) : (
+        <MatrixTable dark={dark} data={data} />
+      )}
+    </div>
+  );
+}
+
+// ── Panel 5b: Custom Wage Comparison builder ─────────────────────────────────
+// Typeahead search input with removable chips; used for both SOCs and areas.
+function ChipPicker({ dark, label, placeholder, endpoint, selected, setSelected,
+                      itemKey, renderOption, renderChip, max = 20 }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); setOpen(false); return; }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetch(`${API}${endpoint}?q=${encodeURIComponent(query)}`)
+        .then(r => r.json())
+        .then(d => { setResults(d); setOpen(true); })
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(debounceRef.current);
+  }, [query, endpoint]);
+
+  useEffect(() => {
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const add = (item) => {
+    if (selected.length < max && !selected.some(s => itemKey(s) === itemKey(item))) {
+      setSelected([...selected, item]);
+    }
+    setQuery(""); setResults([]); setOpen(false);
+  };
+  const remove = (item) => setSelected(selected.filter(s => itemKey(s) !== itemKey(item)));
+
+  return (
+    <div ref={boxRef} style={{ flex: 1, minWidth: 260, position: "relative" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>{label}</div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => { if (results.length) setOpen(true); }}
+        placeholder={placeholder}
+        style={{
+          width: "100%", boxSizing: "border-box", padding: "8px 11px",
+          fontSize: 12.5, color: "var(--text)", background: "var(--bg)",
+          border: "1px solid var(--border)", borderRadius: "var(--radius)",
+          outline: "none",
+        }}
+      />
+      {open && results.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4,
+          background: dark ? "#242b31" : "#fff", border: "1px solid var(--border)",
+          borderRadius: "var(--radius)", boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+          zIndex: 20, maxHeight: 260, overflowY: "auto",
+        }}>
+          {results.map((r) => (
+            <div key={itemKey(r)} onMouseDown={() => add(r)}
+                 style={{ padding: "7px 11px", fontSize: 12, cursor: "pointer", color: "var(--text)", borderBottom: "1px solid var(--border)" }}
+                 onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg3)"}
+                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+              {renderOption(r)}
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, minHeight: 24 }}>
+        {selected.map((s) => (
+          <span key={itemKey(s)} style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "3px 9px", fontSize: 11, fontWeight: 500,
+            background: "var(--bg3)", border: "1px solid var(--border)",
+            borderRadius: 999, color: "var(--text)", whiteSpace: "nowrap",
+          }}>
+            {renderChip(s)}
+            <span onClick={() => remove(s)} style={{ cursor: "pointer", color: "var(--text3)", fontWeight: 700, fontSize: 12, lineHeight: 1 }}>×</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CustomMatrixPanel({ dark }) {
+  const [socs, setSocs] = useState([]);     // [{soc_code, soc_title}]
+  const [areas, setAreas] = useState([]);   // [{area_code, area_name, state}]
+
+  const url = socs.length && areas.length
+    ? `${API}/wages/matrix/custom?socs=${encodeURIComponent(socs.map(s => s.soc_code).join(","))}&areas=${encodeURIComponent(areas.map(a => a.area_code).join(","))}`
+    : null;
+  const { data, loading } = useFetch(url);
+
+  return (
+    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 20 }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>Custom Wage Comparison</div>
+        <div style={{ fontSize: 11, color: "var(--text3)" }}>Build your own matrix — pick occupations (rows) and locations (columns) · Level I % change, 2025-26 → 2026-27</div>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginBottom: 16 }}>
+        <ChipPicker
+          dark={dark} label="Occupations (rows)" placeholder="Search SOC code or title…"
+          endpoint="/wages/soc-search"
+          selected={socs} setSelected={setSocs}
+          itemKey={(s) => s.soc_code}
+          renderOption={(s) => <><b>{s.soc_code}</b> · {s.soc_title}</>}
+          renderChip={(s) => `${s.soc_code} ${(s.soc_title || "").split(",")[0]}`}
+        />
+        <ChipPicker
+          dark={dark} label="Locations (columns)" placeholder="Search metro or area name…"
+          endpoint="/wages/area-search"
+          selected={areas} setSelected={setAreas}
+          itemKey={(a) => a.area_code}
+          renderOption={(a) => <>{a.area_name}</>}
+          renderChip={(a) => (a.area_name || "").split(",")[0]}
+        />
+      </div>
+
+      {!url ? (
+        <div style={{ padding: "26px 0", textAlign: "center", fontSize: 12, color: "var(--text3)" }}>
+          Select at least one occupation and one location to build the comparison.
+        </div>
+      ) : loading || !data ? (
+        <div style={{ height: 120, background: "var(--bg3)", borderRadius: "var(--radius)", animation: "pulse 1.4s ease infinite" }} />
+      ) : (
+        <MatrixTable dark={dark} data={data} />
+      )}
     </div>
   );
 }
@@ -847,6 +989,9 @@ export function WageDashboard() {
 
         {/* Full-width change matrix */}
         <MatrixPanel dark={dark} />
+
+        {/* User-built comparison matrix */}
+        <CustomMatrixPanel dark={dark} />
 
         {/* SOC search explorer */}
         <SocExplorerPanel dark={dark} />

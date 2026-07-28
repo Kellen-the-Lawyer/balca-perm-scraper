@@ -18,6 +18,20 @@ YELLOW = "YELLOW"
 MANDATORY_STEP_KEYS = ("swa_job_order", "ad1", "ad2")
 PROFESSIONAL_MIN_ADDITIONAL_STEPS = 3
 
+# Ranking used to pick the foreign worker's highest degree (Appendix A.B).
+# Mirrors rules_tier3.DEGREE_RANK; consolidate the two when Tier 3 is reworked.
+DEGREE_RANK = {"None": 0, "High School/GED": 1, "High school/GED": 1,
+               "Associate": 2, "Associate's": 2, "Bachelor's": 3,
+               "Master's": 4, "Doctorate": 5, "Other": 3, "Other Degree": 3}
+
+US_COUNTRY_NAMES = {"united states of america", "united states", "usa",
+                    "u.s.a.", "us", "u.s.", "united states of america (usa)"}
+
+_ENTITY_SUFFIX_RX = re.compile(
+    r"\b(inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|co|"
+    r"company|plc|lp|llp|pc|na|usa)\b\.?", re.I)
+
+
 
 @dataclass
 class Flag:
@@ -125,6 +139,127 @@ APPX_C_TRIGGERS = {
     "G.11": "G_job_info.employer_received_payment",
     "G.12": "G_job_info.layoff_6mo",
 }
+
+
+def _norm_entity(name):
+    """Normalize a business name for comparison: drop punctuation and
+    common entity suffixes so 'Chewy Inc.' == 'Chewy, Inc'."""
+    s = re.sub(r"[^\w\s]", " ", str(name or "").lower())
+    s = _ENTITY_SUFFIX_RX.sub(" ", s)
+    return " ".join(s.split())
+
+
+def _same_entity(a, b, threshold=0.88):
+    na, nb = _norm_entity(a), _norm_entity(b)
+    if not na or not nb:
+        return False
+    if na == nb or na in nb or nb in na:
+        return True
+    import difflib
+    return difflib.SequenceMatcher(None, na, nb).ratio() >= threshold
+
+
+def _is_us(country):
+    return str(country or "").strip().lower() in US_COUNTRY_NAMES
+
+
+def _g5_checks(form):
+    """T1-010a..e — G.5 family: reliance on experience gained with the
+    petitioning employer.
+
+    The correct G.5 answer is derived from Appendix A.E (work experience):
+    if every employer listed there is the petitioner, the worker's qualifying
+    experience was necessarily gained with the employer and G.5 must be Yes.
+    Appendix A.D (special skills) is an attestation, not proof of general
+    experience, so it is deliberately not consulted here.
+    """
+    flags = []
+    F = flags.append
+    g5 = _get(form, "G_job_info.relying_solely_on_experience_with_employer")
+    g5a = _get(form, "G_job_info.experience_substantially_comparable")
+    g5b = _get(form, "G_job_info.employer_paid_training")
+
+    petitioner = _get(form, "A_employer.legal_business_name")
+    employers = [w.get("employer_name")
+                 for w in (_get(form, "appendix_A.work_experience", []) or [])
+                 if w.get("employer_name")]
+    only_petitioner = bool(employers) and bool(petitioner) and \
+        all(_same_entity(e, petitioner) for e in employers)
+
+    if only_petitioner and str(g5) == "No":
+        F(Flag(RED, "T1-010a", "G.5",
+               f"Every employer in Appendix A.E is the petitioner "
+               f"('{petitioner}'), so all qualifying experience was gained "
+               f"with the employer — G.5 should be Yes, not No.",
+               "regulation",
+               "20 CFR 656.17(i)(3); ETA-9089 Instructions §G.5"))
+
+    if str(g5) == "Yes":
+        F(Flag(YELLOW, "T1-010b", "G.5",
+               "Employer is relying solely on experience the foreign worker "
+               "gained with the employer — 656.17(i)(3) applies; be prepared "
+               "to show the positions are not substantially comparable.",
+               "balca",
+               "20 CFR 656.17(i)(3); Delitizer Corp. of Newton, 1988-INA-482"))
+        if str(g5a) == "Yes":
+            F(Flag(RED, "T1-010d", "G.5a",
+                   "G.5 and G.5a are both Yes: the employer is relying on "
+                   "experience gained in a substantially comparable position, "
+                   "which 656.17(i)(3) does not permit. Where a Delitizer "
+                   "comparison shows the positions differ, G.5a should be No.",
+                   "regulation",
+                   "20 CFR 656.17(i)(3); Delitizer Corp. of Newton, 1988-INA-482"))
+    elif str(g5) == "No":
+        for item, val in (("G.5a", g5a), ("G.5b", g5b)):
+            if not _is_na(val):
+                F(Flag(RED, "T1-010c", item,
+                       f"G.5 is No, so {item} must be N/A; it is answered "
+                       f"'{val}'.", "completeness",
+                       "20 CFR 656.17(a)(1); ETA-9089 Instructions §G.5"))
+
+    if str(g5b) == "Yes":
+        F(Flag(RED, "T1-010e", "G.5b",
+               "G.5b is Yes: the employer paid for the training or experience "
+               "on which the foreign worker qualifies.",
+               "regulation", "20 CFR 656.17(i)(3); 656.17(l)"))
+    return flags
+
+
+def _g10_checks(form):
+    """T1-011a/b — G.10 (credentialing service) derived from the country of
+    institution on each Appendix A.B education record.
+
+    A tie at the highest degree rank counts as US-conferred if any degree at
+    that rank was conferred in the United States.
+    """
+    flags = []
+    F = flags.append
+    if str(_get(form, "G_job_info.credentialing_service")) != "No":
+        return flags
+    edus = [e for e in (_get(form, "appendix_A.education", []) or [])
+            if e.get("degree")]
+    foreign = [e for e in edus if e.get("country") and not _is_us(e["country"])]
+    if not edus or not foreign:
+        return flags
+
+    top = max(DEGREE_RANK.get(e.get("degree"), 0) for e in edus)
+    top_is_us = any(_is_us(e.get("country"))
+                    for e in edus if DEGREE_RANK.get(e.get("degree"), 0) == top)
+    names = ", ".join(f"{e.get('degree')} ({e.get('country')})"
+                      for e in foreign)
+    if not top_is_us:
+        F(Flag(RED, "T1-011a", "G.10",
+               f"The foreign worker's highest degree was conferred outside "
+               f"the United States [{names}] but G.10 is answered No.",
+               "form_instructions", "ETA-9089 Instructions §G.10"))
+    else:
+        F(Flag(YELLOW, "T1-011b", "G.10",
+               f"A lower-level degree was conferred outside the United States "
+               f"[{names}] while the highest degree is US-conferred and G.10 "
+               f"is No. Correct if the worker qualifies on the US degree; "
+               f"confirm the foreign degree is not being relied on.",
+               "form_instructions", "ETA-9089 Instructions §G.10"))
+    return flags
 
 
 def tier1(form):
@@ -276,6 +411,9 @@ def tier1(form):
     except ValueError:
         F(Flag(RED, "T1-016", "A.14",
                f"A.14 is not a number: '{emp}'.", "typo", "format"))
+
+    flags += _g5_checks(form)
+    flags += _g10_checks(form)
 
     return flags
 
@@ -450,14 +588,9 @@ def tier4_form_only(form):
                "Familial relationship between foreign worker and "
                "owners/officers — audit highly likely.",
                "balca", "20 CFR 656.17(l)"))
-    if yes("G_job_info.relying_solely_on_experience_with_employer") and \
-       yes("G_job_info.experience_substantially_comparable"):
-        F(Flag(YELLOW, "T4-003", "G.5/G.5a",
-               "Qualifying experience gained with the employer in a "
-               "substantially comparable position — infeasibility-to-train "
-               "documentation required.",
-               "balca", "20 CFR 656.17(i)(3); Delitizer Corp. of Newton, "
-               "1988-INA-482"))
+    # T4-003 retired: the G.5/G.5a pair is now handled by T1-010b (G.5 = Yes,
+    # YELLOW) and T1-010d (G.5 + G.5a both Yes, RED), which reflect that a
+    # Delitizer comparison showing dissimilar positions yields G.5a = No.
     if yes("G_job_info.combination_of_occupations"):
         F(Flag(YELLOW, "T4-004", "G.7",
                "Combination of occupations — business necessity/normalcy "
