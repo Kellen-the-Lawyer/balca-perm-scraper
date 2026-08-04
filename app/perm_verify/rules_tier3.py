@@ -133,61 +133,135 @@ def tier3(form, pwd, filing_date=None):
                    "regulation",
                    "20 CFR 656.10(c)(1); ETA-9089 Instructions §E note "
                    "(higher-of-two rule)"))
-        elif offered_annual < governing * 1.02:
-            F(Flag(YELLOW, "T3-003", "E.3",
-                   f"Offered wage ${offered_annual:,.2f}/yr is within 2% of the "
-                   f"prevailing wage ${governing:,.2f}/yr — no cushion for a "
-                   f"renewal-year PW increase before the I-140/start date.",
-                   "data_check", "practice heuristic"))
 
-    # ---- PWD validity at filing ------------------------------------------------
+    # ---- PWD validity at filing / filing window ---------------------------------
+    # 656.40(c): the validity period must cover either the filing date or the
+    # start of at least one recruitment step.  Three postures:
+    #   (a) >=1 step STARTS during validity -> filing is governed by the
+    #       30/180 recruitment window (Tier 2, filing_window()), NOT by PWD
+    #       expiry; the window can lawfully close months after the PWD expires.
+    #   (b) recruitment began before the PWD issued and no step starts during
+    #       validity -> the 9089 must be FILED during the validity period, so
+    #       the effective deadline is min(180-day window close, validity end).
+    #   (c) ALL recruitment starts after validity ends -> the recruitment is
+    #       not usable with this determination.
     v_from, v_to = _d(pwd.get("validity_from")), _d(pwd.get("validity_to"))
     if v_from and v_to:
+        from .rules import _steps, filing_window
+        starts = [s for s, e in _steps(form).values() if s]
+        in_validity = any(v_from <= s <= v_to for s in starts)
+        _, window_last = filing_window(form)
+        deadline = None
+        binds = None
+
         if fd < v_from:
             F(Flag(RED, "T3-005", "E.1",
                    f"Filing date {fd} precedes PWD validity start {v_from}.",
                    "regulation", "20 CFR 656.40(c)"))
-        elif fd > v_to:
-            # 656.40(c): filing after expiration is PERMITTED if recruitment
-            # began during the validity period. Check recruitment starts.
-            from .rules import _steps
-            starts = [s for s, e in _steps(form).values() if s]
-            first_recruit = min(starts) if starts else None
-            if first_recruit and v_from <= first_recruit <= v_to:
-                pass  # lawful: recruitment began during validity
-            elif first_recruit:
+        elif in_validity:
+            # posture (a): PWD expiry no longer gates the filing date.
+            deadline, binds = window_last, "180-day recruitment window"
+        elif starts and all(s > v_to for s in starts):
+            # posture (c)
+            F(Flag(RED, "T3-005", "H.c",
+                   f"No recruitment step started during the PWD validity "
+                   f"period {v_from}-{v_to}; every step began after "
+                   f"expiration. The recruitment cannot be used with PWD "
+                   f"{pnum}.",
+                   "regulation", "20 CFR 656.40(c)"))
+        elif starts:
+            # posture (b): recruitment predates the PWD; must file while valid.
+            if fd > v_to:
                 F(Flag(RED, "T3-005", "E.1",
-                       f"PWD {pnum} expired {v_to}; filing date {fd} is after "
-                       f"expiration AND recruitment began {first_recruit}, "
-                       f"outside the validity period {v_from}-{v_to}.",
+                       f"Recruitment began before PWD {pnum} issued and no "
+                       f"step started during validity ({v_from}-{v_to}), so "
+                       f"the 9089 had to be filed during the validity period; "
+                       f"filing date {fd} is after expiration.",
                        "regulation", "20 CFR 656.40(c)"))
             else:
+                cands = [x for x in (window_last, v_to) if x]
+                deadline = min(cands) if cands else None
+                binds = ("PWD expiration" if deadline == v_to
+                         else "180-day recruitment window")
+        else:
+            # no recruitment dates on the form: can only test filing-in-validity.
+            if fd > v_to:
                 F(Flag(YELLOW, "T3-005", "E.1",
                        f"PWD {pnum} expired {v_to} before the filing date "
                        f"{fd}. Lawful only if recruitment began during "
                        f"validity ({v_from}-{v_to}) - no recruitment dates "
                        f"available to confirm.",
                        "regulation", "20 CFR 656.40(c)"))
-        elif (v_to - fd).days <= 14:
-            F(Flag(YELLOW, "T3-013", "E.1",
-                   f"PWD expires {v_to} — only {(v_to - fd).days} days after "
-                   f"the presumed filing date. Verify filing occurs in time.",
-                   "regulation", "20 CFR 656.40(c)"))
+            else:
+                deadline, binds = v_to, "PWD expiration"
+
+        # T3-013: filing window closing soon (Tier 2 flags windows already
+        # blown; this is the prospective warning, PWD-aware per posture).
+        if deadline and 0 <= (deadline - fd).days <= 14:
+            F(Flag(YELLOW, "T3-013", "H.c",
+                   f"The filing window closes {deadline} ({binds}) — only "
+                   f"{(deadline - fd).days} days after the presumed filing "
+                   f"date {fd}. Verify filing occurs in time.",
+                   "regulation", "20 CFR 656.17(e); 656.40(c)"))
 
     # ---- geography ---------------------------------------------------------------
-    msa_9089 = (_get(form, "F_worksite.msa_oes_area_title") or "").strip().lower()
-    bls_9141 = (pwd.get("bls_area") or "").strip().lower()
-    if msa_9089 and bls_9141 and msa_9089 != bls_9141:
+    # T3-014 (T3-015 folded in).  The MSA/BLS area titles on both forms are
+    # AUTO-FILLED by FLAG from the entered address, so equal titles mean the
+    # same OES area.  Differing titles are cross-checked against the
+    # county->area-code map (geo.area_codes; split counties yield sets, so
+    # "same area" = the sets intersect) before flagging RED, to absorb
+    # formatting drift between the two forms' renderings of one area.
+    from .geo import area_codes, norm_area_title, norm_county
+    title_9089 = norm_area_title(_get(form, "F_worksite.msa_oes_area_title"))
+    title_9141 = norm_area_title(pwd.get("bls_area"))
+    areas_9089 = area_codes(_get(form, "F_worksite.county"),
+                            _get(form, "F_worksite.state"))
+    areas_9141 = area_codes(pwd.get("worksite_county"),
+                            pwd.get("worksite_state"))
+
+    if title_9089 and title_9141:
+        same_area = title_9089 == title_9141
+        if not same_area and areas_9089 and areas_9141 \
+                and (areas_9089 & areas_9141):
+            same_area = True   # title formatting drift; counties agree
+    elif areas_9089 and areas_9141:
+        same_area = bool(areas_9089 & areas_9141)
+    else:
+        same_area = None       # cannot resolve either way
+
+    detail_pairs = [
+        ("ZIP", _get(form, "F_worksite.postal_code"),
+         pwd.get("worksite_postal"), str.strip),
+        ("city", _get(form, "F_worksite.city"), pwd.get("worksite_city"),
+         str.strip),
+        ("county", _get(form, "F_worksite.county"),
+         pwd.get("worksite_county"), norm_county),
+        ("address", _get(form, "F_worksite.address1"),
+         pwd.get("worksite_address1"), str.strip),
+    ]
+    diffs = [f"{k}: 9089 '{a}' vs PWD '{b}'"
+             for k, a, b, norm in detail_pairs
+             if a and b and norm(str(a).lower()) != norm(str(b).lower())]
+
+    if same_area is False:
         F(Flag(RED, "T3-014", "F.a.8a",
-               f"9089 MSA '{msa_9089}' differs from PWD BLS area '{bls_9141}'; "
-               f"the PWD does not cover the stated worksite.",
+               f"Worksites are in different OES areas — 9089 "
+               f"'{_get(form, 'F_worksite.msa_oes_area_title')}' vs PWD "
+               f"'{pwd.get('bls_area')}'. The PWD does not cover the stated "
+               f"worksite.",
                "regulation", "20 CFR 656.40(a); 656.10"))
-    ws_zip_9089 = (_get(form, "F_worksite.postal_code") or "").strip()
-    ws_zip_9141 = (pwd.get("worksite_postal") or "").strip()
-    if ws_zip_9089 and ws_zip_9141 and ws_zip_9089 != ws_zip_9141:
-        F(Flag(YELLOW, "T3-015", "F.a.7",
-               f"Worksite ZIP differs: 9089 {ws_zip_9089} vs PWD {ws_zip_9141}. "
-               f"Fine if same BLS area, but confirm.",
+    elif same_area and diffs:
+        F(Flag(YELLOW, "T3-014", "F.a",
+               "Worksite details differ between the 9089 and PWD but both "
+               "fall in the same OES area (" + "; ".join(diffs[:3]) + "). "
+               "Confirm the intended worksite.",
+               "data_check", "20 CFR 656.40(a)"))
+    elif same_area is None and diffs:
+        F(Flag(YELLOW, "T3-014", "F.a",
+               "Worksite details differ between the 9089 and PWD (" +
+               "; ".join(diffs[:3]) + ") and the OES area could not be "
+               "resolved from either form. Verify the PWD covers the "
+               "worksite.",
                "data_check", "20 CFR 656.40(a)"))
 
     # ---- worker qualification vs PWD minimums ------------------------------------

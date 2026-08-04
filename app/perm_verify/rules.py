@@ -510,15 +510,62 @@ def tier2(form, filing_date=None):
                    f"'{key}' began {start} — more than 180 days before filing ({fd}).",
                    "regulation", "20 CFR 656.17(e)(1)(i)"))
 
-    # Sunday check on ads
-    for key, item, dt in [("ad1", "H.c.2b", steps.get("ad1")),
-                          ("ad2", "H.c.3b", steps.get("ad2"))]:
-        if dt and dt[0] and dt[0].weekday() != 6 and \
-           str(_get(form, "H_recruitment.ad2_type", "")).startswith("Newspaper"):
+    # ---- print advertisements: Sunday placement and spacing ----------------
+    # The form has no ad1 type selector: H.c.2/2a/2b are definitionally the
+    # newspaper-of-general-circulation ad, while H.c.3 carries a type for ad2
+    # (the (B)(4) professional-journal substitution).  The Sunday test on ad1
+    # therefore must never be gated on ad2's type.
+    a1, a2 = steps.get("ad1"), steps.get("ad2")
+    ad2_type = str(_get(form, "H_recruitment.ad2_type", "") or "")
+    ad2_is_paper = ad2_type.startswith("Newspaper")
+    sunday_avail = str(_get(form, "H_recruitment.sunday_edition_exists", "") or "")
+
+    checks = [("ad1", "H.c.2b", a1, True)]
+    if a2:
+        checks.append(("ad2", "H.c.3b", a2, ad2_is_paper))
+
+    for key, item, dt, is_paper in checks:
+        if not (dt and dt[0] and is_paper) or dt[0].weekday() == 6:
+            continue
+        day = dt[0].strftime("%A")
+        if sunday_avail == "Yes":
+            F(Flag(RED, "T2-005", item,
+                   f"{key} ran {dt[0]} (a {day}), but H.c.2 states a Sunday "
+                   f"edition is available — the (B)(2) substitution does not "
+                   f"apply where a Sunday edition serves the area.",
+                   "regulation", "20 CFR 656.17(e)(1)(i)(B)(1)-(2)"))
+        else:
             F(Flag(YELLOW, "T2-004", item,
-                   f"Advertisement date {dt[0]} is a "
-                   f"{dt[0].strftime('%A')}, not a Sunday.",
+                   f"{key} ran {dt[0]} (a {day}), not a Sunday. The (B)(2) "
+                   f"substitution is written for rural areas with no Sunday "
+                   f"edition; retain proof none serves the area of intended "
+                   f"employment.",
+                   "regulation", "20 CFR 656.17(e)(1)(i)(B)(1)-(2)"))
+
+    if a1 and a2 and a1[0] and a2[0]:
+        # No T2-004b "neither ad is a Sunday ad" rule: ad1 has no type field,
+        # so two journal ads cannot be represented, and the only case it would
+        # catch is a no-Sunday-edition market running two non-Sunday ads —
+        # which is the (B)(2) carve-out, already YELLOW under T2-004.  Where a
+        # Sunday edition does exist, T2-005 flags each ad RED on its own.
+        if ad2_is_paper and a1[0] == a2[0]:
+            F(Flag(RED, "T2-004a", "H.c.3b",
+                   f"Both newspaper advertisements ran on {a1[0]}; the "
+                   f"regulation requires two different Sundays.",
                    "regulation", "20 CFR 656.17(e)(1)(i)(B)(1)"))
+        elif ad2_is_paper:
+            # Consecutive weekly editions.  6-8 days catches both a skipped
+            # edition and two ads inside the same week.  Skipped when ad2 is a
+            # journal: there is only one newspaper ad to be consecutive with.
+            gap = abs((a2[0] - a1[0]).days)
+            if not 6 <= gap <= 8:
+                F(Flag(YELLOW, "T2-016", "H.c.3b",
+                       f"Print advertisements ran {gap} days apart ({a1[0]} "
+                       f"and {a2[0]}); DOL expects consecutive weekly editions.",
+                       "dol_practice",
+                       "20 CFR 656.17(e)(1)(i)(B)(1) requires two different "
+                       "Sundays; consecutive placement is DOL enforcement "
+                       "practice, not regulatory text."))
 
     if professional:
         add = {k[5:]: v for k, v in steps.items() if k.startswith("step:")}

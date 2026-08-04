@@ -156,7 +156,7 @@ G_MAP = {"1": "full_time_35hrs", "2": "live_in_domestic",
          "11": "employer_received_payment", "12": "layoff_6mo"}
 
 HC_MAP = {"c.1a": "swa_job_order_start", "c.1b": "swa_job_order_end",
-          "c.2": "sunday_edition_available", "c.2a": "ad1_newspaper_name",
+          "c.2": "sunday_edition_exists", "c.2a": "ad1_newspaper_name",
           "c.2b": "ad1_date", "c.3": "ad2_type", "c.3a": "ad2_name",
           "c.3b": "ad2_date"}
 
@@ -202,8 +202,18 @@ def _num(v):
 
 
 def _norm(v):
+    """Normalize a print-summary value to match extract_9089's output.
+
+    FLAG renders yes/no answers in lower case ('yes'), while the geometry
+    extractor reads checkbox labels and yields 'Yes'.  Every rule compares
+    with exact case (`yes = lambda p: str(_get(form, p)) == "Yes"` and ~30
+    other sites), so without this the whole draft path silently under-flags.
+    Only bare yes/no tokens are touched; free text passes through unchanged.
+    """
     v = (v or "").strip()
-    return None if v in ("", "N/A", "n/a") else v
+    if v in ("", "N/A", "n/a"):
+        return None
+    return {"yes": "Yes", "no": "No"}.get(v.lower(), v)
 
 
 def to_form(fields):
