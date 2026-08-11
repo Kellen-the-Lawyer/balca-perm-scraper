@@ -36,6 +36,15 @@ VLM_MODEL = os.environ.get(
     os.environ.get("AUDIT_VLM_MODEL", "qwen/qwen3-vl-8b"),
 )
 
+# Optional remote backend for PWD parsing ONLY (all three must be set).
+# EVLs contain employee PII and always stay on the local VLM regardless.
+# Example: PWD_LLM_URL=https://api.openai.com/v1/chat/completions
+#          PWD_LLM_MODEL=gpt-5.6-luna
+#          PWD_LLM_API_KEY=<key>
+PWD_LLM_URL = os.environ.get("PWD_LLM_URL", "")
+PWD_LLM_MODEL = os.environ.get("PWD_LLM_MODEL", "")
+PWD_LLM_API_KEY = os.environ.get("PWD_LLM_API_KEY", "")
+
 MAX_PDF_PAGES = 30
 MAX_VISION_PAGES = 12
 MAX_TEXT_CHARS = 80_000
@@ -301,27 +310,45 @@ def _json_object(raw: str) -> dict[str, Any]:
     return value
 
 
-def _chat(content: list[dict[str, Any]], max_tokens: int = 7000) -> dict[str, Any]:
-    payload = {
-        "model": VLM_MODEL,
-        "temperature": 0,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": content}],
-    }
+def _chat(content: list[dict[str, Any]], max_tokens: int = 7000,
+          remote: bool = False) -> dict[str, Any]:
+    use_remote = remote and PWD_LLM_URL and PWD_LLM_MODEL and PWD_LLM_API_KEY
+    if use_remote:
+        # OpenAI-compatible remote: newer models reject `temperature` and
+        # `max_tokens`; use defaults and `max_completion_tokens` instead.
+        payload = {
+            "model": PWD_LLM_MODEL,
+            "max_completion_tokens": max_tokens,
+            "messages": [{"role": "user", "content": content}],
+        }
+        url = PWD_LLM_URL
+        headers = {"Content-Type": "application/json",
+                   "Authorization": f"Bearer {PWD_LLM_API_KEY}"}
+    else:
+        payload = {
+            "model": VLM_MODEL,
+            "temperature": 0,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": content}],
+        }
+        url = VLM_URL
+        headers = {"Content-Type": "application/json"}
     request = urllib.request.Request(
-        VLM_URL,
+        url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=600) as response:
             result = json.loads(response.read())
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
-        raise VLMError(f"Cannot reach the local document model at {VLM_URL}: {exc}") from exc
+        where = "the remote PWD model" if use_remote else \
+            f"the local document model at {VLM_URL}"
+        raise VLMError(f"Cannot reach {where}: {exc}") from exc
     try:
         raw = result["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
-        raise VLMError("Local model returned an unexpected response") from exc
+        raise VLMError("The document model returned an unexpected response") from exc
     return _json_object(raw)
 
 
@@ -555,13 +582,14 @@ def _needs_atomic_repair(raw: dict[str, Any]) -> bool:
     return False
 
 
-def _ensure_atomic_requirements(raw: dict[str, Any]) -> dict[str, Any]:
+def _ensure_atomic_requirements(raw: dict[str, Any],
+                                remote: bool = False) -> dict[str, Any]:
     if not _needs_atomic_repair(raw):
         return raw
     repaired = _chat([{
         "type": "text",
         "text": ATOMIC_REPAIR_PROMPT + json.dumps(raw, ensure_ascii=False),
-    }])
+    }], remote=remote)
     if _needs_atomic_repair(repaired):
         raise VLMError(
             "A complex PWD experience clause could not be separated into reliable "
@@ -634,7 +662,11 @@ def _effective_alternative(
 def extract_pwd_requirements(path: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     base = extract_9141(path)
     content, _ = _document_content(path, PWD_PROMPT, pwd=True)
-    raw = _ensure_atomic_requirements(_chat(content))
+    # PWDs contain no PII, so a configured remote model is allowed here;
+    # EVL extraction below never sets remote and always stays local.
+    remote = bool(PWD_LLM_URL and PWD_LLM_MODEL and PWD_LLM_API_KEY)
+    raw = _ensure_atomic_requirements(_chat(content, remote=remote),
+                                      remote=remote)
     structured = {
         "job_title": _nullable_text(raw.get("job_title")) or base.get("job_title"),
         "primary": _clean_requirement_set(raw.get("primary")),

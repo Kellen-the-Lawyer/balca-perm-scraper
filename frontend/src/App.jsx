@@ -12,6 +12,7 @@ const VIEW_PATHS = {
   "perm-comparer":      "/perm-comparer",
   "perm-verify":        "/perm-verify",
   "evl-compare":        "/evl-compare",
+  "applicant-eval":     "/applicant-eval",
   "visa-bulletin":      "/visa-bulletin",
   "wage-forecaster":    "/wage-forecaster",
   "wage-dashboard":     "/wage-dashboard",
@@ -38,6 +39,7 @@ import { AAOCitationGraphView, CitationGraphView } from "./CitationGraphs";
 import { PermComparer } from "./PermComparer";
 import { PermVerifyView } from "./PermVerifyView";
 import { EvlCompareView } from "./EvlCompareView";
+import { ApplicantEvalView } from "./ApplicantEvalView";
 import { ProjectsView } from "./ProjectsViews";
 import { PolicyView, RegulationsView } from "./RegulationPolicyViews";
 import { SearchAllView } from "./SearchAllView";
@@ -64,6 +66,7 @@ function LandingPage({ onNavigate }) {
     { id: "perm-comparer", label: "PERM Comparer", description: "Compare job description and requirements language, validate PWD wage positioning, and export reports.", accent: "var(--accent)", accentDim: "var(--accent-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>, available: true },
     { id: "perm-verify", label: "PERM Verify", description: "Upload a completed ETA-9089 (and its PWD) to flag denial risks, timing violations, and audit exposure — with citations.", accent: "var(--accent)", accentDim: "var(--accent-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 12l2 2 4-5"/><path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7z"/></svg>, available: true },
     { id: "evl-compare", label: "PWD / EVL Review", description: "Compare every current PWD requirement against experience verification letters and report what is covered, unclear, or missing.", accent: "var(--blue)", accentDim: "var(--blue-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4h6v16H4zM14 4h6v16h-6z"/><path d="m6 10 1.5 1.5L9 9M16 10h2M16 14h2"/></svg>, available: true },
+    { id: "applicant-eval", label: "Applicant Evaluation", description: "Generate the recruiter applicant-review spreadsheet from a PWD or pasted requirements — YES/NO evaluation columns, auto-recommendation formula, and row highlighting.", accent: "var(--amber)", accentDim: "var(--amber-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/><path d="m5.5 13.5 1 1 2-2"/></svg>, available: true },
     { id: "visa-bulletin", label: "Visa Bulletin", description: "Monthly DOS priority dates — track cutoffs, retrogression, and backlog estimates for EB and family categories", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, available: true },
     { id: "wage-dashboard", label: "July 1 Wage Comparer", description: "2026-27 vs 2025-26 prevailing wage changes — US heat map, metro-level SOC comparisons, top movers, and employer exposure analysis", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>, available: true },
     { id: "wage-forecaster", label: "Upcoming Wage Estimator", description: "July 2026 prevailing wage projections — all 619 H-1B/PERM occupation codes across 530 metro areas, current OFLC 2025-26 floors and ECI-calibrated estimates", accent: "var(--green)", accentDim: "var(--green-dim)", icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>, available: true },
@@ -228,6 +231,7 @@ export default function App() {
       { type: "item", id: "perm-comparer",  label: "PERM Comparer",      icon: icon.tool  },
       { type: "item", id: "perm-verify",    label: "PERM Verify",        icon: icon.tool  },
       { type: "item", id: "evl-compare",    label: "PWD / EVL Review",   icon: icon.letter },
+      { type: "item", id: "applicant-eval", label: "Applicant Evaluation", icon: icon.tool },
       { type: "item", id: "wage-forecaster", label: "Upcoming Wage Estimator", icon: icon.cal },
       { type: "item", id: "wage-dashboard",   label: "July 1 Wage Comparer",    icon: icon.cal },
       { type: "item", id: "wage-level",       label: "Wage Level Tool",          icon: icon.tool },
@@ -261,6 +265,7 @@ export default function App() {
       { id: "perm-comparer",  label: "PERM Comparer",  icon: icon.tool   },
       { id: "perm-verify",    label: "PERM Verify",    icon: icon.tool   },
       { id: "evl-compare",    label: "PWD / EVL Review", icon: icon.letter },
+      { id: "applicant-eval", label: "Applicant Evaluation", icon: icon.tool },
       { id: "wage-forecaster", label: "Upcoming Wage Estimator", icon: icon.cal },
       { id: "wage-level",     label: "Wage Level Tool", icon: icon.tool   },
       { id: "soc-suggest",    label: "SOC Suggester",  icon: icon.tool   },
@@ -384,6 +389,7 @@ export default function App() {
         {view === "perm-comparer" && <PermComparer />}
         {view === "perm-verify" && <PermVerifyView />}
         {view === "evl-compare" && <EvlCompareView />}
+        {view === "applicant-eval" && <ApplicantEvalView />}
         {view === "visa-bulletin" && <VisaBulletinView />}
         {view === "wage-forecaster" && <WageForecaster />}
         {view === "wage-dashboard"  && <WageDashboard />}

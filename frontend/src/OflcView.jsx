@@ -51,6 +51,18 @@ const PERM_FIELDS = {
     { key: "is_multiple_locations", label: "Multiple Locations",    type: "text", agg: false },
     { key: "employer_layoff",       label: "Employer Layoff",       type: "text", agg: false },
   ],
+  "Recruitment Steps (new-form 9089, FY2024+)": [
+    { key: "used_radio_ad",             label: "Radio/TV Ad",            type: "text", agg: false },
+    { key: "used_job_fair",             label: "Job Fair",               type: "text", agg: false },
+    { key: "used_emp_website",          label: "Employer Website",       type: "text", agg: false },
+    { key: "used_job_search_site",      label: "Job Search Website",     type: "text", agg: false },
+    { key: "used_on_campus_recruiting", label: "On-Campus Recruiting",   type: "text", agg: false },
+    { key: "used_trade_org",            label: "Trade/Professional Org", type: "text", agg: false },
+    { key: "used_private_firm",         label: "Private Employment Firm", type: "text", agg: false },
+    { key: "used_emp_referral",         label: "Employee Referral Program", type: "text", agg: false },
+    { key: "used_campus_placement",     label: "Campus Placement Office", type: "text", agg: false },
+    { key: "used_local_newspaper",      label: "Local/Ethnic Newspaper", type: "text", agg: false },
+  ],
 };
 
 const LCA_FIELDS = {

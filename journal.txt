@@ -2429,3 +2429,139 @@ re-ranker still the structural fix for reg-vs-commentary ranking.
   answer returns the full corrected series.
 - CAUTION for downstream: any analysis/feature built on oflc_perm
   employer/wage/attorney fields before 7/27/26 silently excluded FY2020–24.
+
+
+=== 2026-08-06 — PERM recruitment-step flags added to oflc_perm / Ask AI ===
+- Root cause found for Ask AI failing "what % of employers use radio ads":
+  recruitment columns were never ingested and never exposed in OFLC_TABLES.
+- Added 10 text Y/N columns to oflc_perm (used_radio_ad, used_job_fair,
+  used_emp_website, used_job_search_site, used_on_campus_recruiting,
+  used_trade_org, used_private_firm, used_emp_referral,
+  used_campus_placement, used_local_newspaper), derived from
+  RECR_OCC_*_FROM/TO date pairs. NULL = legacy-form filing (not reported).
+- ingest_oflc.py: mapper + PERM_SQL updated; DATA_DIR fixed (oflc_data dir
+  was gone → now data/raw/oflc, override via OFLC_DATA_DIR); PERM glob fixed
+  to match New_Form files.
+- BUG FOUND: PERM_Disclosure_Data_New_Form_FY2024_Q4.xlsx (22,292 filings)
+  was never ingested — old glob PERM_Disclosure_Data_FY*.xlsx didn't match.
+  Now loaded. FY2024 total is 114,499 (92,258 legacy + 22,241 new-form).
+- New scripts/ingest/backfill_perm_recruitment.py backfills flags by
+  (case_number, fiscal_year) for already-ingested rows.
+- core.py OFLC_TABLES + ask_tools.py tool description updated (incl. NULL
+  denominator guidance so Haiku doesn't report false zeros pre-FY2024).
+- Verified vs raw file: FY2025 radio = 23,962/147,056 apps (16.29%);
+  FY2024 new-form 14.99%; FY2026 Q1 19.38%. By unique employer (FEIN),
+  FY2025 radio usage = 9,242/35,698 (25.9%).
+- Deployed: sync-from-dev.sh + docker compose up --build -d; app healthy.
+- PENDING: Homebrew PG :5433 is DOWN (brew services shows postgresql@16
+  error). DDL + backfill applied to Docker :5432 ONLY. When :5433 is back:
+  run the same ALTER TABLE (10 ADD COLUMN text) then re-run ingest_oflc.py
+  --program perm and backfill_perm_recruitment.py against :5433.
+- Git commits not made (Kellen commits himself).
+- Follow-up same day: pivot builder now exposes the recruitment flags.
+  Backend already accepted them (endpoint validates against OFLC_TABLES);
+  frontend PERM_FIELDS in OflcView.jsx was hardcoded, so added a
+  "Recruitment Steps (new-form 9089, FY2024+)" field group with all 10
+  flags. Synced + rebuilt; verified used_radio_ad present in served bundle.
+  UI note: pivots over these fields will show a NULL/blank bucket for
+  legacy-form rows — that's "not reported," not "N".
+
+=== 2026-08-06 — Applicant Evaluation Spreadsheet tool (new) ===
+- New recruiter-facing tool: generates the PERM applicant review workbook
+  (modeled on the firm's Workday template, Req R29297 sample).
+- app/applicant_eval.py: stateless openpyxl generator. Dynamic columns
+  (alternative route omitted when absent; N special skills), YES/NO data
+  validation, Q-column formula IF(AND(routes, COUNTIF(skills)>=threshold),
+  "Send Questionnaire","Do Not Send"), full-row yellow CF on $Q, exact
+  styling from the sample (accent banners, D9D9D9 headers). Typos in the
+  template fixed ("Requirements", "Questionnaire"); evaluator-responsibility
+  disclaimer kept verbatim; B1 instructions regenerate to match the chosen
+  threshold/columns. Default threshold = floor(n_skills/2), min 1.
+- app/routers/applicant_eval.py: POST /api/applicant-eval/from-pwd (PWD PDF
+  -> editable config via perm_verify.evl_compare.extract_pwd_requirements —
+  reused, no new parsing) and POST /api/applicant-eval/generate (config ->
+  xlsx download). Registered in api.py.
+- frontend/src/ApplicantEvalView.jsx: PWD-load button, position fields,
+  editable primary/alternative questions (alt toggle), editable skill list +
+  bulk paste (lines wrapped as "Does the applicant's experience involve X?"),
+  highlight-rule card with ?-help popup (animated row-highlight demo) and
+  threshold input that tracks floor(n/2) until overridden. Registered in
+  App.jsx (route /applicant-eval, Tools nav, landing card).
+- Tested: TestClient generate 200 + validation 400s; workbook verified vs
+  sample (formula/CF/DV/geometry, no-alt collapse, rule-off manual dropdown);
+  npm run build clean. NOT deployed to casebase-app. No git commits (Kellen).
+- NEXT: Kellen to review UI (his item #5); then wire Graphite (Antigravity)
+  to call /api/applicant-eval/* via casebase_client.py from the PERM tab.
+
+=== 2026-08-06 (cont.) — Applicant Eval: UI polish + Graphite wiring ===
+- Help popup rebuilt as a staged demo (cells fill sequentially incl. a NO,
+  skills-met counter, yellow sweep + glow, "Send Questionnaire" badge pop,
+  7s loop). Kellen: acceptable, not great — candidate for a design pass.
+- Threshold selector now ALWAYS visible in the rule card (was hidden until
+  skills existed — why Kellen thought it was missing); disabled w/ hint at 0
+  skills. Fixed global index.css `input{width:100%}` stretching checkboxes
+  (width:auto inline) — check this on any future checkbox in Casebase UI.
+- Playwright installed in Homebrew python3.14 (--break-system-packages);
+  use channel="chrome" (cached playwright browsers are old rev). Used for
+  frontend screenshot verification against dev server :5174.
+- GRAPHITE WIRING (Antigravity repo — Django check + vite build both clean):
+  * casebase_client.py: applicant_eval_from_pwd(pdf_bytes) [multipart,
+    180s timeout], applicant_eval_generate(config) -> (bytes, filename).
+  * core/views_applicant_eval.py: POST /api/applicant-eval/<profile_id>/
+    from-pwd/ (auto-finds newest profile Document PDF matching
+    PWD/9141/"prevailing wage", or explicit document_id) and POST
+    /api/applicant-eval/generate/ (streams xlsx). urls.py registered.
+  * frontend PermApplicantEvalCard.jsx on PERM details tab (after
+    RecruitmentCard): Load-from-case-PWD / Start blank, editable questions +
+    skills + threshold rule, Generate downloads.
+- DEPLOY DEPENDENCY: Graphite hits CASEBASE_API_URL (Docker :8080). The
+  applicant-eval endpoints exist only in the dev repo until sync-from-dev.sh
+  + rebuild — Graphite card will 502 until Casebase is deployed.
+- No git commits (Kellen). E2E test pending: needs deployed casebase-app +
+  a profile with an uploaded PWD PDF.
+
+=== 2026-08-06 (cont. 2) — PWD parsing: remote model + question fixes ===
+- Slowness diagnosed: PWD extraction uses the LOCAL VLM (evl_compare._chat ->
+  LM Studio :1234, qwen3-vl-8b) with page images + possible repair pass;
+  Kellen had qwen3.5-9b loaded 3x -> swap. qwen3.5 is text-only anyway.
+- Added remote backend for PWD parsing ONLY (EVL path never sets remote —
+  EVLs have PII, always local). Env: PWD_LLM_URL / PWD_LLM_MODEL /
+  PWD_LLM_API_KEY in Casebase/.env; currently OpenAI gpt-5.6-luna
+  (NOT bare "gpt-5.6" — that alias routes to Sol). GPT-5.x rejects
+  temperature + max_tokens -> remote branch omits temp, uses
+  max_completion_tokens.
+- Tested all 4 ETA-9141s in ~/Desktop/PERM Comparer Improvement Docs:
+  13-26s each (vs minutes local). Duration binding correct incl. shared
+  "2 years in the following" and "full term must include" (72mo/item).
+- Question-template fixes in applicant_eval.py: de-dupe "or related
+  position/occupation" + "related field" tails vs extractor text; gerund-only
+  lowercasing (needs lowercase second word — preserves Spring Boot, P&L,
+  Snowflake); conditions-of-employment filter (travel/telecommute/relocation/
+  on-call) -> excluded from skills, returned as config.conditions_excluded,
+  surfaced as a note in the frontend.
+- KNOWN VARIANCE: no temperature control on GPT-5.x -> atomic granularity
+  differs run to run (same PWD gave 20 skills once, 13 next: comma groups
+  sometimes split). Threshold auto-adjusts; user edits. If it bothers,
+  options: group items by source_clause, or try gpt-5.6-terra.
+- nohup+heredoc+& via DC dies silently — write a script file to /tmp and run
+  it instead (pattern reaffirmed).
+- API on :8001 restarted with new code. No git commits (Kellen).
+
+=== 2026-08-06 (cont. 3) — Applicant Eval DEPLOYED to casebase-app ===
+- docker-compose.yml (deploy repo, compose is deploy-native): app service now
+  passes PWD_LLM_URL/MODEL/API_KEY (default empty = local-VLM fallback);
+  values copied from dev .env into casebase-app/.env.
+- First rebuild crash-looped: ModuleNotFoundError openpyxl — the deployed
+  image installs api/requirements.txt (synced from dev app/requirements.txt,
+  which lacked it; root requirements.txt is dev-only). Fixed in DEV
+  app/requirements.txt (openpyxl==3.1.5), re-synced, rebuilt.
+- Verified on :8080: generate 200 (24.7KB xlsx), from-pwd 200 in 12.5s on a
+  real 9141 through gpt-5.6-luna, existing routes healthy, frontend serves
+  /applicant-eval, live via Cloudflare tunnel.
+- NOTE: container never could reach LM Studio (:1234) — remote model is what
+  makes deployed PWD parsing work at all, not just faster.
+- SECURITY (standing item, now sharper): /api/applicant-eval/from-pwd on the
+  public tunnel spends OpenAI credits per request, unauthenticated. Adds to
+  the gate-immediately list (PERM Verify, RAG). Cloudflare Access + service
+  token for Graphite's casebase_client remains the near-term plan.
+- Graphite E2E now unblocked (its card hits :8080). No git commits (Kellen).

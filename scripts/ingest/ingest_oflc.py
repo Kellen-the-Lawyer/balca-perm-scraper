@@ -22,7 +22,10 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 DB_URL   = os.environ.get("DATABASE_URL", "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions")
-DATA_DIR = Path(__file__).parent / "oflc_data"
+DATA_DIR = Path(os.environ.get(
+    "OFLC_DATA_DIR",
+    Path(__file__).resolve().parents[2] / "data" / "raw" / "oflc",
+))
 BATCH    = 2000
 
 def get_conn():
@@ -76,7 +79,10 @@ INSERT INTO oflc_perm (
   atty_law_firm, atty_last_name, atty_first_name, atty_state,
   job_title, soc_code, soc_title, wage_from, wage_to, wage_per,
   worksite_city, worksite_state, worksite_postal_code, worksite_bls_area,
-  pwd_number, fw_currently_employed, is_multiple_locations, employer_layoff
+  pwd_number, fw_currently_employed, is_multiple_locations, employer_layoff,
+  used_job_fair, used_emp_website, used_job_search_site, used_on_campus_recruiting,
+  used_trade_org, used_private_firm, used_emp_referral, used_campus_placement,
+  used_local_newspaper, used_radio_ad
 ) VALUES (
   %(case_number)s, %(fiscal_year)s, %(source_file)s, %(case_status)s,
   %(received_date)s, %(decision_date)s, %(occupation_type)s,
@@ -85,9 +91,40 @@ INSERT INTO oflc_perm (
   %(atty_law_firm)s, %(atty_last_name)s, %(atty_first_name)s, %(atty_state)s,
   %(job_title)s, %(soc_code)s, %(soc_title)s, %(wage_from)s, %(wage_to)s, %(wage_per)s,
   %(worksite_city)s, %(worksite_state)s, %(worksite_postal_code)s, %(worksite_bls_area)s,
-  %(pwd_number)s, %(fw_currently_employed)s, %(is_multiple_locations)s, %(employer_layoff)s
+  %(pwd_number)s, %(fw_currently_employed)s, %(is_multiple_locations)s, %(employer_layoff)s,
+  %(used_job_fair)s, %(used_emp_website)s, %(used_job_search_site)s, %(used_on_campus_recruiting)s,
+  %(used_trade_org)s, %(used_private_firm)s, %(used_emp_referral)s, %(used_campus_placement)s,
+  %(used_local_newspaper)s, %(used_radio_ad)s
 ) ON CONFLICT (case_number, fiscal_year) DO NOTHING
 """
+
+# New-form (2023+ ETA-9089) additional professional recruitment steps.
+# Each is reported as a FROM/TO date pair; we derive Y/N. Legacy-form files
+# lack these columns entirely, so the flags stay NULL for those rows.
+RECR_OCC_STEPS = {
+    "used_job_fair":             "RECR_OCC_JOB_FAIR",
+    "used_emp_website":          "RECR_OCC_EMP_WEBSITE",
+    "used_job_search_site":      "RECR_OCC_JOB_SEARCH",
+    "used_on_campus_recruiting": "RECR_OCC_ON_CAMPUS",
+    "used_trade_org":            "RECR_OCC_TRADE_ORG",
+    "used_private_firm":         "RECR_OCC_PRIVATE_EMP",
+    "used_emp_referral":         "RECR_OCC_EMP_REFERRAL",
+    "used_campus_placement":     "RECR_OCC_CAMPUS_PLACEMENT",
+    "used_local_newspaper":      "RECR_OCC_LOCAL_NEWSPAPER",
+    "used_radio_ad":             "RECR_OCC_RADIO_AD",
+}
+
+def recr_flags(row, columns) -> dict:
+    out = {}
+    for dest, prefix in RECR_OCC_STEPS.items():
+        c_from, c_to = f"{prefix}_FROM", f"{prefix}_TO"
+        if c_from not in columns and c_to not in columns:
+            out[dest] = None  # legacy-form file: recruitment fields not reported
+        else:
+            used = (coerce_date(g(row, c_from)) is not None or
+                    coerce_date(g(row, c_to)) is not None)
+            out[dest] = "Y" if used else "N"
+    return out
 
 def map_perm_row(row, fy, sf):
     return {
@@ -123,6 +160,7 @@ def map_perm_row(row, fy, sf):
         "fw_currently_employed":   coerce_str(g(row, "OTHER_REQ_IS_FW_CURRENTLY_WRK", "FOREIGN_WORKER_CURR_EMPLOYED")),
         "is_multiple_locations":   coerce_str(g(row, "IS_MULTIPLE_LOCATIONS")),
         "employer_layoff":         coerce_str(g(row, "OTHER_REQ_EMP_LAYOFF", "LAYOFF_IN_PAST_SIX_MONTHS")),
+        **recr_flags(row, set(row.index)),
     }
 
 # ── LCA ───────────────────────────────────────────────────────────────────────
@@ -374,7 +412,8 @@ def main():
         print(f"\n{'='*60}\n {program.upper()} Disclosure Data\n{'='*60}")
 
         if program == "perm":
-            files = sorted((DATA_DIR / "PERM").rglob("PERM_Disclosure_Data_FY*.xlsx"))
+            # Pattern must also match PERM_Disclosure_Data_New_Form_FY2024_Q4.xlsx
+            files = sorted((DATA_DIR / "PERM").rglob("PERM_Disclosure_Data*FY*.xlsx"))
         elif program == "lca":
             files = lca_files_deduped()
         else:
