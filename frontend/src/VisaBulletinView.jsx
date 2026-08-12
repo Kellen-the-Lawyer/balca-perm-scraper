@@ -179,7 +179,7 @@ function VisaBulletinView() {
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
       {/* ── Top bar ── */}
-      <div style={{ padding: "11px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+      <div className="vb-topbar" style={{ padding: "11px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 16, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
             <span>Visa Bulletin — {bulletinTitle}</span>
@@ -238,10 +238,10 @@ function VisaBulletinView() {
       </div>
 
       {/* ── Body: sidebar + center + right panel ── */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      <div className="vb-body" style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
         {/* ── Left sidebar ── */}
-        <div style={{ width: 220, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg2)" }}>
+        <div className="vb-side" style={{ width: 220, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg2)" }}>
 
           {/* Side tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
@@ -304,7 +304,7 @@ function VisaBulletinView() {
         </div>
 
         {/* ── Center ── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="vb-center" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
           {/* Center tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg2)", flexShrink: 0 }}>
@@ -318,7 +318,8 @@ function VisaBulletinView() {
 
             {/* ── Priority dates table ── */}
             {!loadingB && centerTab === "dates" && (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="m-scroll-x">
+              <table className="vb-table" style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ position: "sticky", top: 0, background: "var(--bg)", zIndex: 2 }}>
                     <th style={{ padding: "9px 14px", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text3)", textAlign: "left", borderBottom: "1px solid var(--border)", width: 110 }}>Preference</th>
@@ -354,6 +355,7 @@ function VisaBulletinView() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
 
             {/* ── Movement chart ── */}
@@ -411,7 +413,7 @@ function VisaBulletinView() {
         </div>
 
         {/* ── Right panel: backlog + history ── */}
-        <div style={{ width: 280, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--bg2)", flexShrink: 0 }}>
+        <div className="vb-right" style={{ width: 280, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", background: "var(--bg2)", flexShrink: 0 }}>
           <div style={{ padding: "11px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)", marginBottom: 2 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", color: "var(--amber)" }}>{selPref}</span>

@@ -23,105 +23,147 @@ const wrapSkill = (line) => {
 const floorHalf = (n) => (n > 0 ? Math.max(1, Math.floor(n / 2)) : 0);
 
 
-// Demo timeline: which cells are filled at each tick (500ms per tick).
-// Skills 1,3,4,5 are YES and 2 is NO — threshold 3 of 5 is met at tick 7,
-// the row sweeps yellow at tick 8, holds, then the loop resets.
-const DEMO_SKILLS = ["YES", "NO", "YES", "YES", "YES"];
-const DEMO_TICKS = 14;
+// ── Help popup: how the highlight rule works ─────────────────────────────────
+// A stepped walkthrough of a miniature spreadsheet — the same columns, formula,
+// and conditional formatting the generated workbook uses. Auto-advances gently;
+// any click takes over. The one animation is the yellow row sweep (the payoff),
+// disabled under prefers-reduced-motion.
+const DEMO_COLS = [
+  { key: "name", letter: "A", label: "Applicant",  w: 86 },
+  { key: "edu",  letter: "B", label: "Edu",        w: 52 },
+  { key: "exp",  letter: "C", label: "Exp",        w: 52 },
+  { key: "s1",   letter: "D", label: "Skill 1",    w: 58 },
+  { key: "s2",   letter: "E", label: "Skill 2",    w: 58 },
+  { key: "s3",   letter: "F", label: "Skill 3",    w: 58 },
+  { key: "q",    letter: "G", label: "Pre-Screen", w: 134 },
+];
+const DEMO_ROW = { name: "A. Rivera", edu: "YES", exp: "YES", s1: "YES", s2: "NO", s3: "YES" };
+const DEMO_FORMULA = '=IF(AND(B2="YES",C2="YES",COUNTIF(D2:F2,"YES")>=2),"Send Questionnaire","Do Not Send")';
+
+const DEMO_STEPS = [
+  { focus: ["edu", "exp"], fx: "YES",
+    caption: "Recruiters answer YES or NO for the primary education and experience requirements." },
+  { focus: ["s1", "s2", "s3"], fx: "YES",
+    caption: "Then each special-skill question. This applicant meets 2 of the 3 — at least 2 are required." },
+  { focus: ["q"], fx: DEMO_FORMULA,
+    caption: "Column G runs the recommendation formula for every row — no manual tallying." },
+  { focus: [], fx: DEMO_FORMULA,
+    caption: "When the rule passes, conditional formatting turns the whole row yellow: contact this applicant." },
+];
 
 function HelpPopup({ onClose }) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setTick(v => (v + 1) % DEMO_TICKS), 500);
-    return () => clearInterval(t);
-  }, []);
-  const eduOn = tick >= 1, expOn = tick >= 2;
-  const skillsShown = Math.max(0, Math.min(5, tick - 2));
-  const yesCount = DEMO_SKILLS.slice(0, skillsShown)
-    .filter(v => v === "YES").length;
-  const hit = expOn && yesCount >= 3;
-  const lit = tick >= 8;
+  const [step, setStep] = useState(0);
+  const [auto, setAuto] = useState(true);
+  const reduceMotion = typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-  const box = (filled, val) => ({
-    minWidth: 40, padding: "6px 4px", fontSize: 11, fontWeight: 600,
-    textAlign: "center", borderRadius: 6, border: "1px solid var(--border)",
-    background: "var(--bg3)", color: val === "NO" ? "#c66" : "var(--text1)",
-    opacity: filled ? 1 : 0.25,
-    transform: filled ? "scale(1)" : "scale(.7)",
-    transition: "opacity .3s, transform .3s cubic-bezier(.34,1.56,.64,1)",
-  });
-  const lbl = { fontSize: 9.5, color: "var(--text3)", textAlign: "center",
-    marginBottom: 3, whiteSpace: "nowrap" };
+  useEffect(() => {
+    if (!auto) return;
+    const t = setInterval(() => setStep(s => (s + 1) % DEMO_STEPS.length), 3200);
+    return () => clearInterval(t);
+  }, [auto]);
+
+  const go = (s) => { setAuto(false); setStep(((s % DEMO_STEPS.length) + DEMO_STEPS.length) % DEMO_STEPS.length); };
+  const cur = DEMO_STEPS[step];
+  const lit = step === 3;
+  const mono = "'DM Mono', monospace";
+  const focused = (key) => cur.focus.includes(key);
+
+  const cell = (key, text, { header = false, letter = false } = {}) => (
+    <div key={key + (header ? "h" : letter ? "l" : "d")} style={{
+      width: DEMO_COLS.find(c => c.key === key)?.w, flexShrink: 0,
+      padding: letter ? "2px 6px" : "5px 6px",
+      fontSize: letter ? 9 : header ? 10 : 11,
+      fontFamily: mono,
+      fontWeight: header || (key === "q" && lit) ? 600 : 400,
+      textAlign: key === "name" ? "left" : "center",
+      color: letter ? "var(--text3)"
+        : header ? "var(--text2)"
+        : text === "NO" ? "#b04a4a"
+        : lit && key === "q" ? "#3a3000" : "var(--text)",
+      background: letter ? "transparent"
+        : header ? "var(--bg3)"
+        : "transparent",
+      borderRight: letter ? "none" : "1px solid var(--border)",
+      borderBottom: letter ? "none" : "1px solid var(--border)",
+      outline: !letter && !header && focused(key) ? "2px solid var(--amber)" : "none",
+      outlineOffset: -2,
+      transition: "outline-color .25s",
+      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+    }}>{text}</div>
+  );
+
+  const qValue = step >= 2 ? "Send Questionnaire" : "";
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60,
       background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center",
-      justifyContent: "center" }}>
+      justifyContent: "center", padding: 16 }}>
       <style>{`
         @keyframes aeSweep { from { background-position: 100% 0; }
                              to   { background-position: 0% 0; } }
-        @keyframes aePop { 0% { transform: scale(.6); opacity: 0; }
-                           60% { transform: scale(1.12); opacity: 1; }
-                           100% { transform: scale(1); opacity: 1; } }
-        @keyframes aeGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(250,204,21,0); }
-                            50% { box-shadow: 0 0 14px 2px rgba(250,204,21,.45); } }
       `}</style>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--bg2)",
-        border: "1px solid var(--border)", borderRadius: 12, padding: 24,
-        width: 480, maxWidth: "94vw", boxShadow: "0 12px 40px rgba(0,0,0,.4)" }}>
+        border: "1px solid var(--border)", borderRadius: 12, padding: 22,
+        width: 540, maxWidth: "94vw", boxShadow: "0 12px 40px rgba(0,0,0,.4)" }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>
-          Automatic highlight rule</div>
+          How the highlight rule works</div>
 
-        <div style={{ borderRadius: 10, padding: "12px 12px 10px",
-          border: "1px solid var(--border)",
-          background: lit
-            ? "linear-gradient(90deg, #FFF3A0 0%, #FFF3A0 50%, var(--bg3) 50%, var(--bg3) 100%)"
-            : "var(--bg3)",
-          backgroundSize: "200% 100%",
-          animation: lit ? "aeSweep .7s ease-out forwards, aeGlow 1.6s ease-in-out .7s infinite" : "none",
-          marginBottom: 12 }}>
-          <div style={{ display: "flex", gap: 6, alignItems: "flex-end",
-            justifyContent: "center" }}>
-            <div><div style={lbl}>Primary Edu</div>
-              <div style={box(eduOn, "YES")}>YES</div></div>
-            <div><div style={lbl}>Primary Exp</div>
-              <div style={box(expOn, "YES")}>YES</div></div>
-            <div style={{ width: 8 }} />
-            {DEMO_SKILLS.map((v, i) => (
-              <div key={i}><div style={lbl}>Skill {i + 1}</div>
-                <div style={box(skillsShown > i, v)}>{v}</div></div>))}
-            <div style={{ width: 8 }} />
-            <div><div style={lbl}>Skills met</div>
-              <div style={{ ...box(skillsShown > 0, "YES"),
-                background: hit ? "#2e7d32" : "var(--bg3)",
-                color: hit ? "#fff" : "var(--text2)",
-                borderColor: hit ? "#2e7d32" : "var(--border)" }}>
-                {yesCount} / 3</div></div>
-          </div>
-          <div style={{ textAlign: "center", marginTop: 10, minHeight: 26 }}>
-            {lit
-              ? <span style={{ display: "inline-block", fontSize: 12.5,
-                  fontWeight: 700, color: "#3a3000", background: "#FFE94D",
-                  border: "1px solid #E3C800", borderRadius: 6,
-                  padding: "4px 12px", animation: "aePop .45s ease-out" }}>
-                  ✓ Send Questionnaire — row highlighted</span>
-              : <span style={{ fontSize: 11.5, color: lit ? "#3a3000" : "var(--text3)" }}>
-                  {tick < 2 ? "Evaluating primary requirements…"
-                    : skillsShown < 5 ? "Evaluating special skills…"
-                    : "Requirements met — applying rule…"}</span>}
+        {/* Formula bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8,
+          border: "1px solid var(--border)", borderBottom: "none",
+          borderRadius: "8px 8px 0 0", background: "var(--bg3)",
+          padding: "5px 10px" }}>
+          <span style={{ fontFamily: mono, fontSize: 10, fontStyle: "italic",
+            color: "var(--text3)", flexShrink: 0 }}>fx</span>
+          <span style={{ fontFamily: mono, fontSize: 10, color: "var(--text2)",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {cur.fx}</span>
+        </div>
+
+        {/* Miniature sheet */}
+        <div className="m-scroll-x" style={{ border: "1px solid var(--border)",
+          borderRadius: "0 0 8px 8px", background: "var(--bg)", marginBottom: 12 }}>
+          <div style={{ minWidth: 502 }}>
+            <div style={{ display: "flex" }}>
+              {DEMO_COLS.map(c => cell(c.key, c.letter, { letter: true }))}
+            </div>
+            <div style={{ display: "flex", borderTop: "1px solid var(--border)" }}>
+              {DEMO_COLS.map(c => cell(c.key, c.label, { header: true }))}
+            </div>
+            <div style={{ display: "flex",
+              background: lit
+                ? (reduceMotion ? "#FFF3A0"
+                   : "linear-gradient(90deg, #FFF3A0 0%, #FFF3A0 50%, transparent 50%, transparent 100%)")
+                : "transparent",
+              backgroundSize: "200% 100%",
+              animation: lit && !reduceMotion ? "aeSweep .6s ease-out forwards" : "none" }}>
+              {DEMO_COLS.map(c => cell(c.key, c.key === "q" ? qValue : DEMO_ROW[c.key]))}
+            </div>
           </div>
         </div>
 
-        <div style={{ fontSize: 12.5, color: "var(--text2)", lineHeight: 1.55 }}>
-          When an applicant meets the primary or alternative requirements and at
-          least your chosen number of special skills, the spreadsheet highlights
-          the entire row yellow and flips the Pre-Screen Questionnaire column to
-          &ldquo;Send Questionnaire.&rdquo; Recruiters instantly see who to
-          contact — and the evaluator still verifies every recommendation.
-        </div>
-        <div style={{ textAlign: "right", marginTop: 16 }}>
+        {/* Step caption + controls */}
+        <div style={{ fontSize: 12.5, color: "var(--text2)", lineHeight: 1.55,
+          minHeight: 40 }}>{cur.caption}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {DEMO_STEPS.map((_, i) => (
+              <button key={i} onClick={() => go(i)} aria-label={`Step ${i + 1}`}
+                style={{ width: 8, height: 8, minHeight: "unset", padding: 0,
+                  borderRadius: "50%", border: "none", cursor: "pointer",
+                  background: i === step ? "var(--amber)" : "var(--border)" }} />
+            ))}
+          </div>
+          <button onClick={() => go(step - 1)} style={{ ...btn(false),
+            fontSize: 11, padding: "4px 10px" }}>‹ Back</button>
+          <button onClick={() => go(step + 1)} style={{ ...btn(false),
+            fontSize: 11, padding: "4px 10px" }}>Next ›</button>
+          <div style={{ flex: 1 }} />
           <button style={btn(false)} onClick={onClose}>Close</button>
         </div>
+        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 10 }}>
+          The evaluator still verifies every recommendation.</div>
       </div>
     </div>
   );
@@ -235,7 +277,7 @@ export function ApplicantEvalView() {
         <div style={panel}>
           <div style={{ fontWeight: 650, fontSize: 13.5, marginBottom: 6 }}>
             1 · Load requirements</div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <input ref={fileInput} type="file" accept=".pdf" style={{ display: "none" }}
               onChange={(e) => { loadPwd(e.target.files?.[0]); e.target.value = ""; }} />
             <button style={btn(true)} disabled={busy}
@@ -250,7 +292,7 @@ export function ApplicantEvalView() {
 
         <div style={panel}>
           <div style={{ fontWeight: 650, fontSize: 13.5 }}>2 · Position</div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+          <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
             <div><label style={label}>Job title</label>
               <input style={inp} value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}

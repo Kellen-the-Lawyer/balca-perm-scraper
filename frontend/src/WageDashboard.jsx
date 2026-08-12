@@ -79,7 +79,7 @@ function SummaryCards({ dark }) {
   ] : [];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
       {loading ? [0,1,2,3].map(i => (
         <div key={i} style={{ height: 80, background: "var(--bg3)", borderRadius: "var(--radius-lg)", animation: "pulse 1.4s ease infinite" }} />
       )) : cards.map((c,i) => (
@@ -144,7 +144,7 @@ function USHeatMap({ onStateSelect, selectedState, dark }) {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 16 }}>
+      <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 16 }}>
         {/* Map */}
         <div ref={wrapRef} style={{ position: "relative" }}>
           <svg viewBox={US_MAP_VIEWBOX} style={{ width: "100%", height: "auto", display: "block" }}>
@@ -281,13 +281,13 @@ function AreaWagePanel({ areaCode, areaName, dark }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="m-scroll-x" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {data.map((row, i) => {
           const chg = row.change_pct?.I;
           const barWidth = (v) => v ? `${(v / maxWage * 100).toFixed(1)}%` : "0%";
           const barH = 8;
           return (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "200px 1fr 80px 80px 72px", gap: 12, alignItems: "center" }}>
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "200px 1fr 80px 80px 72px", gap: 12, alignItems: "center", minWidth: 560 }}>
               {/* SOC label */}
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
@@ -761,7 +761,7 @@ function SocExplorerPanel({ dark }) {
           No comparable year-over-year data for this SOC
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 28px", alignItems: "start" }}>
+        <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 28px", alignItems: "start" }}>
           {[["gain", "Top 20 gains"], ["reduction", "Top 20 reductions"]].map(([dir, label]) => {
             const rows = areas.filter(a => a.direction === dir);
             return (

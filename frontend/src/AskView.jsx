@@ -487,7 +487,7 @@ export function AskView({ onNavigate }) {
                 <button key={q} onClick={() => { setQuestion(q); setTimeout(() => inputRef.current?.focus(), 0); }}
                   style={{ padding: "8px 12px", fontSize: 12, textAlign: "left", borderRadius: "var(--radius)",
                     border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text2)",
-                    cursor: "pointer", lineHeight: 1.4 }}>
+                    cursor: "pointer", lineHeight: 1.4, whiteSpace: "normal", height: "auto" }}>
                   {q}
                 </button>
               ))}

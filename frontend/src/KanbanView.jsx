@@ -380,7 +380,7 @@ function BoardView({ board }) {
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px 14px" }}>
         {loading && cards.length === 0 && <Spinner />}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, alignItems: "start" }}>
+        <div className="kanban-board" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, alignItems: "start" }}>
           {COLS.map(col => (
             <KanbanColumn key={col.id} col={col}
               cards={cards.filter(c => c.col === col.id)}
@@ -600,7 +600,7 @@ export function KanbanView() {
           {loading && cards.length === 0 && <Spinner />}
           {error && <div style={{ padding: 20, color: "var(--red)", fontSize: 13 }}>{error}</div>}
           {!loading && !error && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, alignItems: "start" }}>
+            <div className="kanban-board" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, alignItems: "start" }}>
               {COLS.map(col => (
                 <KanbanColumn key={col.id} col={col}
                   cards={visibleCards.filter(c => c.col === col.id)}

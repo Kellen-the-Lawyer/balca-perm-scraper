@@ -464,6 +464,42 @@ html[data-theme="light"] .grid-bg {
   background-image: radial-gradient(circle at 1px 1px, rgba(100,116,139,0.10) 1px, transparent 0);
 }
 
+/* ── Landing: sectioned cards ─────────────── */
+.landing-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.landing-card.clickable:hover {
+  border-color: var(--card-accent);
+  background: var(--card-accent-dim);
+  transform: translateY(-2px);
+}
+.landing-section-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+.landing-section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.landing-section-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 /* ── Regulation navigation prototype ─────────────── */
 .reg-proto-root {
   height: 100%;
@@ -1055,5 +1091,49 @@ html[data-theme="light"] .grid-bg {
   .reg-proto-block pre {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  /* ── Generic mobile utilities ── */
+  .m-stack { grid-template-columns: 1fr !important; }
+  .m-scroll-x { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+
+  /* ── Visa Bulletin: stack the 3-panel layout ── */
+  .vb-topbar { flex-wrap: wrap; row-gap: 8px; }
+  .vb-topbar > div:nth-child(3) { margin-left: 0 !important; }
+  .vb-body { flex-direction: column !important; overflow-y: auto !important; }
+  .vb-side, .vb-right { width: 100% !important; }
+  .vb-side {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .vb-side > div:last-child { max-height: 320px; }
+  .vb-right {
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+  }
+  .vb-center, .vb-center > div:last-child,
+  .vb-side, .vb-right, .vb-right > div:last-child {
+    flex: none !important;
+    overflow: visible;
+  }
+  .vb-center > div:last-child { overflow-y: visible !important; }
+  .vb-table { min-width: 640px; }
+
+  /* ── Kanban: columns become a horizontal snap-scroller ── */
+  .kanban-board {
+    display: flex !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kanban-board > * {
+    min-width: 272px;
+    scroll-snap-align: start;
+  }
+
+  /* ── Ask AI: example chips wrap instead of clipping ── */
+  .ask-chip {
+    white-space: normal !important;
+    text-overflow: clip !important;
   }
 }

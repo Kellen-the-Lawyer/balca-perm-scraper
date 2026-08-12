@@ -2565,3 +2565,322 @@ re-ranker still the structural fix for reg-vs-commentary ranking.
   the gate-immediately list (PERM Verify, RAG). Cloudflare Access + service
   token for Graphite's casebase_client remains the near-term plan.
 - Graphite E2E now unblocked (its card hits :8080). No git commits (Kellen).
+
+=== 2026-08-11 — Mobile audit + fixes (frontend-wide) ===
+- Playwright audit (channel="chrome", 390x844) of all 22 routes on :8080:
+  no document-level horizontal overflow anywhere — failure mode was column
+  COMPRESSION (1fr grids squeezing to slivers), not overflow.
+- Shell was already mobile-ready (hamburger drawer, 44px touch targets,
+  split-view stacking). Broken: Visa Bulletin (worst — 3 panels side by
+  side), OFLC Dashboard (3-col charts ~110px), Wage Dashboard (KPI/Top
+  States clipped), PERM Comparer (panels squeezed, header pills clipped),
+  Kanban (4 cols ~85px), Ask AI chips clipped, tables w/o overflow wrap.
+- FIXES (dev repo, build clean, verified 390px AND 1440px regression):
+  * index.css mobile block: .m-stack (grid->1col), .m-scroll-x, vb-*
+    rules (Visa Bulletin stacks; dates table min-width 640 + h-scroll;
+    sidebar list max 320px), .kanban-board (flex h-scroll, snap, 272px
+    cols), .ask-chip.
+  * VisaBulletinView: classNames vb-topbar/body/side/center/right; table
+    wrapped in .m-scroll-x.
+  * OflcDashboard: repeat(4,1fr)->auto-fit minmax(150px,1fr) (x3);
+    1fr 1fr 1fr->auto-fit minmax(240px,1fr) (x3); header overflowX auto.
+  * WageDashboard: KPI auto-fit; map grid + gains/reductions .m-stack;
+    top-movers .m-scroll-x + row minWidth 560.
+  * PermComparer: grid2/grid3 constants -> auto-fit minmax(300/200px,1fr)
+    (fixes all 6 usages); hero flexWrap; action-pill container needed
+    maxWidth:'100%' — flexShrink:0 kept intrinsic width so its own
+    flexWrap never triggered (subtle: measured overflow was 0 because an
+    ancestor clipped).
+  * KanbanView: className kanban-board on both board grids.
+  * AskView: example chips whiteSpace:normal — GLOBAL `button {
+    white-space: nowrap }` in index.css was the culprit; remember this
+    for any future multi-line button text.
+  * ApplicantEvalView: step-1 flexWrap; Position grid .m-stack.
+  * WageLevelView panel overflow:hidden->overflowX auto; SocSuggestView
+    worksheet table wrapped .m-scroll-x + minWidth 480.
+  * App.jsx: wage-dashboard added to mobile drawer (was desktop-nav only
+    — module list is duplicated 4x in App.jsx; drift caused this).
+  * OflcView + OflcTemplates (x2) headers: overflowX auto.
+- Verification servers: vite dev on :5175 via
+  VITE_API_PROXY=http://127.0.0.1:8080 (proxy to Docker app) — script at
+  /tmp/run_vite.sh, log /tmp/vite5175.log. Kill when done.
+- auto-fit minmax note: empty tracks collapse, so with exactly N children
+  desktop keeps N columns — safe drop-in for fixed `repeat(N,1fr)` ONLY
+  when child count == N (checked grid2/grid3 usages before changing).
+- NOT deployed to casebase-app. No git commits (Kellen).
+- KNOWN GAP: OFLC pivot builder drag-and-drop is HTML5 DnD — dead on
+  touch. Layout survives mobile but tool unusable there w/o tap-to-add.
+- PROPOSED: App.jsx single module registry (id/path/label/icon/group)
+  driving VIEW_PATHS + landing + desktop nav + drawer.
+
+=== 2026-08-11 (cont.) — Drawer derivation + pivot tap-to-assign ===
+- App.jsx: mobile drawerGroups now DERIVED from dropdownGroups (desktop
+  nav = single source of truth; filters seps + disabled). Home prefix and
+  Other (visa-bulletin, projects) suffix stay explicit. Side effect: Ask
+  AI now also in drawer Tools (was header-icon only) — intentional.
+  Verified via Playwright: all 20 drawer items render incl. July 1 Wage
+  Comparer. This closes the 4x-duplication drift for nav/drawer; landing
+  cards + VIEW_PATHS remain separate (full registry refactor still open).
+- OflcView pivot builder: tap-to-assign fallback for touch (HTML5 DnD is
+  dead on touch). Clicking a field row toggles an inline action strip
+  ("→ Rows / → Columns / + Filter"); assignField() routes to
+  handleFieldDrop or prefills a new filter {field, ILIKE, ""}. Drag still
+  works on desktop; click doubles as a shortcut there. Sidebar hint text
+  updated. E2E verified on touch emulation: tap Case Status → → Rows →
+  chip appears in Rows zone, field dims as used.
+- Build clean. NOT deployed. No git commits (Kellen).
+
+=== 2026-08-11 (cont. 2) — Module registry + help popup redesign ===
+- NEW frontend/src/modules.jsx: single source of truth for all routed views.
+  MODULES entries carry path, nav label, navIcon key, and (optionally) the
+  full landing-card content (label override, description, accent, 28px icon,
+  countKey). Exports MODULES/MODULES_BY_ID/VIEW_PATHS/PATH_VIEWS/icon/
+  dropdownGroups/drawerGroups. Drawer still derives from dropdownGroups.
+  Dev-only drift guard: console.warn if a routed module has no card and is
+  not in nav/drawer/header (HEADER_IDS = landing/projects/kanban/ask/
+  search-all).
+- App.jsx 406 -> 296 lines: hardcoded VIEW_PATHS, icon dict, dropdownGroups,
+  drawerGroups all removed; LandingPage cards derive from MODULES (counts
+  injected via countKey map — balca/aao stats endpoints). Adding a tool is
+  now ONE registry entry + one nav() reference.
+- Verified (Playwright, dev :5175): 21 landing cards in original order w/
+  live counts (18,230 BALCA / 166,122 AAO), Letter Assistant "Soon" card
+  present, Tools dropdown correct, card->route nav works, drawer has all
+  20 items, drift guard silent.
+- ID unification: landing card id "letter-assistant" folded into
+  "letter-assist" (nav id). path:null keeps it out of VIEW_PATHS.
+- Applicant Eval help popup REDESIGNED (Kellen's item: "acceptable, not
+  great"). Old: passive 7s timer loop, pill boxes, 3 competing animations
+  (sweep+glow+bounce). New: stepped walkthrough of a faithful miniature
+  spreadsheet — column letters A–G, gridlines, DM Mono cells, and a live
+  formula bar showing the REAL Q-column formula (=IF(AND(...,COUNTIF>=n)).
+  4 steps: primary reqs -> skills -> formula -> CF row sweep (the single
+  kept animation, the payoff). Auto-advances 3.2s; any click takes over
+  (Back/Next/dots). prefers-reduced-motion -> instant fill, no sweep.
+  Sheet wrapped in .m-scroll-x (minWidth 502) for mobile. Persistent
+  footnote: "The evaluator still verifies every recommendation."
+  Verified desktop steps 1–4 + mobile via screenshots.
+- Build clean. NOT deployed. No git commits (Kellen).
+- Splice pattern note: for replacing large JSX blocks, python
+  start/end-marker splice with assertion guards beats edit_block exact
+  matching (used for landing modules array + HelpPopup swap).
+
+=== 2026-08-11 (cont. 3) — Upcoming Wage Estimator removed ===
+- Kellen: tool no longer relevant. Removed wage-forecaster from
+  modules.jsx (registry entry + Tools nav ref) and App.jsx (import +
+  route). Registry did its job: two-line removal, landing/nav/drawer/
+  routes all updated automatically.
+- WageForecaster.jsx left ON DISK (unwired, tree-shaken out of the
+  bundle) in case projections become relevant again next cycle; delete
+  the file + any /api/wages/forecast backend endpoints if this is
+  permanent.
+- /wage-forecaster URL now falls back to landing (PATH_VIEWS miss ->
+  "landing"), verified. Build clean; Tools dropdown, landing, drawer
+  verified without the tool; drift guard silent. NOT deployed. No git
+  commits (Kellen).
+
+=== 2026-08-11 (cont. 4) — SOC & Wage Level merge PROTOTYPE ===
+- Kellen: merging SOC Suggester + Wage Level Tool could work, but the
+  suggester's biggest weakness must be fixed first — no way to change the
+  SOC code or the wage level whose wage is shown. BALCA/AAO citation
+  graphs stay separate (different research); PERM lifecycle tools stay
+  separate. Prototype requested.
+- NEW frontend/src/SocWageView.jsx (~550 lines, self-contained) at
+  /soc-wage — "SOC & Wage Level (Preview)". ORIGINAL TOOLS UNTOUCHED and
+  still registered; remove them + this preview label only on approval.
+- Design, targeting the stated weakness:
+  * Two modes (segmented control): "Suggest from job description" and
+    "I know the SOC code" (embeds the Wage Level workflow).
+  * ANY ranked suggestion is clickable -> re-runs /wage-level/determine
+    for that SOC with the current worksheet inputs. Selected card gets
+    "Worksheet SOC ✓" badge; SOC input + occupation prefill follow.
+  * Worksheet inputs (SOC/degree/years/step-4 skills/lang/sup/area) are
+    seeded from soc-suggest's parsed_requirements but always editable,
+    with Recompute. Top-match determination reused from the suggest
+    response (no duplicate LLM/determine call).
+  * All four level wages render as CLICKABLE cards; clicking one shows
+    that level's wage in the banner with "Level N (selected)" + note
+    "Worksheet computed Level X — you are viewing the Level N wage."
+    Computed level stays tagged "· worksheet" on its card.
+- Backend unchanged — composes existing endpoints only: POST /soc-suggest,
+  POST /wage-level/determine, GET /wage-level/occupation/{soc},
+  GET /wage-level/counties/{st}.
+- Fixed during build: area picker originally lived only in the worksheet
+  panel, which doesn't render pre-suggest — now shows in the suggest
+  panel until the worksheet panel appears ({!sugRes && areaPicker}).
+- E2E verified (dev :5175): direct mode 15-1252/CA -> Level II computed,
+  clicked LEVEL IV card -> $221,187/yr SF wage w/ override note; suggest
+  mode (1 real gpt call) -> 4 ranked matches, inputs seeded, clicked #2
+  (15-1254 Web Developers) -> worksheet re-ran on it, badge moved.
+- Registered in modules.jsx (Tools nav after soc-suggest + landing card
+  marked "Merge Preview") and App.jsx route. Build clean. NOT deployed.
+  No git commits (Kellen).
+- ON APPROVAL: retire wage-level + soc-suggest registry entries (files
+  can stay like WageForecaster), drop "(Preview)" from label, consider
+  /wage-level and /soc-suggest path redirects to /soc-wage.
+
+=== 2026-08-11 (cont. 5) — SOC & Wage prototype v2 (redesign) ===
+- Kellen rejected v1: "ugly and dumb", barely-visible mode toggle, be
+  more creative. Correct diagnosis: v1 was two tools behind a switch,
+  not a merge.
+- v2 = NO MODES. One pipeline, three numbered stages on one canvas:
+  1 Occupation -> 2 Requirements -> 3 Wage.
+  * Occupation box = the centerpiece: accepts SOC code OR title words
+    with live typeahead (250ms debounce). "Not sure which SOC? Match
+    from the job description" is an expandable assist under it (compact
+    ranked rows w/ "why" expander), not a separate mode. LLM only on
+    explicit button.
+  * Requirements strip AUTO-RECOMPUTES the worksheet (400ms debounce,
+    stale-response guard via seq ref) — /wage-level/determine is local
+    and cheap, so no submit button. Change Master's->Bachelor's and
+    watch the level move. Readout dims to 45% while computing.
+  * Signature element: the LEVEL LADDER — four ascending rungs, height
+    proportional to wage, "▼ worksheet" flag on the computed level, any
+    rung clickable; readout follows the click w/ note "Your selection —
+    the worksheet computed Level X. Click its rung to return."
+    Recompute resets the override. Worksite picker inline in stage 3;
+    hint when no worksite: "pick a worksite to light up the ladder."
+  * Worksheet table + SVP analysis as <details> (worksheet open by
+    default — the audit trail stays one glance away).
+- NEW backend endpoint (local, no LLM): GET /api/wage-level/occupations
+  ?q= -> SOC prefix OR title ILIKE over current_oews_wages, limit 12.
+  In app/routers/wage_level.py above /occupation/{soc}.
+- Local API now running: uvicorn app.api:app on :8001 (script
+  /tmp/run_api8001.sh, log /tmp/api8001.log). Vite :5175 proxy
+  REPOINTED to :8001 (was :8080 Docker, which lacks the new endpoint).
+- E2E verified: typeahead "financial an" -> 13-2051 pick; Master's+4yrs
+  TX -> Level IV $115,170 computed w/ ladder flag; clicked LEVEL II rung
+  -> $78,458 w/ override note; edited years -> recompute cleared the
+  override. Checkbox width:auto fix applied (global input{width:100%}).
+- Build clean. NOT deployed. No git commits (Kellen).
+- Playwright note: text= is substring match — "LEVEL I" also hits
+  LEVEL II/III/IV; use get_by_text(..., exact=True) for rung clicks.
+
+=== 2026-08-11 (cont. 6) — SOC suggester entry made first-class ===
+- Kellen: "how is someone supposed to use the soc suggestion tool?" —
+  v2 buried the JD matcher behind a whisper link. Fixed without modes:
+  * The occupation smart box now ACCEPTS A PASTED JD: any input >90
+    chars or multiline flips the matcher open with the text carried
+    into the description field and the box cleared. One input handles
+    code / title words / whole JD.
+  * "Match from job description" is now a real button beside the box
+    (amber-active when open), replacing the collapsed link.
+  * Stage-1 sub-label + placeholder both advertise the paste path.
+- Verified: pasting a multiline JD auto-opens the matcher with text
+  carried over and box cleared; typeahead path unaffected.
+- Build clean. NOT deployed. No git commits (Kellen).
+
+=== 2026-08-11 (cont. 7) — sim score restored on suggestion rows ===
+- Kellen liked the similarity score from the v1/original suggester;
+  v2's compact rows had dropped it. Restored: right side of each match
+  row now shows "Zone N · sim 0.NNN" in DM Mono (same format as v1's
+  s.similarity.toFixed(3)). Build clean. Prototype otherwise approved
+  direction ("This is better"). NOT deployed. No git commits (Kellen).
+
+=== 2026-08-11 (cont. 8) — Merge APPROVED, deployed; typeahead root cause ===
+- Kellen approved v2 ("This is better"); requested job-title box moved
+  ABOVE the description/requirements boxes in the matcher (done — title
+  on its own row, two 6-row textareas side by side beneath) and the sim
+  score restored on suggestion rows (done earlier, cont. 7).
+- DEPLOYED the merge: wage-level + soc-suggest REMOVED from modules.jsx
+  and App.jsx (WageLevelView.jsx / SocSuggestView.jsx left on disk,
+  unwired). soc-wage label finalized "SOC & Wage Level"; card + in-view
+  descriptions state it combines the SOC Suggester and Wage Level Tool.
+  LEGACY_PATHS export in modules.jsx: /wage-level + /soc-suggest ->
+  /soc-wage via replace-redirect useEffect in App root. Verified on
+  :8080: landing card correct, old cards/nav gone, both redirects work.
+- TYPEAHEAD BUG (post-deploy verification caught it): dropdown never
+  appeared. Long debug — fetch appeared to "hang". ROOT CAUSE: not a
+  hang. GET /wage-level/occupations queried
+  `SELECT DISTINCT soc_code, soc_title FROM current_oews_wages WHERE
+  ... ILIKE ...` = seq scan over 4,761,850 rows per keystroke: 10.8s on
+  Homebrew PG, 2.6s Docker. All test waits (1.5-2.5s) expired first;
+  warm-cache runs passing intermittently disguised it as flaky. Every
+  "fetch never resolves" observation was just a response slower than
+  the probe.
+- FIX: derived lookup table `soc_occupations` (868 rows =
+  SELECT DISTINCT soc_code, soc_title FROM current_oews_wages) created
+  in BOTH Homebrew :5433 and Docker casebase-db, + idx on soc_code.
+  Endpoint now queries it: 10.8s -> 0.035s (psql) / 115ms (HTTP :8080).
+  REBUILD NOTE (also in code comment): recreate soc_occupations after
+  each annual OEWS wage load, or typeahead titles go stale.
+- Removed [ta] console.log instrumentation from SocWageView.
+- Redeployed. Verified :8080: typeahead 3/3 runs, full E2E (type
+  "registered nurse" -> pick 29-1141 -> Bachelor's + 2yrs + TX ->
+  ladder + worksheet flag + wages render; LEVEL III rung click ->
+  override note). Dev servers on :5175/:8001 KILLED (session cleanup).
+- Ops note: Cmd+Q of Claude Desktop killed the nohup'd :8001 uvicorn's
+  responsiveness story mid-debug and confused diagnosis; also curl
+  --max-time shorter than a slow query prints 000 and looks like a dead
+  server. Check query timing via psql before assuming process death.
+- No git commits (Kellen).
+
+=== 2026-08-11 (cont. 9) — Landing redesign per Kellen's direction ===
+- Kellen rejected both my UI concepts (law-library, calm-workspace) as
+  stuffy/wrong. His direction: KEEP 21 cards w/ descriptions, group into
+  sections (PERM / SOC+wage / research / misc), open to colorful or
+  picture background, drop the search-all card (redundant w/ header).
+- Implemented:
+  * modules.jsx: new CARD_SECTIONS export (label, accent, ids[]) —
+    PERM Tools (verify, comparer, evl-compare, applicant-eval);
+    SOC Codes & Wages (soc-wage, wage-dashboard); Research (ask, balca,
+    aao, regulations, policy, both citation graphs); More Tools & Data
+    (visa-bulletin, oflc, processing-times, eb-inventory, letter-assist).
+    search-all card REMOVED (module kept — header search still routes).
+    Drift guard extended: warns on card w/o section and section id w/o
+    card.
+  * App.jsx LandingPage renders sections (colored square dot + uppercase
+    label + hairline rule) from CARD_SECTIONS; card content untouched.
+    Hover moved from JS handlers to CSS via --card-accent custom props.
+  * index.css: .landing-mesh — 4-corner radial-gradient color wash
+    (teal/amber/violet/rose) over var(--bg), fixed attachment; dark-mode
+    variant at lower alpha. .landing-card — translucent bg2 via
+    color-mix + backdrop-blur(10px), hover lift + accent tint + shadow.
+    (color-mix + backdrop-filter fine in Chrome/Safari current.)
+- 18 cards total now. Verified :5175 (vite proxy -> :8080 Docker API):
+  all 4 sections render, search-all card gone, 18 cards, drift guard
+  silent, dark mode good. NOT deployed — awaiting Kellen's review of
+  the look (two concept rejections earn a review cycle before deploy).
+- Vite dev running on :5175 (proxy :8080) for his review; kill after.
+- No git commits (Kellen).
+
+=== 2026-08-11 (cont. 10) — Landing background: real photograph ===
+- Kellen rejected the gradient wash ("F+") and the hand-drawn SVG
+  landscape ("first grader"). Correct call on capability: hand-coded
+  SVG caps at flat stylized illustration. Switched to what he suggested
+  originally — an actual photograph.
+- Photo: "Pfeiffer Beach at Dusk" (Big Sur), Wikimedia Commons, CC0
+  (public domain dedication — no attribution required, commercial use
+  fine). Sourced via Commons API (Unsplash blocks scraping w/ 401).
+  Original 3840x2560; shipped at 2560w JPEG q75 = 824KB at
+  frontend/public/coast.jpg. Same image both themes, theme-tuned veil:
+  light = warm white linear-gradient 0.42->0.30 over photo; dark =
+  near-black 0.55->0.45. bg-attachment fixed (photo stays put while
+  cards scroll over it), position center 60%.
+- FIXED along the way: the position:fixed ::before art layer painted
+  OVER the app header (stacking-context/paint-order: later sibling's
+  fixed pseudo covers earlier header). Lesson: for full-page backdrops
+  under app chrome, use background-image + background-attachment:fixed
+  on the scroll container, not a fixed-position layer.
+- Masthead + section labels got frosted chips (color-mix bg2 ~65% +
+  backdrop-blur) so text holds contrast over photography. Cards already
+  frosted at 82%.
+- SVG landscape files deleted from public/. DC write_file corrupted
+  the large SVGs on first write (binary garbage on disk, XML parse
+  fail) — rewrote via shell heredoc chunks; add to known DC behaviors:
+  VERIFY large writes (xml/py parse or head) before using the file.
+- Verified :5175 light+dark screenshots: header visible, photo shows
+  through frosted cards, text legible. NOT deployed pending Kellen.
+- No git commits (Kellen).
+
+=== 2026-08-11 (cont. 11) — Background reverted to original; sections kept ===
+- Kellen: revert to the original background, he'll handle the background
+  separately. Done: landing back on .grid-bg dotted grid; photo-era
+  frosting removed (cards solid var(--bg2) again, masthead chip and
+  section-label pills gone, plain dot+label+rule section headers).
+  coast.jpg deleted from public/. KEPT: the four CARD_SECTIONS groups,
+  search-all card removal, CSS-var card hover, drift guards.
+- Verified :5175: 18 cards, 4 sections, header fine. NOT deployed —
+  landing sectioning awaits his go-ahead alongside whatever background
+  he chooses. Vite dev still on :5175 (proxy :8080); kill when done.
+- No git commits (Kellen).

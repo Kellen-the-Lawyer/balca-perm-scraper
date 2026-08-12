@@ -238,7 +238,8 @@ export function SocSuggestView() {
                     </div>
                   )}
                 </div>
-                <table style={{ width: "100%", marginTop: 14, fontSize: 13, borderCollapse: "collapse" }}>
+                <div className="m-scroll-x">
+                <table style={{ width: "100%", marginTop: 14, fontSize: 13, borderCollapse: "collapse", minWidth: 480 }}>
                   <tbody>
                     {w.worksheet.map(row => (
                       <tr key={row.step} style={{ borderTop: `1px solid ${ls.border}` }}>
@@ -254,6 +255,7 @@ export function SocSuggestView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
                 {w.wage?.levels_hourly && (
                   <div style={{ fontSize: 12, color: ls.color, opacity: 0.85, marginTop: 8 }}>
                     All levels (hourly): I ${w.wage.levels_hourly.i} · II ${w.wage.levels_hourly.ii} ·
