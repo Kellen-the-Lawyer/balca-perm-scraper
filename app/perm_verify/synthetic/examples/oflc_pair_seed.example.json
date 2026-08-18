@@ -1,0 +1,265 @@
+{
+  "schema_version": "casebase.perm-pwd-pair.v1",
+  "case_id": "training-example-000001",
+  "created_at": "2026-08-17T12:00:00Z",
+  "random_seed": 170001,
+  "lifecycle_stage": "seed",
+  "privacy": {
+    "classification": "synthetic",
+    "contains_real_person_data": false,
+    "contains_real_employer_data": false,
+    "training_approved": true,
+    "redaction_notes": "All names, identifiers, and contact details are fictional."
+  },
+  "sources": [
+    {
+      "source_id": "oflc_perm:example-1",
+      "kind": "oflc_perm",
+      "table": "oflc_perm",
+      "record_id": "example-1",
+      "source_file": "PERM_Disclosure_Data_FY2025.xlsx",
+      "fiscal_year": "2025",
+      "public_data": true
+    },
+    {
+      "source_id": "oflc_pw:example-2",
+      "kind": "oflc_pw",
+      "table": "oflc_pw",
+      "record_id": "example-2",
+      "source_file": "PW_Disclosure_Data_FY2025.xlsx",
+      "fiscal_year": "2025",
+      "public_data": true
+    },
+    {
+      "source_id": "synthetic_rule:identity-v1",
+      "kind": "synthetic_rule",
+      "notes": "Replaced disclosure identities with fictional training identities."
+    }
+  ],
+  "shared_case_facts": {
+    "employer_name": "Lakeshore Analytics LLC",
+    "employer_fein": "12-3456789",
+    "job_title": "Data Scientist",
+    "soc_code": "15-2051",
+    "soc_title": "Data Scientists",
+    "worksite_city": "Chicago",
+    "worksite_state": "IL",
+    "worksite_postal_code": "60601"
+  },
+  "shared_fact_annotations": {
+    "job_title": {
+      "state": "present",
+      "source": {
+        "kind": "oflc_perm",
+        "source_id": "oflc_perm:example-1",
+        "source_field": "job_title",
+        "transformation": "direct OFLC disclosure mapping"
+      },
+      "review_status": "auto_validated"
+    },
+    "employer_name": {
+      "state": "present",
+      "source": {
+        "kind": "synthetic_rule",
+        "source_id": "synthetic_rule:identity-v1",
+        "generator_rule": "fictional_employer_identity_v1",
+        "transformation": "identity replacement"
+      },
+      "review_status": "auto_validated"
+    }
+  },
+  "pwd": {
+    "metadata": {
+      "document_id": "pwd-training-example-000001",
+      "form": "ETA-9141",
+      "form_edition": "unassigned",
+      "stage": "seed",
+      "artifact_kind": "training_render",
+      "source_type": "semi_synthetic",
+      "artifact": {
+        "rendering_seed": 170001,
+        "augmentations": []
+      }
+    },
+    "form_data": {
+      "meta": {
+        "pwd_case_number": "P-100-25001-654321",
+        "case_status": "Determination Issued",
+        "determination_date": "2025-02-14",
+        "validity_from": "2025-02-14",
+        "validity_to": "2025-06-30"
+      },
+      "employer": {
+        "legal_business_name": "Lakeshore Analytics LLC",
+        "fein": "12-3456789",
+        "naics_code": "541511",
+        "address": {
+          "city": "Chicago",
+          "state": "IL",
+          "postal_code": "60601",
+          "country": "United States"
+        }
+      },
+      "job_offer": {
+        "job_title": "Data Scientist",
+        "worksite": {
+          "city": "Chicago",
+          "county": "Cook",
+          "state": "IL",
+          "postal_code": "60601",
+          "country": "United States"
+        },
+        "travel_required": false,
+        "telecommuting_allowed": true,
+        "telecommuting_details": "May telecommute up to two days per week."
+      },
+      "primary_requirements": {
+        "education_level": "Bachelor's",
+        "majors": "Computer Science, Statistics, or a related field",
+        "second_degree_required": false,
+        "training_required": false,
+        "experience_required": true,
+        "experience_months": 24,
+        "experience_occupation": "Data Scientist or related occupation",
+        "special_requirements_required": true,
+        "special_requirements_text": "Two years of experience with SQL and Python.",
+        "special_requirement_items": [
+          "SQL",
+          "Python"
+        ],
+        "foreign_language_required": false
+      },
+      "alternate_requirements_accepted": false,
+      "determination": {
+        "soc_code": "15-2051",
+        "soc_title": "Data Scientists",
+        "prevailing_wage": 120000,
+        "wage_unit": "Year",
+        "wage_level": "II",
+        "wage_source": "OEWS (All Industries)",
+        "bls_area": "Chicago-Naperville-Elgin, IL-IN-WI"
+      }
+    },
+    "annotations": {
+      "meta.pwd_case_number": {
+        "state": "present",
+        "source": {
+          "kind": "oflc_pw",
+          "source_id": "oflc_pw:example-2",
+          "source_field": "case_number",
+          "transformation": "direct OFLC disclosure mapping"
+        },
+        "review_status": "auto_validated"
+      },
+      "primary_requirements.special_requirements_text": {
+        "state": "present",
+        "source": {
+          "kind": "synthetic_rule",
+          "source_id": "synthetic_rule:requirements-v1",
+          "generator_rule": "soc_conditioned_requirements_v1"
+        },
+        "review_status": "unreviewed"
+      }
+    }
+  },
+  "perm": {
+    "metadata": {
+      "document_id": "perm-training-example-000001",
+      "form": "ETA-9089",
+      "form_edition": "OMB 1205-0451, exp. 02/28/2029",
+      "stage": "seed",
+      "artifact_kind": "training_render",
+      "source_type": "semi_synthetic",
+      "artifact": {
+        "rendering_seed": 170001,
+        "augmentations": []
+      }
+    },
+    "form_data": {
+      "meta": {
+        "perm_case_number": "G-100-25120-123456",
+        "case_status": "Certified",
+        "received_date": "2025-04-30",
+        "decision_date": "2025-08-15",
+        "filing_date": "2025-04-30"
+      },
+      "A_employer": {
+        "legal_business_name": "Lakeshore Analytics LLC",
+        "city": "Chicago",
+        "state": "IL",
+        "postal_code": "60601",
+        "country": "United States",
+        "fein": "12-3456789",
+        "naics_code": "541511"
+      },
+      "E_job_wage": {
+        "pwd_case_number": "P-100-25001-654321",
+        "offered_wage_from": 125000,
+        "offered_wage_to": null,
+        "wage_per": "Year"
+      },
+      "F_worksite": {
+        "worksite_type": "business_premises",
+        "city": "Chicago",
+        "county": "Cook",
+        "state": "IL",
+        "postal_code": "60601",
+        "msa_oes_area_title": "Chicago-Naperville-Elgin, IL-IN-WI",
+        "additional_worksites": "No"
+      },
+      "G_job_info": {
+        "full_time_35hrs": "Yes",
+        "fw_currently_employed": "Yes",
+        "foreign_language": "No",
+        "layoff_6mo": "No"
+      },
+      "H_recruitment": {},
+      "appendix_A": {}
+    },
+    "annotations": {
+      "E_job_wage.pwd_case_number": {
+        "state": "present",
+        "source": {
+          "kind": "oflc_perm",
+          "source_id": "oflc_perm:example-1",
+          "source_field": "pwd_number",
+          "transformation": "direct OFLC disclosure mapping"
+        },
+        "review_status": "auto_validated"
+      },
+      "E_job_wage.offered_wage_from": {
+        "state": "present",
+        "source": {
+          "kind": "oflc_perm",
+          "source_id": "oflc_perm:example-1",
+          "source_field": "wage_from",
+          "transformation": "direct OFLC disclosure mapping"
+        },
+        "review_status": "auto_validated"
+      }
+    }
+  },
+  "expected_comparisons": [
+    {
+      "comparison_id": "pwd-number-link",
+      "pwd_path": "pwd.form_data.meta.pwd_case_number",
+      "perm_path": "perm.form_data.E_job_wage.pwd_case_number",
+      "expected": "match",
+      "rule": "ETA-9089 must reference the paired ETA-9141 determination"
+    },
+    {
+      "comparison_id": "offered-wage-floor",
+      "pwd_path": "pwd.form_data.determination.prevailing_wage",
+      "perm_path": "perm.form_data.E_job_wage.offered_wage_from",
+      "expected": "match",
+      "rule": "offered wage must be at least the governing prevailing wage",
+      "notes": "Expected match means the comparison passes; numeric values need not be identical."
+    }
+  ],
+  "tags": [
+    "oflc_seed",
+    "paired_pwd_perm",
+    "fictional_identity",
+    "telecommuting"
+  ]
+}
