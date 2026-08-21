@@ -50,6 +50,7 @@ coverage.xml
 
 # OFLC disclosure data (PERM, LCA, PW spreadsheets)
 data/raw/oflc/
+data/raw/oflc_superseded/
 perm-research/oflc_data/
 
 # USCIS quarterly report spreadsheets
@@ -95,6 +96,33 @@ tests/OALJ*
 eval_mistral.py
 reorganize.sh
 Antigravity/
+
+# ============================================================
+# Local AI training materials — NEVER push (large + contains form data)
+# ============================================================
+
+# Generated ETA 9089/9141 pair corpus, Unsloth datasets, tarballs
+output/
+
+# Scratch QA renders
+tmp/
+
+# Fine-tuning artifacts anywhere in the repo
+*.jsonl
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.tar
+*.tar.gz
+*.sha256
+checkpoints/
+adapters/
+lora_outputs/
+unsloth_outputs/
+wandb/
 
 # ============================================================
 # Runtime logs / PID files

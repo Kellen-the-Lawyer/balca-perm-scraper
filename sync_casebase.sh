@@ -16,6 +16,19 @@ SYSTEM_PYTHON="/opt/homebrew/bin/python3.14"
 LOG="$HOME/Library/Logs/casebase_sync.log"
 LOCK="/tmp/casebase_sync.lock"
 
+# ── Environment ──────────────────────────────────────────────────────────────
+# launchd gives jobs a bare environment, so nothing from the interactive shell
+# is present. Without this, BALCA scrape fails (DOL_AZURE_QUERY_KEY missing) and
+# AAO ingest fails (falls back to a wrong DATABASE_URL default).
+if [ -f "$REPO/.env" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$REPO/.env"
+    set +a
+fi
+: "${DATABASE_URL:=postgresql://perm@127.0.0.1:5433/perm_decisions}"
+export DATABASE_URL
+
 # ── Logging helper ────────────────────────────────────────────────────────────
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
@@ -67,7 +80,7 @@ fi
 log "--- Tagging docketing notices ---"
 if "$SYSTEM_PYTHON" - <<'PYSQL' >> "$LOG" 2>&1
 import psycopg2, os
-url = os.environ.get("DATABASE_URL", "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions")
+url = os.environ.get("DATABASE_URL", "postgresql://perm@127.0.0.1:5433/perm_decisions")
 conn = psycopg2.connect(url)
 cur = conn.cursor()
 cur.execute("""
@@ -82,6 +95,7 @@ conn.commit()
 cur.close()
 conn.close()
 PYSQL
+then
     log "Docketing notice tagging: OK"
 else
     log "Docketing notice tagging: FAILED (exit $?)"

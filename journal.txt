@@ -2893,3 +2893,300 @@ re-ranker still the structural fix for reg-vs-commentary ranking.
 - Verified :8080: all 4 sections, live counts, SOC & Wage typeahead
   still working post-rebuild. Vite :5175 killed (session cleanup).
 - No git commits (Kellen).
+
+=== 2026-08-18 — Wage-rule cluster + missing-data sidebar + T3-020/021 redesign ===
+Session focus: 9089 verifier rules (Tier 3 review continues; wage rules
+across tiers; new interactive missing-data feature). All local dev only —
+NOTHING synced to casebase-app.
+
+## Wage rules (Kellen's ruling: 9089 wage >= HIGHEST PWD wage; 9089 wage
+## must MATCH wage in recruitment materials — match, not floor)
+- T3-001 confirmed as designed (exact floor, higher-of-two, no tolerance).
+- audit_pack.py T5-012 FIXED: was `pw_alt or pw_pri` (alt-if-present);
+  now max() of the two — mirrors T3-001.
+- NEW _wage_figures() extractor in audit_pack.py: $ figures counted only
+  with a wage keyword within 80 chars (blocks newspaper-page price noise).
+  Handles $91.35-style hourly. wage_figures stored on job_bank_prints,
+  jobvertise_prints, amny_tearsheets, nyt_tearsheets (readable only).
+- NEW T5-024: wage figure in ad evidence must MATCH 9089 E.3 (from/to or
+  annualized equiv). RED direct printouts, YELLOW tear sheets, GREEN match,
+  silent when no wage stated. Cite 656.17(f)(7).
+- NEW app/perm_verify/ept.py: 12-jurisdiction Equal Pay Transparency data
+  ported from PermComparer.jsx EPT_DATA (AILA Oct 2025, Doc 25110603) with
+  threshold_count + threshold_scope (total/state/mixed). KEEP IN SYNC with
+  the JSX copy until comparer fetches from backend.
+- NEW T5-025 (YELLOW only, per Kellen — applicability hard to determine):
+  EPT-state worksite + ad dated on/after law's effective date + no wage
+  detected -> YELLOW. A.14 (employees in AREA) is a LOWER BOUND for state
+  and total headcount: A.14 >= threshold proves the count condition; below
+  proves nothing (never suppresses). No total-US-employee field found in
+  our 9089 extraction.
+
+## Missing-data sidebar (new feature, Kellen wants this pattern in several
+## places across Casebase)
+- NEW app/perm_verify/missing_data.py: registry of ~40 form + 11 PWD
+  scalar fields the tiers consume; needs_input(form, pwd) returns entries
+  {scope, path, label, section_item, kind, options?, reason, why}.
+  Appendix A EXCLUDED per Kellen (D.1 checkbox stays — form flag, not FN
+  info). PWD fields only when a 9141 was supplied. reason field extensible
+  for future "low_confidence" (extractors don't emit confidence yet).
+- engine.verify_data() now returns needs_input (Graphite gets it free).
+- BUG FIXED: rules_tier3._annual() crashed on string wages ('190000'*1 is
+  string repetition) — now coerces $/commas. User-supplied + Graphite
+  values flow correctly.
+- PermVerifyView.jsx: amber "Missing info · N" edge tab -> slide-out panel
+  grouped 9089/PWD, inputs by kind, "Apply & re-verify" deep-merges and
+  re-posts /verify-data (dates converted to M/D/YYYY), keeps overlay,
+  records form.meta.user_supplied. esbuild-verified. KELLEN HAS NOT
+  REVIEWED THE UI YET — review pending (uvicorn/vite were up, now killed).
+
+## T3-016 travel (Kellen's rulings)
+- Travel lives in E.5 (unlikely) or F.c.1 on the 9089. PWD travel with
+  NEITHER location mentioning it -> RED (was YELLOW). 9089 travel with
+  silent PWD -> RED (reverse direction; wage not determined for travel).
+  Language differs both present -> YELLOW. E.5 keyword-gated
+  (travel|relocat|client site|unanticipated|various location|roving|
+  itinerant) so bonus/per-diem text neither triggers nor shields.
+
+## T3-020/021 REDESIGN (Kellen's spec) + new T3-022/023/024/025
+- T3-020 RED: fails BOTH paths (F.b primary, F.c alternate); message gives
+  per-path gaps ("missing 12 months on primary; Master's not listed on
+  alternate"). Empty Appendix A no longer suppresses (notes possible
+  extraction gap). Degree-only PWDs work (no experience axis).
+- T3-021 YELLOW: within 2 months of experience req (form month/year
+  rounding, per Kellen: "that is how the form is built").
+- T3-022 YELLOW: qualifies only when counting sponsor experience
+  (_worker_profile_full computes months excl. sponsor via normalized
+  employer-name match vs A.1). G.5 "solely" read narrowly; T1-010d still
+  owns the true disqualification.
+- T3-023 YELLOW: 'Other Degree' on Appendix A (foreign-equiv markup);
+  deeper equivalency fix deferred to audit-pack review. NOTE: DEGREE_RANK
+  maps Other->3 so T3-020 message says "highest: Bachelor's" — slightly
+  misleading, T3-023 fires alongside.
+- T3-024 YELLOW: PWD special-skills items (F.b.5.a(iv)/F.c.5.a(iv)) not
+  evidenced in 9089 Skills/Abilities/Proficiencies. Deterministic splitter
+  follows evl_compare atomic floor: split ONLY on PWD's own delimiters,
+  NEVER and/or/commas inside an item. Token matching excludes numerics +
+  duration words (bug found in testing: "24 months of Python" failed
+  presence on "24"/"months" — fixed, incl. word numbers one-ten).
+- T3-025 YELLOW: per-skill DURATION verification. Section D skills mapped
+  by provider; coursework/school/training providers = attested, NO Section
+  E join (Kellen ruling). Employer providers join Section E by normalized
+  name; span months prorated by hours (>=35 = full time, else hours/40,
+  missing hours assumed full-time). Sum vs stated duration in the PWD item
+  ("24 months", "two years"); 2-month near-miss wording; "cannot compute"
+  YELLOW when provider absent from Section E. AI INSERTION POINTS
+  documented in code for Kellen's QLoRA fine-tune of qwen3-vl-8b (in
+  progress, training data being built): (A) atomization+duration parsing,
+  (B) semantic skill matching, (C) provider name-variant joining. Env-var
+  transport (VERIFY_SKILL_MODEL/URL), LOCAL ONLY — Kellen's concern is
+  COST of public access, not PII ("not specific enough to trace").
+  v1 limits (commented): concurrent cross-employer spans sum (may double-
+  count calendar time); T3-022 sponsor split not applied per-skill.
+
+## Tier 3 review status
+DONE: T3-001, 003(del), 005, 010-016, 020-025 (new family).
+REMAINING: T3-030..035 derived-checks family, incl. deduping T3-030's
+meets-neither RED against the new T3-020. Kellen returns tomorrow evening.
+
+## Verification notes
+- All rule changes unit-tested via synthetic dicts (no audit-pack PDF
+  fixture on disk — BHARGAVA pack only ever lived in chat sandbox).
+- Syntax-validated per pattern; JSX esbuild-compiled clean.
+- uvicorn :8001 + vite :5173 killed at session end.
+- No git commits (Kellen).
+
+
+================================================================================
+2026-08-21 — OFLC full refresh + schema expansion; scheduler repair
+================================================================================
+
+## OFLC data refresh (FY2026 Q3)
+Was two releases behind (loaded FY2026 Q1, DOL had published Q3).
+Downloaded all 25 missing files; DB now current through 2026-06-30.
+
+  oflc_perm    680,654 -> 1,229,967   (FY2015-FY2026)
+  oflc_pw    1,295,909 -> 2,035,239
+  oflc_lca     813,152 -> 3,869,254
+
+## THREE DATA-LOSS BUGS FOUND (all pre-existing)
+1. lca_files_deduped() kept ONE file per FY, preferring Q4, assuming Q4 was
+   annual-cumulative. FALSE for FY2020-FY2025 — those quarterly files are
+   DISJOINT (verified: FY2024_Q4 spans 2024-07-01..2024-09-30 only). ~3
+   quarters/yr silently dropped. FY2026+ files ARE cumulative. Patched to
+   return all files; ON CONFLICT (case_number, fiscal_year) DO NOTHING
+   absorbs overlap. LCA grew 4.8x.
+   NOTE: LCA files carry one row per WORKSITE — FY2024_Q4 has 598,831 rows
+   but 120,897 distinct cases. Dedup was always correct; not a bug.
+2. Homebrew never ingested PERM_Disclosure_Data_New_Form_FY2024_Q4.xlsx
+   (22,292 rows, revised ETA-9089). FY2024: 92,258 -> 114,499. The FY2024
+   "dip" in prior firm/employer analysis was largely THIS, not a real decline.
+3. Homebrew was missing all ten used_* recruitment columns that Docker had.
+
+## SCHEMA DRIFT — Docker was AHEAD of Homebrew
+Both #2 and #3 existed in Docker but not Homebrew, inverting the local-first
+model. Cause not determined. Worth tracing before next refresh.
+
+## Schema expansion — every spreadsheet field now has a column
+Audited headers across all 53 files: PERM 400 distinct cols vs 45 in DB,
+PW 241 vs 44, LCA 102 vs 38 = 667 missing. Added 658 (rest were casing/
+spacing variants of the same field). Applied to BOTH DBs; column sets
+verified byte-identical.
+  oflc_perm  45 -> 429 | oflc_pw  44 -> 243 | oflc_lca  38 -> 113
+ingest_oflc.load_file() rewritten: builds INSERT dynamically, curated typed
+columns take precedence, every remaining header written via passthrough.
+Verified 0 unmapped columns. Required TRUNCATE + full re-ingest (DO NOTHING
+won't update existing rows).
+  CAVEAT: revised ETA-9089 RENAMED fields, so country_of_citizenship /
+  class_of_admission populate FY2015-FY2024 then go to 0 for FY2025-26 —
+  data lands in new-form columns instead. Not loss; know this before
+  writing queries spanning the form change.
+
+## DOL download is now blocked — Playwright required
+Two independent breakages:
+- DOL moved new releases to https://www.dol.gov/media/<name>.xlsx. The old
+  /sites/dolgov/files/ETA/oflc/pdfs/ path still serves OLD files only.
+- Akamai bot-blocks this host's direct HTTP (curl/httpx/wget) regardless of
+  headers. Adaptive: one full-browser-header curl got 206, next was 403.
+NEW: scripts/scrape/download_oflc_playwright.py — scrapes the performance
+page for the real file list (no hardcoded manifest, new quarters auto-picked-
+up), downloads via fetch() inside page context, validates zip, atomic .part
+rename. Persistent profile ~/.casebase/playwright-profile, state in
+~/.casebase/oflc_download_state.json. Verified headless: 51 links, correct
+up-to-date result. --check-only flag for cheap polling.
+  Needed `playwright install chromium` (cache had build 1200, pw 1.62 wants 1234).
+  download_oflc_data.py is now DEAD — stale manifest + retired path.
+
+## SCHEDULER — was silently dead since 2026-04-28 (~17 failed runs)
+com.casebase.sync plist pointed at balca-perm-scraper/sync_casebase.sh; the
+script moved to Casebase/ on Apr 28. launchctl showed exit 127. Repaired
+rather than rewritten — script itself is sound (PID locking w/ stale
+detection, per-step error counts, structured logging).
+
+Four separate bugs, all pre-existing, fixed in order:
+1. plist path stale -> exit 127. Fixed; RunAtLoad false -> true (per Kellen).
+2. macOS TCC: launchd-spawned /bin/bash cannot read ~/Documents -> exit 126.
+   Proved with a minimal probe LaunchAgent. Kellen granted FDA to /bin/bash
+   AND com.anthropic.claudefordesktop; TCC.db confirms both auth_value=2.
+   Probe now returns DOCUMENTS_OK / HOMEX_OK.
+3. sync_casebase.sh line 86: `if ... <<'PYSQL'` heredoc with NO `then`,
+   so bash failed at the matching `else`. Script had NEVER run successfully.
+4. Script never sourced .env. launchd gives a bare environment, so
+   DOL_AZURE_QUERY_KEY was missing (BALCA scrape) and DATABASE_URL fell back
+   to a wrong default (AAO ingest). Added `set -a; . $REPO/.env; set +a`
+   plus a 5433 fallback.
+
+## ingest_rag.py was broken IN GIT since the Voyage migration (407a77c)
+Dead Ollama preflight block left mangled by that commit: referenced an
+undefined `req`, bad indentation -> IndentationError on import. BALCA RAG
+ingest has been failing since then, independent of the scheduler outage.
+Block removed (embeddings go through Voyage now).
+
+## BALCA source URLs — SOLVED
+decisions table had only pdf_path, pointing at the deleted balca-perm-scraper
+dir. PDFs actually now at Casebase/data/raw/pdfs/ (18,230).
+KEY FIND: balca_perm_scraper ALREADY captures source_url + pdf_url into
+data/processed/balca_perm.sqlite (23,403 rows, 100% have pdf_url) — it just
+never carried them into Postgres. sqlite docket_number == pg case_number.
+Added decisions.source_url, backfilled 18,230/18,230 = 100%. Spot-checked
+one URL: HTTP 200, real PDF. Case-brief linking for BALCA is done.
+
+## AAO — accessible again, but NO source URLs
+~/aao_decisions is a SYMLINK to /Volumes/HomeX/aao_decisions. Volume was
+mounted the whole time; TCC was blocking reads. Post-FDA: 165,597 PDFs
+readable. BUT ingest_aao.py has no URL logic at all — it only re-indexes
+rows already in Postgres. AAO source_url strategy is the one open item
+gating the briefing emails.
+
+## Wrong DSN in project instructions
+`postgresql://perm:perm_local_pw@localhost:5432/perm_decisions` is the DOCKER
+container, not Homebrew, and that password FAILS. Source of truth remains
+5433 (trust auth). ingest_oflc.py still has that bad string as its default —
+override DATABASE_URL on every run. .env correctly points at 5433.
+
+## Backups
+/Users/Dad/oflc_backups/oflc_pre_refresh_20260819_1321.dump  (HB, 208MB)
+/Users/Dad/oflc_backups/docker_pre_sync_20260820_1939.dump   (Docker, 211MB)
+/tmp/sync_casebase.sh.bak, /tmp/ingest_rag.py.bak, /tmp/com.casebase.sync.plist.bak
+Superseded FY2026_Q1 files: data/raw/oflc_superseded/ (added to .gitignore —
+data/raw/oflc/ was already ignored but the new dir was not).
+
+## Uncommitted (Kellen commits)
+ M .gitignore
+ M scripts/ingest/ingest_oflc.py      (lca glob + dynamic passthrough insert)
+ M scripts/ingest/ingest_rag.py       (dead Ollama block removed)
+ M sync_casebase.sh                   (then + .env loading + DATABASE_URL)
+ ?? scripts/scrape/download_oflc_playwright.py
+ ~/Library/LaunchAgents/com.casebase.sync.plist (path + RunAtLoad)
+
+## NEXT
+- Docker still NOT synced after re-ingest — run /tmp/sync_docker.sh
+  (TRUNCATE + COPY w/ explicit column lists; do NOT pg_restore --clean,
+  it would cascade into mv_lca_soc_filings).
+- BALCA scrape backlog running at session end; verify it completed and that
+  new rows carry source_url through to Postgres.
+- AAO source_url: needs a scraper that captures URLs, or reconstruct from
+  USCIS reading-room index by filename match.
+- Briefing emails (design agreed, NOT built): group by month, <=4 sentences
+  per case, link to original. Novelty scoring = 1 - max cosine similarity vs
+  prior decisions (pgvector/voyage-4-large already in rag_chunks), boosted by
+  overrule/reverse/"first impression" language, new CFR subsection combos in
+  balca_issue_tags, outcome diverging from modal outcome for the cluster.
+  Routine cases collapse to one aggregate line; novel ones get full treatment.
+  Delivery: AppleScript -> Outlook desktop (installed) = no SMTP creds, no
+  new mailbox needed.
+- pmset (needs sudo, Kellen):
+  sudo pmset repeat wakeorpoweron MTWRFSU 01:55:00
+  launchd CANNOT wake a sleeping Mac. StartCalendarInterval does queue a
+  missed run and fire on wake; RunAtLoad does NOT do catch-up (the comment
+  in the plist claiming otherwise is wrong).
+
+--------------------------------------------------------------------------------
+2026-08-21 (later) — Docker refresh completed
+--------------------------------------------------------------------------------
+
+Docker synced from Homebrew after the full re-ingest. Verified identical:
+  oflc_perm 1,229,967 | oflc_pw 2,035,239 | oflc_lca 3,869,254
+  column counts 429 / 243 / 113 (match HB)
+  mv_lca_soc_filings refreshed
+Live confirmed on BOTH localhost:8080 and casebase.kellenpowell.com:
+  {"perm_total":1229967,"perm_cert_rate":52.7,"lca_total":3869254,"pw_total":2035239}
+Passthrough spot-checked IN DOCKER (not just HB): FY2023 country_of_citizenship
+116,300/116,306; FY2026 = 0 as expected (ETA-9089 rename, see earlier entry).
+Sync ran 14:26 -> 14:33 (~7 min; slower than the 3 min pre-expansion because
+COPY now streams 428/242/112 cols per row instead of ~44).
+
+## GOTCHA: /tmp/sync_docker.sh only covers the three OFLC tables
+Caught because decisions.source_url was added to HB this session. The ALTER
+was applied to Docker so the COLUMN existed, but it arrived EMPTY — the sync
+script never touches `decisions`. Backfilled separately:
+  docker cp /tmp/balca_urls.tsv + /tmp/backfill_urls_docker.sql
+  -> UPDATE 18230, now 18,230/18,230 = 100% in Docker too.
+Any future change to decisions / aao_decisions / rag_chunks will NOT propagate
+via that script. Note the drift we found earlier ran the OTHER direction
+(Docker ahead of Homebrew), so this needs to be a two-way check.
+
+## NEXT SESSION — start here
+1. Parity checker across ALL shared tables (not just OFLC). Should compare
+   row counts AND column sets in both directions, HB<->Docker, and report
+   rather than auto-fix. This is the recurring failure mode of this project:
+   two of the three data-loss bugs found today were silent HB/Docker drift.
+2. Extend sync_docker.sh (or replace with a table-list-driven version) so
+   decisions / aao_decisions / rag_chunks are covered.
+3. BALCA/AAO sync finished during the Docker refresh — SQLite went
+   23,403 -> 23,406, so HB `decisions` may hold ~3 rows Docker lacks.
+   Verify and re-sync.
+4. CRITICAL: confirm whether NEW BALCA rows carry source_url through the
+   scraper -> Postgres path. Today's 100% coverage came from a one-off
+   backfill out of balca_perm.sqlite. If the pipeline still drops the URL,
+   coverage will silently decay as new decisions land — and the briefing
+   emails depend on that link.
+5. Verify BALCA RAG ingest now succeeds with the ingest_rag.py fix (it had
+   been failing in git since 407a77c).
+6. AAO source_url strategy — still the one hard blocker for AAO briefings.
+   165,597 PDFs readable at /Volumes/HomeX/aao_decisions post-FDA, but
+   ingest_aao.py has no URL logic. Options: (a) scrape USCIS reading-room
+   index and match on filename, (b) capture URL at scrape time going forward
+   and backfill historically, (c) check whether pdf_path's category subdir
+   ("Sec. 212(i) of the INA" etc.) maps to a USCIS ERR URL folder.
+7. THEN build the briefing emails (design already agreed — see prior entry).

@@ -399,16 +399,10 @@ def main():
                         help="Delete existing chunks before ingesting")
     args = parser.parse_args()
 
-    # Verify Ollama is running and model is available
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            tags = json.loads(resp.read())
-        models = [m["name"] for m in tags.get("models", [])]
-            print("Run: ollama pull qwen3-embedding:8b")
-            sys.exit(1)
-    except Exception as e:
-        print("Make sure Ollama is running: ollama serve")
-        sys.exit(1)
+    # NOTE: the old Ollama preflight check was removed here. Embeddings now go
+    # through the Voyage API (see embed_batch/embed_query above); the leftover
+    # block referenced an undefined `req` and had broken indentation, which made
+    # this module fail to import since the Voyage migration (407a77c).
 
     conn = get_conn()
 

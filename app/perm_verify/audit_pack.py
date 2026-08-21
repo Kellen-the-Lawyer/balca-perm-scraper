@@ -148,9 +148,11 @@ def extract_pack_facts(pages):
         f["pwd_in_pack"] = pwd
 
     # SWA job order evidence (state job bank printouts)
-    jb = [(_hdr_date(p["text"]), p["page"]) for p in pages
+    jb = [(_hdr_date(p["text"]), p["page"], p["text"]) for p in pages
           if p["kind"] == "job_bank"]
-    f["job_bank_prints"] = [{"date": d, "page": pg} for d, pg in jb if d]
+    f["job_bank_prints"] = [{"date": d, "page": pg,
+                             "wage_figures": _wage_figures(t)}
+                            for d, pg, t in jb if d]
 
     # NYT Sunday tear sheets: press marker, masthead date, or cid-decoded
     nyt = []
@@ -166,15 +168,19 @@ def extract_pack_facts(pages):
                 _long_date(_cid_decode(p["text"][:2000]))
             if ld:
                 d = f"{ld.month}/{ld.day}/{ld.year}"
+        readable = "Software Engineer" in p["text"]
         nyt.append({"date": d, "page": p["page"],
-                    "ad_text_readable": "Software Engineer" in p["text"]})
+                    "ad_text_readable": readable,
+                    "wage_figures": _wage_figures(p["text"])
+                    if readable else []})
     f["nyt_tearsheets"] = nyt
 
     # Jobvertise printouts
     f["jobvertise_prints"] = [
         {"date": _hdr_date(p["text"]), "page": p["page"],
          "contains_ref": "00089423" in p["text"],
-         "contains_salary": bool(re.search(r"190,?000", p["text"]))}
+         "contains_salary": bool(re.search(r"190,?000", p["text"])),
+         "wage_figures": _wage_figures(p["text"])}
         for p in pages if p["kind"] == "jobvertise"]
 
     # amNY local paper
@@ -185,7 +191,8 @@ def extract_pack_facts(pages):
         ld = _long_date(p["text"][:3000])
         amny.append({"date": f"{ld.month}/{ld.day}/{ld.year}" if ld else None,
                      "page": p["page"],
-                     "contains_ref": "00089423" in p["text"]})
+                     "contains_ref": "00089423" in p["text"],
+                     "wage_figures": _wage_figures(p["text"])})
     f["amny_tearsheets"] = amny
 
     # Radio invoice
@@ -301,6 +308,33 @@ def _wage_num(v):
         return None
 
 
+WAGE_FIG_RX = re.compile(
+    r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+\.\d{2}|\d{4,7})")
+WAGE_CTX_RX = re.compile(
+    r"salary|wage|per\s+(?:year|hour|week|month|annum)|annually|"
+    r"/\s?(?:yr|hr|year|hour)|compensation|pay(?:\s+rate)?", re.I)
+
+
+def _wage_figures(text, window=80):
+    """Dollar figures that appear in a wage context within ad/evidence text.
+
+    Keyword-window guard keeps prices in surrounding newspaper content from
+    being read as wages.  Returns floats, deduped, order preserved.
+    """
+    out = []
+    for m in WAGE_FIG_RX.finditer(text or ""):
+        ctx = text[max(0, m.start() - window):m.end() + window]
+        if not WAGE_CTX_RX.search(ctx):
+            continue
+        try:
+            v = float(m.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if v not in out:
+            out.append(v)
+    return out
+
+
 # ---------------------------------------------------------------- T5 rules
 
 REQUIRED_EVIDENCE = {
@@ -372,18 +406,22 @@ def crosscheck(form, pack, notice=None, filing_date=None):
     offered = _wage_num(_get(form, "E_job_wage.offered_wage_from"))
     pw_alt = pwd.get("pw_alternative")
     pw_pri = pwd.get("pw_primary")
-    governing = pw_alt or pw_pri
+    # The offered wage must meet the HIGHEST wage on the PWD, not merely
+    # the alternative when one exists (mirrors T3-001's higher-of-two).
+    cands = [w for w in (pw_alt, pw_pri) if w]
+    governing = max(cands) if cands else None
     if offered and governing:
+        which = "higher of the two PWD wages" if len(cands) == 2 \
+            else "prevailing wage"
         if offered < governing:
             F(Flag(RED, "T5-012", "E.3",
-                   f"Offered wage {offered:,.0f} is below the governing "
-                   f"prevailing wage {governing:,.0f} from the PWD.",
+                   f"Offered wage {offered:,.0f} is below the {which} "
+                   f"{governing:,.0f} from the PWD.",
                    "regulation", "20 CFR 656.10(c)(1)"))
         else:
             F(Flag(GREEN, "T5-012", "E.3",
-                   f"Offered wage {offered:,.0f} meets the governing "
-                   f"prevailing wage {governing:,.0f} "
-                   f"(alt-requirements wage applied).",
+                   f"Offered wage {offered:,.0f} meets the {which} "
+                   f"{governing:,.0f}.",
                    "regulation", "verified"))
 
     # --- T5-020 SWA job order evidence ----------------------------------
@@ -465,6 +503,96 @@ def crosscheck(form, pack, notice=None, filing_date=None):
         F(Flag(YELLOW, "T5-023", "H.d.10",
                "Radio script does not state the offered salary.",
                "data_check", "cross-document"))
+
+    # --- T5-024 wage stated in recruitment materials --------------------
+    # Any wage figure appearing in recruitment evidence must MATCH the
+    # wage on the 9089 (E.3) — match, not merely a floor.  Ads are not
+    # federally required to state a wage, so silence when none is found
+    # (some jurisdictions require it; jurisdiction-specific presence
+    # checks are not implemented).  Accepted values: E.3 from/to as
+    # stated, and their annualized equivalents.
+    ok_vals = set()
+    for _k in ("offered_wage_from", "offered_wage_to"):
+        _v = _wage_num(_get(form, f"E_job_wage.{_k}"))
+        if _v:
+            ok_vals.add(round(_v, 2))
+    _per = _get(form, "E_job_wage.wage_per") or "Year"
+    _mult = {"Hour": 2080, "Week": 52, "Bi-Weekly": 26,
+             "Month": 12, "Year": 1}.get(_per, 1)
+    ok_vals |= {round(v * _mult, 2) for v in list(ok_vals)}
+    if ok_vals:
+        _srcs = [
+            ("job_bank_prints", "SWA job order printout", RED, "H.c.1"),
+            ("jobvertise_prints", "Job search website printout", RED, "H.d"),
+            ("amny_tearsheets", "Local newspaper tear sheet", YELLOW, "H.d"),
+            ("nyt_tearsheets", "Sunday newspaper tear sheet", YELLOW,
+             "H.c"),
+        ]
+        for _key, _label, _lvl, _item in _srcs:
+            for _ev in pack.get(_key, []) or []:
+                _figs = _ev.get("wage_figures") or []
+                if not _figs:
+                    continue
+                if any(round(x, 2) in ok_vals for x in _figs):
+                    F(Flag(GREEN, "T5-024", _item,
+                           f"{_label} (page {_ev.get('page')}) states a "
+                           f"wage matching the 9089 offered wage.",
+                           "data_check", "verified"))
+                else:
+                    F(Flag(_lvl, "T5-024", _item,
+                           f"{_label} (page {_ev.get('page')}) states wage "
+                           f"figure(s) {[f'{x:,.0f}' for x in _figs]} that "
+                           f"do not match the 9089 offered wage — "
+                           f"recruitment materials must state the same "
+                           f"wage as the 9089.",
+                           "regulation", "20 CFR 656.17(f)(7)"))
+
+    # --- T5-025 EPT wage-disclosure laws (state/local) ------------------
+    # If the worksite state has an Equal Pay Transparency law effective at
+    # the time an ad ran, and no wage figure was detected in that ad,
+    # flag YELLOW.  Applicability is hard to fully determine (employer
+    # thresholds, remote coverage, long-arm reach), so this never goes
+    # RED.  A.14 (employees in the area of intended employment) is a
+    # lower bound on both state and total headcount: A.14 >= threshold
+    # PROVES the count condition; below it proves nothing.
+    from .ept import lookup_ept
+    _ept = lookup_ept(_get(form, "F_worksite.state"),
+                      _get(form, "F_worksite.city"))
+    if _ept:
+        try:
+            _n_area = int(str(_get(
+                form, "A_employer.num_employees_in_area")).replace(",", ""))
+        except (TypeError, ValueError):
+            _n_area = None
+        _thresh_met = (_ept["threshold_count"] == 0 or
+                       (_n_area is not None
+                        and _n_area >= _ept["threshold_count"]))
+        _basis = (f"threshold met (A.14 shows {_n_area} employees in the "
+                  f"area \u2265 {_ept['threshold_count']})" if _thresh_met
+                  else f"could not confirm the "
+                       f"{_ept['threshold_count']}-employee threshold from "
+                       f"A.14 alone \u2014 verify "
+                       f"{_ept['threshold_scope']}-level headcount")
+        _ept_srcs = [
+            ("job_bank_prints", "SWA job order printout", "H.c.1"),
+            ("jobvertise_prints", "Job search website printout", "H.d"),
+            ("amny_tearsheets", "Local newspaper tear sheet", "H.d"),
+            ("nyt_tearsheets", "Sunday newspaper tear sheet", "H.c"),
+        ]
+        for _key, _label, _item in _ept_srcs:
+            for _ev in pack.get(_key, []) or []:
+                _ad = _d2(_ev.get("date"))
+                if not _ad or _ad < _ept["effective"]:
+                    continue
+                if _ev.get("wage_figures"):
+                    continue
+                F(Flag(YELLOW, "T5-025", _item,
+                       f"{_label} (page {_ev.get('page')}, {_ev.get('date')})"
+                       f" states no wage, but {_ept['state']} requires "
+                       f"compensation disclosure in job postings "
+                       f"({_ept['citation']}, eff. {_ept['effective']}); "
+                       f"{_basis}. {_ept['note']}",
+                       "data_check", _ept["citation"]))
 
     # --- T5-030 posting notice (VLM-read) --------------------------------
     rr_meta = pack.get("recruitment_report") or {}

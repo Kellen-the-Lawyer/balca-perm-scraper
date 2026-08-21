@@ -332,6 +332,48 @@ def map_pw_row(row, fy, sf):
         "worksite_postal_code":     coerce_str(g(row, "PRIMARY_WORKSITE_POSTAL_CODE")),
     }
 
+# ── Full-fidelity passthrough ─────────────────────────────────────────────────
+
+TABLE_FOR = {"perm": "oflc_perm", "lca": "oflc_lca", "pw": "oflc_pw"}
+CONFLICT_FOR = {
+    "perm": "DO NOTHING",
+    "lca":  "DO NOTHING",
+    "pw":   "DO UPDATE SET",   # replaced below with real assignment list
+}
+_COLCACHE: dict = {}
+
+
+def norm_col(s: str) -> str:
+    """Header -> DB column name. Must match scripts/ingest DDL generation."""
+    n = re.sub(r"[^a-z0-9]+", "_", str(s).lower()).strip("_")
+    if re.match(r"^\d", n):
+        n = "c_" + n
+    return n[:63]
+
+
+def table_columns(conn, table: str) -> set:
+    if table not in _COLCACHE:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select column_name from information_schema.columns "
+                "where table_name = %s", (table,))
+            _COLCACHE[table] = {r[0] for r in cur.fetchall()}
+    return _COLCACHE[table]
+
+
+def build_upsert(table: str, cols: list, program: str) -> str:
+    collist = ", ".join(f'"{c}"' for c in cols)
+    vals    = ", ".join(f"%({c})s" for c in cols)
+    if program == "pw":
+        updatable = [c for c in cols if c not in ("case_number", "fiscal_year")]
+        setclause = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in updatable)
+        tail = f"DO UPDATE SET {setclause}"
+    else:
+        tail = "DO NOTHING"
+    return (f"INSERT INTO {table} ({collist}) VALUES ({vals}) "
+            f"ON CONFLICT (case_number, fiscal_year) {tail}")
+
+
 # ── Core loader ───────────────────────────────────────────────────────────────
 
 def load_file(conn, path: Path, program: str, dry_run: bool) -> int:
@@ -343,11 +385,8 @@ def load_file(conn, path: Path, program: str, dry_run: bool) -> int:
     df = pd.read_excel(path, engine="openpyxl", dtype=str)
     df.columns = [c.strip().upper() for c in df.columns]
 
-    mapper, sql = {
-        "perm": (map_perm_row, PERM_SQL),
-        "lca":  (map_lca_row,  LCA_SQL),
-        "pw":   (map_pw_row,   PW_SQL),
-    }[program]
+    mapper = {"perm": map_perm_row, "lca": map_lca_row, "pw": map_pw_row}[program]
+    table  = TABLE_FOR[program]
 
     rows = [mapper(r, fy, sf) for _, r in df.iterrows()
             if coerce_str(r.get("CASE_NUMBER"))]
@@ -356,30 +395,52 @@ def load_file(conn, path: Path, program: str, dry_run: bool) -> int:
         print(f"({len(rows):,} rows — dry run)")
         return len(rows)
 
+    # Passthrough: every spreadsheet header that maps to a real column and is
+    # NOT already produced by the curated mapper (curated values are typed and
+    # take precedence). Guarantees no field in the source file is discarded.
+    tcols  = table_columns(conn, table)
+    curated = set(rows[0].keys()) if rows else set()
+    extra_map = {}
+    for hdr in df.columns:
+        c = norm_col(hdr)
+        if c in tcols and c not in curated and c not in extra_map.values():
+            extra_map[hdr] = c
+    if extra_map:
+        recs = df.to_dict("records")
+        ri = 0
+        for rec in recs:
+            if not coerce_str(rec.get("CASE_NUMBER")):
+                continue
+            row = rows[ri]; ri += 1
+            for hdr, c in extra_map.items():
+                row[c] = coerce_str(rec.get(hdr))
+
+    cols = list(rows[0].keys()) if rows else []
+    sql  = build_upsert(table, cols, program)
+
     inserted = 0
     with conn.cursor() as cur:
         for i in range(0, len(rows), BATCH):
             psycopg2.extras.execute_batch(cur, sql, rows[i:i+BATCH], page_size=BATCH)
             inserted += len(rows[i:i+BATCH])
     conn.commit()
-    print(f"({len(rows):,} rows, {inserted:,} upserted)")
+    print(f"({len(rows):,} rows, {inserted:,} upserted, "
+          f"{len(cols)} cols [+{len(extra_map)} passthrough])")
     return inserted
 
 
 def lca_files_deduped() -> list:
-    """Per FY, prefer Q4 (annual cumulative). Avoids double-counting."""
-    fy_map: dict = {}
-    for p in sorted((DATA_DIR / "LCA").rglob("LCA_Disclosure_Data_FY*.xlsx")):
-        fy = fy_from_path(p)
-        fy_map.setdefault(fy, []).append(p)
-    result = []
-    for fy, files in sorted(fy_map.items()):
-        for q in ("Q4", "Q3", "Q2", "Q1"):
-            match = [f for f in files if q in f.parent.name]
-            if match:
-                result.append(match[0])
-                break
-    return result
+    """Return every LCA disclosure file.
+
+    NOTE: this previously kept only one file per FY (preferring Q4) on the
+    assumption that Q4 is annual-cumulative. That is FALSE for FY2020-FY2025,
+    whose quarterly files are disjoint (verified: FY2024_Q4 spans 2024-07-01
+    to 2024-09-30 only), so ~3 quarters per year were silently dropped.
+    FY2026+ files ARE cumulative. Loading everything is correct either way
+    because the insert uses ON CONFLICT (case_number, fiscal_year) DO NOTHING,
+    which absorbs any overlap between cumulative and per-quarter files.
+    """
+    return sorted((DATA_DIR / "LCA").rglob("LCA_Disclosure_Data_FY*.xlsx"))
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

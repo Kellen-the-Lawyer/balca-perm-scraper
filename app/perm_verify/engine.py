@@ -74,11 +74,13 @@ def verify_data(form, filing_date=None, cite=False, cite_top_k=3, pwd=None):
     if cite and flag_dicts:
         from .citations import attach_citations
         attach_citations(flag_dicts, top_k=cite_top_k)
+    from .missing_data import needs_input
     return {
         "form": form,
         "pwd": pwd,
         "filing_window": window,
         "flags": flag_dicts,
+        "needs_input": needs_input(form, pwd),
         "summary": {
             "red": sum(1 for f in flags if f.level == RED),
             "yellow": sum(1 for f in flags if f.level == YELLOW),

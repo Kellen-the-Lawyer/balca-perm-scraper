@@ -188,6 +188,124 @@ function FlagCard({ flag }) {
   );
 }
 
+/* -------------------------------------------- missing-data sidebar */
+function setDeep(obj, path, value) {
+  const parts = path.split(".");
+  const out = { ...obj };
+  let cur = out;
+  for (let i = 0; i < parts.length - 1; i++) {
+    cur[parts[i]] = { ...(cur[parts[i]] || {}) };
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+  return out;
+}
+
+function MissingDataSidebar({ needs, onApply, applying }) {
+  const [open, setOpen] = useState(true);
+  const [values, setValues] = useState({});
+  if (!needs?.length) return null;
+  const key = (e) => `${e.scope}:${e.path}`;
+  const groups = [
+    ["form", "ETA-9089", needs.filter((e) => e.scope === "form")],
+    ["pwd", "ETA-9141 (PWD)", needs.filter((e) => e.scope === "pwd")],
+  ].filter(([, , g]) => g.length);
+  const filled = Object.entries(values)
+    .filter(([, v]) => v != null && String(v).trim() !== "");
+  const inputStyle = { width: "100%", padding: "6px 8px", borderRadius: 6,
+    border: "1px solid var(--bg4)", background: "var(--bg)",
+    color: "inherit", fontSize: 12.5, boxSizing: "border-box" };
+  return (
+    <div style={{ position: "fixed", top: 70, right: open ? 0 : -318,
+      bottom: 16, width: 318, zIndex: 40,
+      transition: "right .25s ease", display: "flex" }}>
+      <button onClick={() => setOpen(!open)}
+        title={open ? "Collapse" : "Missing information"}
+        style={{ alignSelf: "flex-start", marginTop: 18,
+          border: "1px solid var(--bg4)", borderRight: "none",
+          background: "#b07d2b", color: "#fff", cursor: "pointer",
+          borderRadius: "8px 0 0 8px", padding: "10px 7px",
+          fontWeight: 700, fontSize: 12, writingMode: "vertical-rl",
+          transform: "rotate(180deg)", letterSpacing: 0.5 }}>
+        Missing info · {needs.length}
+      </button>
+      <div style={{ flex: 1, background: "var(--bg2)",
+        border: "1px solid var(--bg4)", borderRight: "none",
+        borderRadius: "10px 0 0 10px", boxShadow: "-6px 0 24px rgba(0,0,0,.18)",
+        display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ padding: "12px 14px 10px",
+          borderBottom: "1px solid var(--bg4)" }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+            Missing information
+          </div>
+          <div style={{ fontSize: 11.5, opacity: 0.65, marginTop: 3,
+            lineHeight: 1.4 }}>
+            These fields could not be read from the uploaded PDFs. Fill in
+            what you know and re-verify — the checks that need them will run.
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
+          {groups.map(([scope, title, items]) => (
+            <div key={scope} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: 0.6,
+                opacity: 0.55, margin: "4px 0 8px" }}>{title}</div>
+              {items.map((e) => (
+                <div key={key(e)} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600,
+                    marginBottom: 3 }}>
+                    {e.label}
+                    <span style={{ opacity: 0.5, fontWeight: 400 }}>
+                      {" "}· {e.section_item}
+                    </span>
+                  </div>
+                  {e.kind === "select" ? (
+                    <select style={inputStyle}
+                      value={values[key(e)] ?? ""}
+                      onChange={(ev) => setValues((v) =>
+                        ({ ...v, [key(e)]: ev.target.value }))}>
+                      <option value="">— leave blank —</option>
+                      {(e.options || []).map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input style={inputStyle}
+                      type={e.kind === "date" ? "date"
+                            : e.kind === "number" ? "number" : "text"}
+                      placeholder={e.kind === "money" ? "$" :
+                                   e.kind === "date" ? "" : ""}
+                      value={values[key(e)] ?? ""}
+                      onChange={(ev) => setValues((v) =>
+                        ({ ...v, [key(e)]: ev.target.value }))} />
+                  )}
+                  <div style={{ fontSize: 10.5, opacity: 0.5,
+                    marginTop: 2, lineHeight: 1.35 }}>
+                    Used by: {e.why}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "10px 14px",
+          borderTop: "1px solid var(--bg4)" }}>
+          <button disabled={!filled.length || applying}
+            onClick={() => onApply(Object.fromEntries(filled), needs)}
+            style={{ width: "100%", padding: "9px 0", borderRadius: 8,
+              border: "none", fontWeight: 700, fontSize: 13,
+              cursor: filled.length && !applying ? "pointer" : "default",
+              background: filled.length && !applying
+                ? "var(--accent)" : "var(--bg4)", color: "#fff" }}>
+            {applying ? "Re-verifying…"
+              : `Apply ${filled.length || ""} & re-verify`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------- main view */
 export function PermVerifyView() {
   const [f9089, setF9089] = useState([]);
@@ -199,6 +317,53 @@ export function PermVerifyView() {
   const [result, setResult] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [exportAll, setExportAll] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  // Sidebar "Apply & re-verify": merge user-supplied values into the
+  // extracted dicts and re-run the structured endpoint.  The page-image
+  // overlay from the original run is kept (it reflects the PDFs).
+  const applyMissing = async (vals, needs) => {
+    if (!result) return;
+    setApplying(true); setError(null);
+    let form2 = result.form || {};
+    let pwd2 = result.pwd ? { ...result.pwd } : null;
+    const supplied = [];
+    for (const [k, v] of Object.entries(vals)) {
+      const [scope, ...rest] = k.split(":");
+      const path = rest.join(":");
+      const entry = needs.find((e) => e.scope === scope && e.path === path);
+      let val = v;
+      if (entry?.kind === "money" || entry?.kind === "number") {
+        const n = Number(String(v).replace(/[$,\s]/g, ""));
+        if (!Number.isNaN(n)) val = n;
+      }
+      if (entry?.kind === "date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        const [y, m, d] = v.split("-");
+        val = `${Number(m)}/${Number(d)}/${y}`;   // engine expects M/D/YYYY
+      }
+      if (scope === "form") form2 = setDeep(form2, path, val);
+      else if (pwd2) pwd2[path] = val;
+      supplied.push(`${scope}.${path}`);
+    }
+    form2 = setDeep(form2, "meta.user_supplied",
+      [...(form2.meta?.user_supplied || []), ...supplied]);
+    try {
+      const r = await fetch(`${API}/perm-verify/verify-data`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ form: form2, pwd: pwd2 || undefined,
+          filing_date: filingDate || undefined, cite }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.detail
+        || `HTTP ${r.status}`);
+      const fresh = await r.json();
+      setResult((prev) => ({ ...fresh, overlay: prev?.overlay }));
+    } catch (e) {
+      setError(`Re-verification failed: ${e.message || e}`);
+    } finally {
+      setApplying(false);
+    }
+  };
 
   const exportPdf = async () => {
     if (!result) return;
@@ -307,6 +472,8 @@ export function PermVerifyView() {
 
       {result && !busy && (
         <>
+          <MissingDataSidebar needs={result.needs_input}
+            onApply={applyMissing} applying={applying} />
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10,
             marginBottom: -6 }}>
             <label style={{ fontSize: 12, display: "flex", gap: 5,
