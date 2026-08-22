@@ -186,6 +186,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--start-page", type=int, default=0)
+    ap.add_argument("--stop-after", type=int, default=0,
+                    help="Incremental mode: stop after N consecutive pages with no new stable_ids "
+                         "(listing is newest-first). 0 = walk every page (full catalog refresh).")
     args = ap.parse_args()
 
     conn = None
@@ -199,13 +202,27 @@ def main():
     log.info("="*60)
 
     total = 0
+    new_total = 0
+    quiet = 0
+    known = set()
+    if args.stop_after and conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT stable_id FROM uscis_foia_documents")
+            known = {r[0] for r in cur.fetchall()}
     for page in range(args.start_page, MAX_PAGE + 1):
         html = fetch_page(page)
         records = parse_page(html)
-        log.info(f"  Page {page}/{MAX_PAGE}: {len(records)} document rows")
+        fresh = [r for r in records if r["stable_id"] not in known]
+        log.info(f"  Page {page}/{MAX_PAGE}: {len(records)} document rows, {len(fresh)} new")
         if records:
             upsert(conn, records, args.dry_run)
             total += len(records)
+            new_total += len(fresh)
+        if args.stop_after:
+            quiet = quiet + 1 if not fresh else 0
+            if quiet >= args.stop_after:
+                log.info(f"  {args.stop_after} consecutive pages with nothing new — stopping.")
+                break
         if page < MAX_PAGE:
             sleep = CRAWL_DELAY + random.uniform(0, JITTER)
             log.info(f"  Sleeping {sleep:.1f}s...")
@@ -213,7 +230,7 @@ def main():
 
     if conn: conn.close()
     log.info("="*60)
-    log.info(f"Done. {total} FOIA document entries scraped.")
+    log.info(f"Done. {total} FOIA document entries scraped, {new_total} new.")
     log.info("="*60)
 
 if __name__ == "__main__":

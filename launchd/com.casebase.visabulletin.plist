@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.casebase.visabulletin</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/Dad/Documents/GitHub/Casebase/venv/bin/python</string>
+    <string>-u</string>
+    <string>/Users/Dad/Documents/GitHub/Casebase/scripts/scrape/check_visa_bulletin.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/Dad/Documents/GitHub/Casebase</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/Dad</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>DATABASE_URL</key><string>postgresql://perm@127.0.0.1:5433/perm_decisions</string>
+  </dict>
+  <!-- every 4 hours; the script itself gates on day>=12 and on whether next month is already loaded -->
+  <key>StartInterval</key><integer>14400</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/Dad/Library/Logs/casebase_visabulletin.log</string>
+  <key>StandardErrorPath</key><string>/Users/Dad/Library/Logs/casebase_visabulletin.log</string>
+</dict>
+</plist>

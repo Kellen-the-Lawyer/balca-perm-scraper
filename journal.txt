@@ -3454,3 +3454,77 @@ September activates on its own. Verified both DBs: Jul/Aug/Sep = 120 each.
   Chrome extension once permission is granted).
 - Unchanged from 2026-08-21: AAO backfill verify, Sunday run log, parity
   checker, briefing emails.
+
+--------------------------------------------------------------------------------
+2026-08-22 — Reading Room on the weekly schedule; Visa Bulletin 4-hourly watcher
+--------------------------------------------------------------------------------
+
+AAO backfill (2026-08-21 late entry) finished overnight: 3,469/3,469 saved,
+0 failures; aao_index.csv now 317,645 lines. Not yet ingested — Sunday 02:00
+run will do it (ingest_aao --new-only -> ingest_rag --corpus aao ->
+build_aao_citations), or run by hand per the prior NEXT list.
+
+## USCIS Electronic Reading Room — now weekly
+Three existing manual scripts wired into sync_casebase.sh as step 4c:
+  scrape_uscis_reading_room.py --stop-after 2   (NEW flag: stop after N
+      consecutive pages with no new stable_id; listing is newest-first.
+      Test run: 2 pages / 25s, found 3 docs posted since June.)
+  download_uscis_foia.py --exclude-category contracts --exclude-category
+      foia-logs --limit 200   (75 of the 79 "pending" are contracts — left
+      pending on purpose, per the 2026-06-21 note)
+  ingest_foia.py   (no --rebuild-index; same HNSW-lock reasoning as ingest_rag)
+Sync order now: BALCA scrape -> load -> RAG -> docketing tags -> AAO fetch ->
+AAO ingest -> AAO RAG -> Reading Room catalog -> download -> RAG -> AAO cites.
+
+## Visa Bulletin watcher — NEW scripts/scrape/check_visa_bulletin.py
+Kellen's spec: from the 12th, check every 4h until next month's bulletin
+lands; then stay quiet until the 12th of the following month.
+Implementation: launchd com.casebase.visabulletin, StartInterval 14400.
+Each run gates (a) today.day >= 12 and (b) next month NOT already in
+visa_bulletin (>=100 rows) — both false -> exit 0 silently in <1s. The DB
+row count IS the stop condition; no state file. Loads Homebrew via asyncpg
+upsert, then mirrors the month to Docker (\copy -> docker cp -> temp table
+-> ON CONFLICT upsert). Falls back to the predictable
+/visa-bulletin/{YYYY}/visa-bulletin-for-{month}-{yyyy}.html URL when the
+index page still says "Coming Soon" (the Sept 2026 pattern).
+FETCH PATH: travel.state.gov Cloudflare 403s curl/Playwright from this
+machine (re-confirmed today). Only working path is the real Chrome via
+AppleScript (make window -> wait for load -> execute javascript
+outerHTML -> close). This needs a ONE-TIME Chrome setting:
+    View > Developer > Allow JavaScript from Apple Events   <-- KELLEN
+Until that is on, every in-window run logs the osascript error and exits;
+after it's on, nothing else changes. Verified: gate is silent today (Sept
+already loaded); --force reaches Chrome and fails on exactly that setting.
+Test after flipping it:  venv/bin/python scripts/scrape/check_visa_bulletin.py --force --dry-run
+   (expect "Parsed 120 rows" for October 2026 once DOS posts it, ~Sep 10-15;
+    before that expect "Not published yet ... will retry next run").
+Log: ~/Library/Logs/casebase_visabulletin.log
+Plists now tracked in repo: launchd/com.casebase.{sync,visabulletin}.plist
+scrape_visa_bulletins.py copied from the stale .claude/worktrees/ copy into
+scripts/scrape/ (the parser the watcher imports).
+
+## Uncommitted (Kellen commits)
+ M scripts/scrape/scrape_uscis_reading_room.py   M sync_casebase.sh
+ ?? launchd/   ?? scripts/scrape/check_visa_bulletin.py
+ (?? scripts/scrape/scrape_visa_bulletins.py if not already tracked)
+
+## NEXT
+1. Kellen: flip the Chrome setting; commit.
+2. Monday: read ~/Library/Logs/casebase_sync.log — first run with BALCA load,
+   AAO fetch/ingest/RAG (3,469 new), and Reading Room steps. Expect the AAO
+   ingest to take ~10 min, AAO RAG ~3,469 docs through Voyage.
+3. After the run, Docker sync:
+     zsh scripts/sync_docker_tables.sh decisions aao_decisions \
+        'rag_chunks:corpus=balca' 'rag_chunks:corpus=aao' \
+        'rag_chunks:corpus=uscis_foia' uscis_foia_documents
+     REPLACE=1 zsh scripts/sync_docker_tables.sh balca_issue_tags
+   + aao_citations if build_aao_citations added rows. This manual step is the
+   obvious next automation: a sync_docker step at the end of sync_casebase.sh.
+4. Parity checker; briefing emails.
+
+2026-08-22 10:31 — Chrome "Allow JavaScript from Apple Events" enabled by
+Kellen. Watcher verified end-to-end: --force --dry-run fetched the live
+Sept 2026 page through Chrome and parsed 120 rows; --target 2026-10 walked
+the real path (index -> not listed -> direct URL -> 0 rows -> "retry next
+run"), which is exactly what every 4-hourly run will do from Sept 12 until
+DOS posts October. Nothing further needed.

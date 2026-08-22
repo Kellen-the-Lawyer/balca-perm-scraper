@@ -145,6 +145,34 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
+# ── 4c. USCIS Reading Room (FOIA): catalog -> download -> RAG ingest ─────────
+# Incremental catalog walk (newest-first, stops after 2 quiet pages), download
+# pending files except contracts/foia-logs, chunk+embed under corpus uscis_foia.
+log "--- USCIS reading room catalog ---"
+if cd "$REPO" && "$VENV_PYTHON" -u scripts/scrape/scrape_uscis_reading_room.py --stop-after 2 \
+    >> "$LOG" 2>&1; then
+    log "Reading room catalog: OK"
+else
+    log "Reading room catalog: FAILED (exit $?)"
+    ERRORS=$((ERRORS + 1))
+fi
+log "--- USCIS reading room download ---"
+if cd "$REPO" && "$VENV_PYTHON" -u scripts/scrape/download_uscis_foia.py \
+    --exclude-category contracts --exclude-category foia-logs --limit 200 \
+    >> "$LOG" 2>&1; then
+    log "Reading room download: OK"
+else
+    log "Reading room download: FAILED (exit $?)"
+    ERRORS=$((ERRORS + 1))
+fi
+log "--- USCIS reading room RAG ingest ---"
+if cd "$INGEST_DIR" && "$VENV_PYTHON" -u ingest_foia.py >> "$LOG" 2>&1; then
+    log "Reading room RAG ingest: OK"
+else
+    log "Reading room RAG ingest: FAILED (exit $?)"
+    ERRORS=$((ERRORS + 1))
+fi
+
 # ── 5. AAO citations: extract citations from newly ingested decisions ─────────
 # --since uses a 8-day window (one day past the weekly schedule) to ensure
 # nothing falls through the cracks if a run is delayed or missed.

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+    <!-- Job identity -->
+    <key>Label</key>
+    <string>com.casebase.sync</string>
+
+    <!-- Script to run -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/Dad/Documents/GitHub/Casebase/sync_casebase.sh</string>
+    </array>
+
+    <!-- Schedule: every Sunday at 2:00 AM -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>2</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- If the Mac was asleep at scheduled time, run once it wakes -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Stdout / stderr go to the same log file the script uses -->
+    <key>StandardOutPath</key>
+    <string>/Users/Dad/Library/Logs/casebase_sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/Dad/Library/Logs/casebase_sync.log</string>
+
+    <!-- Throttle: don't re-run more than once per hour even if launchd retries -->
+    <key>ThrottleInterval</key>
+    <integer>3600</integer>
+
+    <!-- Environment: make sure homebrew and repo paths are on PATH -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/Dad</string>
+    </dict>
+
+</dict>
+</plist>
