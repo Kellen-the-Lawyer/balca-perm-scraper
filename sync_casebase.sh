@@ -66,9 +66,20 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
-# ── 2. BALCA ingest: push scraped SQLite records into Postgres ────────────────
-log "--- BALCA ingest into Postgres ---"
-if cd "$INGEST_DIR" && "$SYSTEM_PYTHON" ingest_rag.py --corpus balca \
+# ── 1b. BALCA load: download new/upgraded PDFs from SQLite listing -> decisions ─
+# One row per docket; newest substantive document wins (see load_balca_decisions.py).
+log "--- BALCA load (sqlite -> PDF -> decisions) ---"
+if cd "$REPO" && "$VENV_PYTHON" -u scripts/ingest/load_balca_decisions.py \
+    >> "$LOG" 2>&1; then
+    log "BALCA load: OK"
+else
+    log "BALCA load: FAILED (exit $?)"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# ── 2. BALCA RAG ingest: chunk + embed (Voyage) any decision not yet in rag_chunks
+log "--- BALCA RAG ingest ---"
+if cd "$INGEST_DIR" && "$VENV_PYTHON" -u ingest_rag.py --corpus balca \
     >> "$LOG" 2>&1; then
     log "BALCA ingest: OK"
 else
@@ -103,14 +114,34 @@ else
 fi
 
 # ── 4. AAO ingest: re-index recent AAO decisions ─────────────────────────────
-# Only re-ingests the last 90 days to keep the run fast.
-DATE_FROM=$(date -v-90d '+%Y-%m-%d' 2>/dev/null || date -d '90 days ago' '+%Y-%m-%d')
-log "--- AAO ingest (from $DATE_FROM) ---"
-if cd "$INGEST_DIR" && "$SYSTEM_PYTHON" ingest_aao.py \
+# ── 3b. AAO fetch: discover + download decisions posted since last run ────────
+# Walks the USCIS non-precedent listing newest-first; appends to aao_index.csv.
+log "--- AAO fetch (uscis.gov listing) ---"
+if cd "$REPO" && "$VENV_PYTHON" -u scripts/scrape/fetch_aao_new.py --max-pages 20 --stop-after 2 \
+    >> "$LOG" 2>&1; then
+    log "AAO fetch: OK"
+else
+    log "AAO fetch: FAILED (exit $?)"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# --new-only: only PDFs in aao_index.csv not yet text-extracted (seconds, not hours).
+log "--- AAO ingest (--new-only) ---"
+if cd "$INGEST_DIR" && "$VENV_PYTHON" -u ingest_aao.py --new-only \
     >> "$LOG" 2>&1; then
     log "AAO ingest: OK"
 else
     log "AAO ingest: FAILED (exit $?)"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# ── 4b. AAO RAG ingest: chunk + embed decisions not yet in rag_chunks ─────────
+log "--- AAO RAG ingest ---"
+if cd "$INGEST_DIR" && "$VENV_PYTHON" -u ingest_rag.py --corpus aao \
+    >> "$LOG" 2>&1; then
+    log "AAO RAG ingest: OK"
+else
+    log "AAO RAG ingest: FAILED (exit $?)"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -119,7 +150,7 @@ fi
 # nothing falls through the cracks if a run is delayed or missed.
 SINCE=$(date -v-8d '+%Y-%m-%d' 2>/dev/null || date -d '8 days ago' '+%Y-%m-%d')
 log "--- AAO citation extraction (since $SINCE) ---"
-if cd "$INGEST_DIR" && "$SYSTEM_PYTHON" build_aao_citations.py \
+if cd "$INGEST_DIR" && "$VENV_PYTHON" -u build_aao_citations.py \
     --since "$SINCE" \
     >> "$LOG" 2>&1; then
     log "AAO citations: OK"

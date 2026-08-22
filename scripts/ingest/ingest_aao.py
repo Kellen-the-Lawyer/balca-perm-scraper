@@ -50,8 +50,9 @@ def parse_date(s):
 
 def extract_pdf(args):
     """Extract text from one PDF. Runs in subprocess pool."""
-    filename, pdf_path, title, date_str, form_type, regulation = args
+    filename, pdf_path, title, date_str, form_type, regulation, pdf_url = args
     result = {
+        "pdf_url": pdf_url,
         "filename": filename,
         "pdf_path": pdf_path,
         "title": title,
@@ -86,9 +87,10 @@ async def upsert(conn, data):
     await conn.execute("""
         INSERT INTO aao_decisions
           (filename, pdf_path, title, decision_date, form_type, regulation,
-           outcome, full_text, text_extracted, parse_errors)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           outcome, full_text, text_extracted, parse_errors, source_url)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         ON CONFLICT (filename) DO UPDATE SET
+          source_url     = COALESCE(EXCLUDED.source_url, aao_decisions.source_url),
           full_text      = EXCLUDED.full_text,
           outcome        = EXCLUDED.outcome,
           text_extracted = EXCLUDED.text_extracted,
@@ -96,22 +98,22 @@ async def upsert(conn, data):
     """,
         data["filename"], data["pdf_path"], data["title"],
         parse_date(data["decision_date"]), data["form_type"], data["regulation"],
-        data["outcome"], data["full_text"], True, data["parse_errors"],
+        data["outcome"], data["full_text"], True, data["parse_errors"], data.get("pdf_url"),
     )
 
 async def upsert_index_only(conn, row):
     """Insert metadata row without text — for a fast first pass."""
     await conn.execute("""
         INSERT INTO aao_decisions
-          (filename, pdf_path, title, decision_date, form_type, regulation, full_text, text_extracted)
-        VALUES ($1,$2,$3,$4,$5,$6,'',$7)
+          (filename, pdf_path, title, decision_date, form_type, regulation, full_text, text_extracted, source_url)
+        VALUES ($1,$2,$3,$4,$5,$6,'',$7,$8)
         ON CONFLICT (filename) DO NOTHING
     """,
         row["filename"], row["pdf_path"], row["title"],
-        parse_date(row["date"]), row["form"], row["regulation"], False,
+        parse_date(row["date"]), row["form"], row["regulation"], False, row.get("pdf_url"),
     )
 
-async def main(db_url, workers, limit, index_only):
+async def main(db_url, workers, limit, index_only, new_only=False):
     conn = await asyncpg.connect(db_url)
     log.info("Connected to database")
 
@@ -149,8 +151,15 @@ async def main(db_url, workers, limit, index_only):
                 "date": row.get("date", "").strip(),
                 "form": row.get("form", "").strip(),
                 "regulation": regulation,
+                "pdf_url": row.get("pdf_url", "").strip() or None,
             })
 
+    if new_only:
+        done = {r["filename"] for r in await conn.fetch(
+            "SELECT filename FROM aao_decisions WHERE text_extracted")}
+        before = len(rows)
+        rows = [r for r in rows if r["filename"] not in done]
+        log.info(f"--new-only: skipping {before - len(rows)} already-extracted, {len(rows)} remain")
     if limit:
         rows = rows[:limit]
     log.info(f"Found {len(rows)} decisions to process")
@@ -169,7 +178,7 @@ async def main(db_url, workers, limit, index_only):
     processed = errors = 0
     loop = asyncio.get_running_loop()
     extract_args = [
-        (r["filename"], r["pdf_path"], r["title"], r["date"], r["form"], r["regulation"])
+        (r["filename"], r["pdf_path"], r["title"], r["date"], r["form"], r["regulation"], r.get("pdf_url"))
         for r in rows
     ]
 
@@ -200,7 +209,9 @@ if __name__ == "__main__":
         "DATABASE_URL", "postgresql://perm:perm_local_pw@localhost:5432/perm_decisions"))
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--new-only", action="store_true",
+                        help="Skip PDFs whose text is already extracted (weekly incremental run)")
     parser.add_argument("--index-only", action="store_true",
                         help="Insert metadata only, skip PDF text extraction")
     args = parser.parse_args()
-    asyncio.run(main(args.db_url, args.workers, args.limit, args.index_only))
+    asyncio.run(main(args.db_url, args.workers, args.limit, args.index_only, args.new_only))

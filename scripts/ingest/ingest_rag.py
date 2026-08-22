@@ -189,10 +189,10 @@ def _process_docs(conn, rows, corpus, id_key, text_key, chunk_fn,
     # Skip already-embedded docs so we can resume after a crash
     with conn.cursor() as cur:
         cur.execute("SELECT DISTINCT source_id FROM rag_chunks WHERE corpus = %s", (corpus,))
-        already_done = {r[0] for r in cur.fetchall()}
+        already_done = {str(r[0]) for r in cur.fetchall()}  # source_id is text; decision ids are int
     if already_done:
         before = len(rows)
-        rows = [r for r in rows if r[id_key] not in already_done]
+        rows = [r for r in rows if str(r[id_key]) not in already_done]
         print(f"  Skipping {before - len(rows)} already-embedded docs, {len(rows)} remaining")
 
     all_pending = []
@@ -395,6 +395,10 @@ def main():
                         help="Only ingest decisions on or after this date (YYYY-MM-DD) — AAO and BALCA only")
     parser.add_argument("--date-to",   default=None,
                         help="Only ingest decisions on or before this date (YYYY-MM-DD) — AAO and BALCA only")
+    parser.add_argument("--reindex",   action="store_true",
+                        help="DROP + rebuild the HNSW index after ingest (takes an exclusive lock on "
+                             "rag_chunks for many minutes — Ask AI is down meanwhile). Not needed for "
+                             "incremental runs: HNSW inserts are indexed on write.")
     parser.add_argument("--reset",     action="store_true",
                         help="Delete existing chunks before ingesting")
     args = parser.parse_args()
@@ -426,7 +430,10 @@ def main():
         elif corpus == "regulation": ingest_regulations(conn, args.limit)
         elif corpus == "policy":     ingest_policy(conn, args.limit)
 
-    rebuild_index(conn)
+    if args.reindex or args.reset:
+        rebuild_index(conn)
+    else:
+        print("\nSkipping HNSW rebuild (incremental run; pass --reindex to force)")
     conn.close()
     print(f"\nTotal time: {time.time()-t0:.1f}s")
 

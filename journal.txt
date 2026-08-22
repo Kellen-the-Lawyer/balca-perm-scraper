@@ -3190,3 +3190,267 @@ via that script. Note the drift we found earlier ran the OTHER direction
    and backfill historically, (c) check whether pdf_path's category subdir
    ("Sec. 212(i) of the INA" etc.) maps to a USCIS ERR URL folder.
 7. THEN build the briefing emails (design already agreed — see prior entry).
+
+--------------------------------------------------------------------------------
+2026-08-21 (evening) — BALCA/AAO pipeline audit: journal NEXT list re-verified
+--------------------------------------------------------------------------------
+
+Checked items 3-6 of the prior NEXT list against reality. Two were wrong,
+one was much smaller than stated, one was much bigger.
+
+## Item 3 (HB ahead of Docker by ~3 decisions) — FALSE
+decisions: 18,230 / 18,230 source_url on BOTH instances. No drift.
+
+## Item 4 (does source_url flow scraper -> Postgres?) — MOOT, worse problem
+There is NO scraper -> Postgres path for BALCA at all. Not broken: absent.
+  scraper writes sqlite (balca_perm.sqlite, 23,406 rows)
+  ingest_rag.py --corpus balca only reads rows ALREADY IN pg decisions
+  nothing in the repo inserts into pg `decisions` (the loader lived in the
+  deleted balca-perm-scraper repo; pdf_path still points there)
+Result: newest BALCA decision in Postgres = 2026-04-15. SQLite holds 25 PER
+docs dated 2026-04-27..06-05 (plus 2018-PER-00182 order, 2019) that never
+landed. ~3,300 other sqlite-only rows are pre-PERM INA (1995-2009) -> that
+is the ina_cases corpus, not a gap.
+DESIGN PROBLEM: pg decisions is one row per docket (case_number unique,
+18,230 rows = 18,230 PDFs named {docket}.pdf). Dockets now routinely get
+an Order (April wave: ~300 PwC/NAIJA/McDoris orders) then a Case Decision
+weeks later. 2026-PER-00141's row IS the Apr-08 docketing notice; the
+Apr-30 decision cannot be stored without overwriting it. Need Kellen's
+ruling: one row per DOCUMENT (sqlite stable_id, pdf_url-derived filename)
+vs keep one-per-docket and overwrite with the latest substantive doc.
+
+## Item 5 (ingest_rag.py now works?) — NO, new failure
+Scheduled run 12:10 today: BALCA ingest FAILED, ModuleNotFoundError:
+voyageai. sync_casebase.sh runs ingest_rag.py with SYSTEM_PYTHON
+(/opt/homebrew/bin/python3.14) which lacks voyageai; venv has it. Even
+once fixed it would have ingested 0 new rows (see item 4).
+
+## Item 6 (AAO source_url "hard blocker") — SOLVED, 15 minutes
+aao_index.csv already has pdf_url for every row. Added
+aao_decisions.source_url, backfilled by filename: 165,639/166,122 (99.7%)
+on HB AND Docker. Spot check MAR262026_01B6203.pdf -> HTTP 200 PDF.
+The 483 without URL are I&N Dec. precedents (OneDrive-sourced) — separate
+small job, not reading-room.
+
+## AAO has the same structural hole as BALCA
+aao_index.csv is dated Apr 17; max aao_decisions.decision_date 2026-03-26.
+The script that BUILT aao_index.csv is not in the repo (scrape_uscis_
+reading_room.py is the FOIA-catalog scraper, unrelated). Nothing fetches
+new AAO decisions. Also: the "last 90 days" AAO step in sync_casebase.sh
+computes DATE_FROM and never passes it — ingest_aao.py re-extracted all
+165,639 PDFs (12:18 -> 14:31, 2h13m) for zero new rows.
+
+## State at session end
+- aao_decisions.source_url: new column, populated, both instances (done)
+- Nothing else changed. No commits.
+
+## NEXT (needs Kellen's rulings first)
+1. RULING: BALCA decisions row model — per-document or per-docket?
+2. Build the missing BALCA loader (sqlite -> download pdf_url -> pdfplumber
+   -> pg decisions w/ source_url, doc_type from document_type) and wire it
+   into sync_casebase.sh between scrape and ingest_rag. Backfill the 26.
+3. sync_casebase.sh: run ingest_rag.py with VENV_PYTHON (or pip install
+   voyageai into python3.14); pass --date-from to ingest_aao.py or add a
+   "skip if text_extracted" path so weekly runs take minutes not hours.
+4. AAO new-decision fetcher: rebuild the index builder (ERR pages are
+   per-category "Decisions_Issued_in_YYYY" folders; URL pattern is stable)
+   — capture pdf_url at scrape time so source_url stays at 100%.
+5. 483 I&N Dec. precedent URLs (justice.gov/eoir virtual law library).
+6. Then the parity checker + table-driven sync_docker.sh from the prior
+   NEXT list, then briefing emails.
+
+--------------------------------------------------------------------------------
+2026-08-21 (night) — BALCA pipeline rebuilt end-to-end; AAO URLs 100%
+--------------------------------------------------------------------------------
+
+RULING (Kellen): decisions stays ONE ROW PER DOCKET; newest substantive
+document wins (Case Decision > Motion Recon > Order; newest within rank).
+Kellen's reasoning: per-document would have kept orders, per-docket-latest
+gives the actual decision.
+
+## NEW scripts/ingest/load_balca_decisions.py — the missing link
+sqlite listing -> download pdf_url -> pdfplumber -> decisions (insert/replace)
+- replace = existing row outranked or older; archives old PDF to
+  data/raw/pdfs_superseded/{docket}__{date}.pdf, purges that id's rag_chunks
+  + balca_issue_tags so ingest_rag re-chunks it.
+- idempotent (skips when source_url already matches), --dry-run/--limit/--since
+- 90s SIGALRM deadline per download: httpx timeout=30 only resets between
+  bytes; DOL trickled one connection for 30+ min and hung the first run.
+RESULT: 279 loaded (8 insert, 271 replace), 0 failures. Of the 271
+replacements, 198 were docketing notices that have since been decided and
+73 were earlier decisions superseded by a later one (e.g. 2012-PER-02046:
+2013 decision -> 2014 decision on recon). The old loader had kept the FIRST
+document per docket.
+  decisions: 18,230 -> 18,238 | newest 2026-04-15 -> 2026-06-05
+  source_url 100% | docketing_notice 672 -> 476 | PDFs on disk 18,238
+  Backup: oflc_backups/decisions_pre_reload_20260821_2039.dump
+
+## sync_casebase.sh
+- new step 1b runs the loader between scrape and RAG ingest
+- ingest_rag / ingest_aao / build_aao_citations now run on VENV_PYTHON
+  (python3.14 lacked voyageai -> today's 12:10 run failed)
+- AAO step: `--new-only` (see below). Old comment claimed "last 90 days" but
+  DATE_FROM was computed and never passed; it re-extracted all 165,639 PDFs
+  (2h13m) for zero new rows.
+
+## ingest_aao.py
+- `--new-only`: skip filenames already text_extracted (0 remain -> 11s run)
+- carries pdf_url from aao_index.csv into aao_decisions.source_url on
+  insert/update, so coverage holds at 100% as new rows land.
+
+## ingest_rag.py — two latent bugs that only bite on incremental runs
+1. already-embedded check compared rag_chunks.source_id (text) to
+   decisions.id (int) -> never matched -> "0 already embedded, 18,238
+   remaining" -> would have re-embedded the ENTIRE corpus through Voyage.
+   Caught after ~1 min / 2,277 chunks (overwrote identical rows). Fixed with
+   str() on both sides. Corrected run: 190 docs, 851 chunks.
+2. rebuild_index() ran unconditionally: DROP INDEX + CREATE hnsw on 684K
+   vectors under 64MB maintenance_work_mem = 30+ min at 12% CPU holding an
+   ACCESS EXCLUSIVE lock on rag_chunks (Ask AI dead meanwhile), and the
+   2026-07 entry already records that this rebuild yields poor recall.
+   HNSW indexes inserts on write; rebuild is now opt-in via --reindex
+   (or --reset). Cancelled tonight's build; rollback restored the index;
+   verified cosine search returns 2026-PER-00087 at 0.000 self-distance.
+   GOTCHA: pkill -f on the first run silently missed the child; a second
+   embedder was alive (blocked on the lock, so no Voyage spend). Check
+   pg_stat_activity, not just pgrep, before relaunching.
+
+## perm-research/tag_balca_cfr.py
+Re-run (pure regex, full rebuild, no API cost): balca_issue_tags 32,967 ->
+33,833 across all 18,238 decisions; rag_chunks.cfr_citation set on 21,968
+balca chunks. NOTE: ids are regenerated each run -> Docker must be synced
+with REPLACE=1 (upsert-by-id collides on the natural key).
+
+## AAO source_url — 100%
+aao_index.csv pdf_url matched 165,639 by filename (prior entry). The 483
+I&N Dec. precedents matched to precedent_decisions.pdf_url (justice.gov/
+eoir) on whitespace-normalized citation. 166,122/166,122 on HB + Docker.
+
+## NEW scripts/sync_docker_tables.sh
+HB -> Docker for the non-OFLC tables. Upsert by id via staged \copy
+(TRUNCATE is impossible: citations/project_notes/research_notes/
+project_cases/decision_tags FK onto decisions and would cascade).
+  table              full upsert, reports Docker-only ids, never deletes
+  table:col=value    slice upsert; deletes Docker-only ids in the slice
+  REPLACE=1 table    delete-all-then-insert (balca_issue_tags)
+Verified tonight: decisions 18,238 | balca_issue_tags 33,833 |
+rag_chunks balca 53,071 — identical both sides. casebase.kellenpowell.com
+returns 2026-PER-00361 (Westlake, 2026-05-27).
+
+## Uncommitted (Kellen commits)
+ M scripts/ingest/ingest_aao.py   M scripts/ingest/ingest_rag.py
+ M sync_casebase.sh               M journal.txt
+ ?? scripts/ingest/load_balca_decisions.py
+ ?? scripts/sync_docker_tables.sh
+
+## NEXT
+1. Sunday 02:00 is the first end-to-end run of the repaired pipeline. Read
+   ~/Library/Logs/casebase_sync.log Monday: expect "BALCA load: OK",
+   "Skipping N already-embedded", "--new-only: ... 0 remain".
+2. After any sync run, Docker needs:
+   zsh scripts/sync_docker_tables.sh decisions 'rag_chunks:corpus=balca'
+   REPLACE=1 zsh scripts/sync_docker_tables.sh balca_issue_tags
+   (tag_balca_cfr.py is NOT in sync_casebase.sh — new decisions get
+   cfr_citation/issue tags only when it is re-run; consider adding it.)
+3. AAO new-decision fetcher (the remaining structural gap): aao_index.csv
+   is frozen at 2026-04-17 and its builder is not in the repo. ERR URL
+   pattern is stable: /sites/default/files/err/{category}/Decisions_Issued_
+   in_{YYYY}/{MMMDDYYYY}_{id}.pdf. Build a per-category listing scraper
+   that appends to aao_index.csv, then ingest_aao --new-only picks it up.
+4. Parity checker across all shared tables (both directions) — still the
+   recurring failure mode.
+5. Briefing emails (design in 2026-08-21 morning entry).
+
+--------------------------------------------------------------------------------
+2026-08-21 (late) — AAO fetcher built; backfill of ~3,469 decisions running
+--------------------------------------------------------------------------------
+
+## NEW scripts/scrape/fetch_aao_new.py
+Discovers + downloads new AAO non-precedent decisions from
+uscis.gov/administrative-appeals/aao-decisions/aao-non-precedent-decisions
+(100/page, newest-POSTED first; reachable directly, no Akamai wall like DOL).
+Parses div.views-row -> pdf_filename, pdf_url, title, date, form, regulation,
+pdf_path — the exact aao_index.csv columns ingest_aao.py reads. Saves under
+~/aao_decisions/<regulation>/ (folder = regulation string, matching the
+existing layout), validates %PDF- magic, appends the index row per file.
+Stop rule: N consecutive pages with nothing new (default 2; the listing is
+sorted by POSTING date, not decision date — Sep-2025 decisions sit between
+Jul-2026 ones — so a date cutoff would be wrong). 10s listing delay
+(robots Crawl-delay), ~2-3s per PDF.
+Backfill run (--max-pages 80 --stop-after 4): 34 pages new, then 4 quiet ->
+3,469 decisions posted since the index froze on 2026-04-17. Downloading at
+~20/min at session end; log /tmp/fetch_aao.log. Pre-fetch index backed up to
+oflc_backups/aao_index_pre_fetch_20260821.csv.
+
+## sync_casebase.sh — two more steps
+3b. AAO fetch  (fetch_aao_new.py --max-pages 20 --stop-after 2)
+4b. AAO RAG ingest (ingest_rag.py --corpus aao) — previously only BALCA was
+    ever embedded on schedule; new AAO decisions reached search but never
+    Ask AI. ingest_rag's aao path already handled str/int ids correctly.
+Order is now: BALCA scrape -> load -> RAG -> docketing tags -> AAO fetch ->
+AAO ingest --new-only -> AAO RAG -> AAO citations.
+
+## Uncommitted (Kellen commits) — adds to prior list
+ ?? scripts/scrape/fetch_aao_new.py      M sync_casebase.sh
+
+## NEXT
+1. If the backfill is still running, leave it; it is idempotent (re-run
+   skips anything already in the index). Verify when done:
+     grep -c saved /tmp/fetch_aao.log   (expect ~3,469, FAIL count 0)
+   then the ingest steps can run manually rather than waiting for Sunday:
+     cd scripts/ingest && DATABASE_URL=postgresql://perm@127.0.0.1:5433/perm_decisions \
+       ../../venv/bin/python ingest_aao.py --new-only
+     ../../venv/bin/python ingest_rag.py --corpus aao      (NO --reindex)
+     ../../venv/bin/python build_aao_citations.py --since 2026-04-01
+   then Docker: zsh scripts/sync_docker_tables.sh aao_decisions 'rag_chunks:corpus=aao'
+   (aao_decisions has FK children via aao_citations — upsert mode, fine.)
+   Also sync aao_citations if build_aao_citations added rows.
+2. Sunday 02:00 run — first end-to-end with all new steps; read the log Monday.
+3. Parity checker (both directions, all shared tables); briefing emails.
+
+--------------------------------------------------------------------------------
+2026-08-22 — Visa Bulletin for September 2026 loaded (Homebrew + Docker)
+--------------------------------------------------------------------------------
+
+## Source
+travel.state.gov/.../2026/visa-bulletin-for-september-2026.html
+(Vol. XI No. 18, CA/VO Aug 10, 2026). Index page still showed "Upcoming:
+Coming Soon" and the Sept URL 404'd in search cache, but the page itself is
+live. 120 rows (12 prefs x 5 chargeabilities x 2 date types), same shape as
+Jun–Aug. Not yet in sync_casebase.sh — still a manual monthly step.
+
+## Fetch path (what worked / didn't)
+- curl, Playwright Chromium, Playwright channel=chrome: all stuck at the
+  Cloudflare "Just a moment" challenge from this machine (as previously noted).
+- claude-in-chrome: permission denied; Control Chrome: Chrome wasn't running.
+- Worked: fetched the page from Claude's sandbox side and transcribed the
+  four tables into /tmp/ingest_sep2026_bulletin.py, which reuses
+  scrape_visa_bulletins.parse_priority_date and upserts via asyncpg.
+  Docker: \copy CSV -> docker cp -> temp table -> INSERT ON CONFLICT
+  (same recipe as 2026-06-18 entry).
+
+## Notable Sept 2026 movement vs Aug
+- EB-2 India FAD: still U. EB-5 Unreserved India FAD: still U.
+  New notes E/F/G warn EB-1 India, EB-2 (all), and EB-5 unreserved may
+  retrogress or go U before Sept 30.
+- EB-3 DfF ALL: C (was 01AUG24 FAD-side; DfF now Current).
+- EB-3 DfF Philippines: 01JAN24. EB-5 DfF India: 01MAY24.
+- EB-4/EB-4R FAD 15DEC22 (was 15OCT22); DfF 01JAN23.
+- Family FADs advanced ~1 month across the board (F1 22JAN20, F2B 22AUG19,
+  F3 22OCT14, F4 22OCT11 for ALL); F2A FAD 22AUG26 / Mexico 22AUG25.
+- FY2026 EB worldwide limit confirmed 186,317; per-country 28,862.
+
+## Behavior reminder
+/api/visa-bulletin/latest gates on EFFECTIVE_BULLETIN (MAX bulletin_date <=
+first of current month), so August stays "in force" until 2026-09-01, then
+September activates on its own. Verified both DBs: Jul/Aug/Sep = 120 each.
+
+## No repo changes; nothing to commit. Temp files: /tmp/ingest_sep2026_bulletin.py,
+/tmp/vb_sep2026.csv (lost on reboot; fine).
+
+## NEXT
+- Automate: a monthly launchd step that tries scrape_visa_bulletins.py
+  --limit 1 and, on Cloudflare 403, flags for manual load (or route through
+  Chrome extension once permission is granted).
+- Unchanged from 2026-08-21: AAO backfill verify, Sunday run log, parity
+  checker, briefing emails.
