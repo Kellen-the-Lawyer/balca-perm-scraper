@@ -31,6 +31,44 @@ log = logging.getLogger(__name__)
 AAO_BASE   = "/Users/Dad/aao_decisions"
 INDEX_CSV  = "/Users/Dad/aao_decisions/aao_index.csv"
 
+_P_AAO_ORDER = re.compile(r"\bORDER:\s*", re.IGNORECASE)
+_P_AAO_ORDER_END = re.compile(r"\bNOTICE:|\bCite as\b|\.\s*\n?\s*\d{1,2}\s", re.IGNORECASE)  # NOTICE, "Cite as", or footnote marker after a period
+
+
+def detect_aao_outcome(full_text):
+    """Outcome from the ORDER: block only (every AAO decision has one). The prior
+    tail-2000 scan with SUSTAINED first mis-labelled ~500 dismissals/remands as
+    Sustained because the word appears in the analysis ("cannot be sustained").
+    Priority: sustained > remanded > withdrawn (appeal/motion) > dismissed/denied/rejected.
+    Returns (outcome, source) with source 'order' or 'tail' (tail = low confidence)."""
+    if not full_text or not full_text.strip():
+        return None, None
+    orders = list(_P_AAO_ORDER.finditer(full_text))
+    if orders:
+        zone = full_text[orders[-1].end(): orders[-1].end() + 600]
+        e = _P_AAO_ORDER_END.search(zone)
+        if e:
+            zone = zone[:e.start()]
+        # include any FURTHER ORDER already in zone; classify
+        z = zone.lower()
+        if "sustain" in z:
+            return "Sustained", "order"
+        if "remand" in z:
+            return "Remanded", "order"
+        if (re.search(r"\b(is|are|be|hereby)\s+approved\b|\bgranted\b", z)
+                and not re.search(r"(appeal|motion)[^.]{0,40}(dismiss|denied|rejected)|remains? denied|affirmed|moot|revoked", z)):
+            return "Sustained", "order"       # old style: "the petition is approved"
+        if re.search(r"(appeal|motion)[^.]{0,40}withdrawn", z):
+            return "Withdrawn", "order"
+        if re.search(r"dismiss|denied|rejected|affirmed", z):
+            return "Dismissed", "order"
+    tail = full_text[-2000:]
+    for pattern, label in OUTCOME_PATTERNS:
+        if pattern.search(tail):
+            return label, "tail"
+    return None, "tail"
+
+
 OUTCOME_PATTERNS = [
     (re.compile(r"\bSUSTAINED\b",  re.IGNORECASE), "Sustained"),
     (re.compile(r"\bDISMISSED\b",  re.IGNORECASE), "Dismissed"),
@@ -75,11 +113,7 @@ def extract_pdf(args):
         result["parse_errors"] = str(e)
         return result
 
-    tail = result["full_text"][-2000:] if len(result["full_text"]) > 2000 else result["full_text"]
-    for pattern, label in OUTCOME_PATTERNS:
-        if pattern.search(tail):
-            result["outcome"] = label
-            break
+    result["outcome"], _ = detect_aao_outcome(result["full_text"])
 
     return result
 

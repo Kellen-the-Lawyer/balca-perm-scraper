@@ -187,6 +187,21 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
+# ── 6. Briefing emails: score novelty, summarize, send via Outlook ───────────
+# One email per corpus from its alias to Kellen. Watermark (briefing_runs)
+# advances only on successful send; first-ever run seeds silently. Archive HTML
+# in ~/Library/Logs/casebase_briefings/. Failure here never blocks the sync.
+for CORPUS in balca aao; do
+    log "--- ${CORPUS} briefing ---"
+    if cd "$REPO" && "$VENV_PYTHON" -u scripts/briefing/send_briefing.py --corpus "$CORPUS" \
+        >> "$LOG" 2>&1; then
+        log "${CORPUS} briefing: OK"
+    else
+        log "${CORPUS} briefing: FAILED (exit $?)"
+        ERRORS=$((ERRORS + 1))
+    fi
+done
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 log "======================================================"
 if [ "$ERRORS" -eq 0 ]; then

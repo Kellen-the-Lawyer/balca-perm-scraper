@@ -42,7 +42,7 @@ _P_VACATED_REMANDED = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _P_GRANTED = re.compile(
-    r'(?:certif\w*\s+(?:is\s+)?GRANTED|HEREBY\s+GRANT'
+    r'(?:certif\w*\s+(?:is\s+)?GRANTED|HEREBY\s+GRANT|GRANT\w*\s+(?:labor\s+)?certif'
     r'|IT\s+IS\s+(?:HEREBY\s+)?ORDERED\s+that\s+(?:labor\s+)?certif\w+\s+(?:is\s+)?GRANT)',
     re.IGNORECASE,
 )
@@ -56,29 +56,68 @@ _P_DISMISSED = re.compile(
 )
 
 
+_P_ORDER_CLAUSE = re.compile(r'IT\s+IS\s+(?:HEREBY\s+)?ORDERED', re.IGNORECASE)
+_P_CAPTION = re.compile(
+    r'DECISION\s+AND\s+ORDER\s+(?:[A-Z ,]{0,40}?)\b(AFFIRM|REVERS|REMAND|VACAT|DISMISS|GRANT)\w*',
+    re.IGNORECASE,
+)
+
+
+_P_FOR_CERT = re.compile(r'REMAND\w*.{0,80}?(?:for\s+(?:the\s+)?(?:purpose\s+of\s+)?(?:grant\w*|certification|issuance)|to\s+grant)', re.IGNORECASE | re.DOTALL)
+
+
+def _classify(zone):
+    """Classify a short zone that is KNOWN to be dispositive (an order clause or caption).
+    Convention (Kellen, 2026-08-22): a remand that merely directs the CO to grant/certify is a
+    REVERSAL; only a remand for further proceedings (submit evidence, reconsider) is Remanded."""
+    if _P_REVERSED.search(zone):
+        return "Reversed"
+    if _P_AFFIRMED.search(zone):          # before grant/remand: "AFFIRMED ... CO's request for remand to grant"
+        return "Affirmed"
+    if _P_GRANTED.search(zone) or _P_FOR_CERT.search(zone):
+        return "Reversed"
+    if _P_VACATED_REMANDED.search(zone) or _P_REMANDED.search(zone):
+        return "Remanded"
+    if _P_VACATED.search(zone):
+        return "Reversed"
+    if _P_DISMISSED.search(zone):
+        return "Dismissed"
+    return None
+
+
+_P_ORDER_END = re.compile(r'Entered at the direction|For the (?:panel|Board)|NOTICE OF OPPORTUNITY|SO ORDERED', re.IGNORECASE)
+
+
 def detect_outcome(full_text):
+    return detect_outcome_ex(full_text)[0]
+
+
+def detect_outcome_ex(full_text):
+    """Outcome from the dispositive text ONLY, in priority order:
+      1. the LAST "IT IS ORDERED" clause (the ORDER paragraph) - ~94% of decisions
+      2. the caption "DECISION AND ORDER AFFIRMING/REVERSING/... "
+      3. the final TAIL_CHARS
+    Never the whole document: discussion of precedent ("the Board has vacated
+    denials...") must not outrank the order (2026-08-22, Idiada 2025-PER-00072)."""
+    """Returns (outcome, source) where source is 'order' | 'caption' | 'tail' | None."""
     if not full_text or not full_text.strip():
-        return None
-
+        return None, None
+    orders = list(_P_ORDER_CLAUSE.finditer(full_text))
+    if orders:
+        zone = full_text[orders[-1].start(): orders[-1].start() + 700]
+        e = _P_ORDER_END.search(zone, 20)
+        if e:
+            zone = zone[:e.start()]
+        r = _classify(zone)
+        if r:
+            return r, "order"
+    m = _P_CAPTION.search(full_text[:3000])
+    if m:
+        r = _classify(m.group(0))
+        if r:
+            return r, "caption"
     tail = full_text[-TAIL_CHARS:] if len(full_text) > TAIL_CHARS else full_text
-
-    for zone in (tail, full_text):
-        if _P_VACATED_REMANDED.search(zone):
-            return "Remanded"
-        if _P_GRANTED.search(zone):
-            return "Reversed"
-        if _P_VACATED.search(zone):
-            return "Reversed"
-        if _P_REMANDED.search(zone):
-            return "Remanded"
-        if _P_REVERSED.search(zone):
-            return "Reversed"
-        if _P_AFFIRMED.search(zone):
-            return "Affirmed"
-        if _P_DISMISSED.search(zone):
-            return "Dismissed"
-
-    return "Unknown"
+    return (_classify(tail) or "Unknown"), "tail"
 
 
 def main():

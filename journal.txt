@@ -3528,3 +3528,153 @@ Sept 2026 page through Chrome and parsed 120 rows; --target 2026-10 walked
 the real path (index -> not listed -> direct URL -> 0 rows -> "retry next
 run"), which is exactly what every 4-hourly run will do from Sept 12 until
 DOS posts October. Nothing further needed.
+
+--------------------------------------------------------------------------------
+2026-08-22 (afternoon) — Briefing emails BUILT; first BALCA briefing sent
+--------------------------------------------------------------------------------
+
+RULINGS (Kellen): weekly cadence (one email per Sunday sync); AAO limited to
+employment-based forms; novelty THRESHOLD not cap (2 or 20, whatever clears);
+SEPARATE emails from balcabriefings@ / aaobriefings@kellenpowell.com, TO
+Kellen@kellenpowell.com for review/edit before any forwarding; Haiku for
+summaries now, local fine-tuned model later.
+
+## NEW scripts/briefing/send_briefing.py  (+ step 6 in sync_casebase.sh)
+Pipeline per corpus: briefing_runs watermark (ingested_at-based, NOT
+decision_date — backfills land old decisions) -> novelty score -> Haiku
+summary (<=4 sentences + VERDICT line) -> HTML archive in
+~/Library/Logs/casebase_briefings/ -> osascript to Outlook -> watermark
+advanced only after send. First-ever run per corpus seeds silently.
+Flags: --dry-run, --no-send (archive + watermark), --force-since DATE,
+--threshold, --max-summaries N, --sample N (N random 2026 decisions as the
+"new" set; implies dry-run; use for tuning).
+
+## Novelty (what changed from the 08-21 design, and why)
+- Averaged-chunk vector + HNSW was unusable: index returns garbage for
+  off-manifold vectors (reported ~0.5 novelty for everything). Exact scan
+  fixed accuracy but cost 15-20s/decision on AAO's 310K chunks.
+- Final metric: MEAN over the decision's chunks of cosine distance to the
+  nearest chunk of any PRIOR decision (HNSW per real chunk, ef_search 80,
+  k=25, own/new ids filtered in Python). ~0.3s/decision. Boilerplate chunks
+  score ~0, so the number reflects the share of novel substantive text.
+- Calibrated on 200 random 2025-26 decisions/corpus:
+    balca p50 .117 p90 .207 p95 .226 p98 .299  -> threshold 0.30
+    aao   p50 .160 p90 .249 p95 .280 p98 .303  -> threshold 0.32
+- Boosts: +0.15 active-voice language (we/hereby overrule, first impression,
+  we reverse, we depart from, decline to follow); +0.10 appellant-win outcome
+  (BALCA Reversed / AAO Sustained) ONLY — Dismissed/Remanded are routine;
+  +0.15 BALCA CFR subsection combo never seen in balca_issue_tags.
+  DROPPED "en banc" (in 187/277 decisions via Symantec citations) and bare
+  "overruled" ("objection overruled"). Outcome Unknown/Withdrawn, _ORDER_/
+  _NOTICE_ URLs, and docs < 4000 chars -> routine unconditionally (short
+  procedural docs score high on text novelty, not legal novelty).
+- Second gate: Haiku ends with VERDICT: NOTABLE|ROUTINE; ROUTINE ones move to
+  a "Reviewed, judged routine" one-liner list so the filter is visible.
+- Routine months older than 24 months collapse to one "backfill" line.
+
+## Test results
+BALCA, 277 decisions (2-week backfill window): 2 notable (Analyzer Intl
+2014-PER-00705 — CO can't accept duties in SWA posting and reject identical
+duties in NOF; Broan NuTone 2022-PER-00042), 0 demoted, 275 routine.
+AAO, 120-sample: 45 excluded (I-914 27, I-918 7, N-600 5 ...), 5 featured —
+two EB-1A decisions rejecting a categorical bar on lawyers (MAR03/MAR10 2026
+_01B2203), EB-5 §203(b)(5)(M) good-faith safe harbor limited to petitions
+pending at RC termination (MAR112026_01B7203). I-485 removed from the
+allowlist after a T-3 adjustment surfaced (EB I-485 isn't AAO-appealable).
+Kellen's prediction (few notables per week) holds.
+
+## SENT: first BALCA briefing (2026-08-22-balca.html), Outlook accepted the
+alias sender without error — confirm in the inbox that From shows
+balcabriefings@ and not the default account. AAO seeded; Sunday's run will
+briefing the 3,469-decision backlog (~1,300 EB after filter, ~7 min scoring
++ Haiku on the featured set). Expect a fat first AAO email.
+
+## Known issues / follow-ups
+- AAO outcome detector: MAR092026_02B2203 stored as Sustained, text reads as
+  a dismissal. Likely partial-sustain/"withdraw SCOPS finding" language.
+  Check backfill_*/ingest_aao outcome regex.
+- AAO novelty baseline covers only the 46K embedded AAO decisions (of 166K).
+- Summaries are cloud Haiku; decisions carry no client PII (public docs).
+- --sample is the tuning tool; threshold/boost constants live at top of file.
+
+## Uncommitted (Kellen commits)
+ M sync_casebase.sh    ?? scripts/briefing/send_briefing.py
+ briefing_runs table created in Homebrew only (Docker does not need it).
+
+## NEXT
+1. Kellen: check inbox for the BALCA briefing (From alias? HTML renders?).
+2. Monday: read casebase_sync.log — steps 3b/4b/4c AND step 6 all first-run.
+3. Docker sync (unchanged list from the morning entry) + parity checker.
+4. Tune thresholds after 2-3 real weeks using --sample.
+
+2026-08-22 15:40 — CORRECTION (Kellen): first BALCA briefing featured 2018 and
+2023 decisions. Wrong rule: ingested_at defines the candidate set, but it
+must NOT define what can feature. Added RECENT_DAYS=120: only decisions
+DECIDED in the last 120 days are eligible; older backfill is aggregate-only
+regardless of novelty score. Deleted the bad briefing_runs row, resent. The
+corrected briefing had 0 featured: of the 277, only the ~27 decided since
+late April were eligible and none cleared 0.30 + model gate. That is the
+honest answer for this window; tune with --sample over time.
+
+2026-08-22 15:55 — RULING (Kellen): non-featured decisions are NOT a count.
+Every decision from the last 24 months gets a table row: date, linked name
+(+ form type for AAO), disposition. Only older backfill collapses to a
+count line. Resent the BALCA briefing (third send; briefing_runs row
+replaced each time). Open question put to Kellen: make Reversed/Sustained
+auto-eligible for a summary (model verdict still gates).
+
+2026-08-22 16:45 — BALCA OUTCOME DETECTOR REWRITTEN (Kellen caught Idiada
+2025-PER-00072 stored "Reversed"; it affirms). Root cause in
+backfill_balca_outcomes.detect_outcome: priority-ordered regexes scanned the
+WHOLE document, so "the Board has vacated denials..." (discussion of
+precedent) outranked "IT IS ORDERED ... is AFFIRMED".
+New detect_outcome_ex -> (outcome, source): classifies ONLY the last
+"IT IS ORDERED" sentence (cut at "Entered at the direction"/"For the
+panel"/NOTICE), else the caption "DECISION AND ORDER AFFIRMING...", else
+tail (low confidence; backfill does not overwrite on tail evidence).
+RULING (Kellen's existing convention, preserved): "REVERSED and REMANDED
+for certification under 656.27(c)(2)" / "REMANDED for the purpose of
+GRANTING" = Reversed; only "VACATED and REMANDED to permit evidence /
+further proceedings" = Remanded. Priority: REVERSED > AFFIRMED > grant/
+for-certification > remand > vacated > dismissed.
+Applied to Homebrew: 1,498 of 17,762 changed (1,288 Remanded->Reversed —
+the old 656.27(c)(2) remands — 79 Reversed->Affirmed incl. all four recent
+ones, 45 Reversed->Remanded, 27 Affirmed->Reversed, ...). 27 tail-only
+disagreements left alone. Now: Dismissed 10,030 / Affirmed 4,602 /
+Reversed 2,723 / Remanded 399 / Unknown 8. rag_chunks.source_outcome
+re-synced (15,828 chunks) in both DBs; Docker decisions.outcome mirrored via
+CSV. load_balca_decisions.py imports detect_outcome so new loads are fixed.
+Known edge: "Order of Dismissal VACATED, appeal REOPENED" classifies
+Reversed (procedural; rare). BALCA briefing resent with correct dispositions.
+NOTE: the same whole-document scan bug almost certainly exists in the AAO
+outcome detector (MAR092026_02B2203 "Sustained" reads as a dismissal) —
+audit ingest_aao outcome logic BEFORE Sunday's first AAO briefing if
+possible, since the Sustained boost and the disposition column both depend
+on it.
+Uncommitted: M scripts/ingest/backfill_balca_outcomes.py (plus earlier).
+
+2026-08-22 (evening) — AAO OUTCOME DETECTOR REWRITTEN (same bug as BALCA)
+ingest_aao.py scanned the last 2000 chars with SUSTAINED first, so any
+decision whose analysis said "cannot be sustained" was stored Sustained.
+New detect_aao_outcome(full_text) -> (outcome, source): reads ONLY the last
+"ORDER:" block (every AAO decision has one), cut at NOTICE: / "Cite as" /
+footnote marker. Substring matching survives OCR-squashed text
+("issustained", "remand.ed" does not — rare). Priority:
+  sustain > remand > (is approved | granted, unless appeal/motion dismissed/
+  denied/rejected, "remains denied", affirmed, moot, revoked) = Sustained
+  > appeal/motion withdrawn > dismiss/denied/rejected/affirmed = Dismissed.
+"Director's decision is withdrawn; matter remanded" = Remanded (AAO's own
+term; it is NOT a sustain even though the petitioner usually benefits).
+Tail fallback kept for documents without ORDER: (low confidence; backfill
+did not overwrite on tail evidence).
+Applied to Homebrew: 36,124 of 165,639 changed. Sustained 30,078 -> 13,971
+(16,332 were plain dismissals!), Dismissed 101,886 -> 135,451 (17,160 were
+NULL: old-style "director's decision is affirmed"), Remanded 11,818 ->
+12,840, Withdrawn 1,171 -> 337, NULL 20,686 -> 3,040.
+MAR092026_02B2203 now Dismissed. rag_chunks.source_outcome re-synced;
+Docker mirrored via /tmp/aao_sync_docker.sh (log /tmp/aao_sync_docker.log
+— verify "DONE" and matching counts if reading this Monday).
+Implication for everything downstream: any prior AAO stat that used
+outcome (sustain rates by form type, firm analysis) was wrong by ~2x on
+Sustained. The aao briefing's Sustained boost now means something.
+Uncommitted: M scripts/ingest/ingest_aao.py (plus all earlier today).
