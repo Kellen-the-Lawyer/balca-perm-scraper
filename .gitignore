@@ -102,3 +102,6 @@ Antigravity/
 logs/
 *.log
 *.pid
+
+# Local ML training checkpoints and adapters
+outputs/
