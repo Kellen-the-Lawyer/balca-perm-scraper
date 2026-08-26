@@ -51,6 +51,18 @@ const PERM_FIELDS = {
     { key: "is_multiple_locations", label: "Multiple Locations",    type: "text", agg: false },
     { key: "employer_layoff",       label: "Employer Layoff",       type: "text", agg: false },
   ],
+  "Recruitment Steps (new-form 9089, FY2024+)": [
+    { key: "used_radio_ad",             label: "Radio/TV Ad",            type: "text", agg: false },
+    { key: "used_job_fair",             label: "Job Fair",               type: "text", agg: false },
+    { key: "used_emp_website",          label: "Employer Website",       type: "text", agg: false },
+    { key: "used_job_search_site",      label: "Job Search Website",     type: "text", agg: false },
+    { key: "used_on_campus_recruiting", label: "On-Campus Recruiting",   type: "text", agg: false },
+    { key: "used_trade_org",            label: "Trade/Professional Org", type: "text", agg: false },
+    { key: "used_private_firm",         label: "Private Employment Firm", type: "text", agg: false },
+    { key: "used_emp_referral",         label: "Employee Referral Program", type: "text", agg: false },
+    { key: "used_campus_placement",     label: "Campus Placement Office", type: "text", agg: false },
+    { key: "used_local_newspaper",      label: "Local/Ethnic Newspaper", type: "text", agg: false },
+  ],
 };
 
 const LCA_FIELDS = {
@@ -329,8 +341,9 @@ function DropZone({ label, items, onDrop, onRemove, color, zoneFilters, onFilter
 }
 
 // ── Field List Sidebar ────────────────────────────────────────────────────────
-function FieldList({ fields, search, usedKeys }) {
+function FieldList({ fields, search, usedKeys, onAssign }) {
   const [collapsed, setCollapsed] = useState({});
+  const [menuKey, setMenuKey] = useState(null);
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     const result = {};
@@ -351,10 +364,12 @@ function FieldList({ fields, search, usedKeys }) {
             <span style={{ fontSize: 10, color: "var(--text3)" }}>{collapsed[cat] ? "▶" : "▼"}</span>
           </div>
           {!collapsed[cat] && flds.map(f => (
-            <div key={f.key} draggable onDragStart={e => e.dataTransfer.setData("fieldKey", f.key)}
+            <div key={f.key}>
+            <div draggable onDragStart={e => e.dataTransfer.setData("fieldKey", f.key)}
+              onClick={() => setMenuKey(k => k === f.key ? null : f.key)}
               style={{
                 padding: "7px 12px", cursor: "grab", display: "flex", alignItems: "center", gap: 7,
-                borderBottom: "1px solid var(--border)",
+                borderBottom: menuKey === f.key ? "none" : "1px solid var(--border)",
                 background: usedKeys.has(f.key) ? "var(--bg3)" : "transparent",
                 opacity: usedKeys.has(f.key) ? 0.45 : 1, transition: "background 0.1s",
               }}
@@ -364,6 +379,20 @@ function FieldList({ fields, search, usedKeys }) {
               <span style={{ width: 5, height: 5, borderRadius: "50%", flexShrink: 0, background: f.type === "numeric" ? "var(--green)" : f.type === "date" ? "var(--blue)" : "var(--text3)" }} />
               <span style={{ fontSize: 12, color: "var(--text2)", flex: 1 }}>{f.label}</span>
               {f.agg && <span style={{ fontSize: 9, color: "var(--green)", fontFamily: "'DM Mono', monospace" }}>∑</span>}
+            </div>
+            {menuKey === f.key && (
+              <div style={{ display: "flex", gap: 6, padding: "4px 12px 8px", borderBottom: "1px solid var(--border)", background: "var(--bg2)" }}>
+                {[["rows", "→ Rows"], ["cols", "→ Columns"], ["filter", "+ Filter"]].map(([zone, lbl]) => (
+                  <button key={zone}
+                    onClick={(e) => { e.stopPropagation(); onAssign?.(zone, f.key); setMenuKey(null); }}
+                    style={{ fontSize: 10, padding: "3px 9px", height: "auto", minHeight: "unset",
+                      background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 10,
+                      color: "var(--text2)", cursor: "pointer" }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
             </div>
           ))}
         </div>
@@ -824,6 +853,13 @@ function OflcPivot({ onBack, templateOverride, onTemplateClear }) {
     else if (zone === "cols") { setColField(key); }
   };
 
+  // Tap-to-assign fallback for touch devices (HTML5 drag-and-drop is dead on
+  // touch); also works as a click shortcut on desktop alongside dragging.
+  const assignField = (zone, key) => {
+    if (zone === "filter") setFilters(f => [...f, { id: Date.now(), field: key, op: "ILIKE", value: "" }]);
+    else handleFieldDrop(zone, key);
+  };
+
   const addFilter = () => setFilters(f => [...f, { id: Date.now(), field: "", op: "ILIKE", value: "" }]);
   const addValueMetric = () => setValueMetrics(v => [...v, { agg: "count", field: null, label: "Metric " + (v.length + 1) }]);
 
@@ -863,7 +899,7 @@ function OflcPivot({ onBack, templateOverride, onTemplateClear }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* ── Header ── */}
-      <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12, overflowX: "auto" }}>
         <button onClick={onBack} style={{ background: "none", border: "1px solid var(--border)", fontSize: 11, padding: "3px 10px", height: "auto", color: "var(--text3)" }}>← Back</button>
         <div style={{ width: 1, height: 16, background: "var(--border)" }} />
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>DOL Performance Data</span>
@@ -913,9 +949,9 @@ function OflcPivot({ onBack, templateOverride, onTemplateClear }) {
               </span>
             ))}
           </div>
-          <FieldList fields={fields} search={fieldSearch} usedKeys={usedKeys} />
+          <FieldList fields={fields} search={fieldSearch} usedKeys={usedKeys} onAssign={assignField} />
           <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", fontSize: 10, color: "var(--text3)", lineHeight: 1.5 }}>
-            Drag fields to Rows, Columns, or use as filters.
+            Drag fields to Rows or Columns — or tap a field to assign it.
           </div>
         </div>
 

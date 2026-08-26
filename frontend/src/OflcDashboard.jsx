@@ -169,13 +169,13 @@ function PermPanel({ fy }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
         <KPI label="Total Filings" value={total?.toLocaleString() ?? "—"} color="var(--amber)" />
         <KPI label="All Certified" value={certPct !== "—" ? `${certPct}%` : "—"} color="var(--green)" sub={`${certCount.toLocaleString()} cases (incl. expired)`} />
         <KPI label="Denied" value={deniedRow ? `${parseFloat(deniedRow.Pct).toFixed(1)}%` : "—"} color="var(--red)" sub={deniedRow?.Count?.toLocaleString()} />
         <KPI label="Unique Firms" value={firms?.total_rows?.toLocaleString() ?? "—"} color="var(--amber)" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
         <Widget title="Case Outcomes" subtitle="All statuses" loading={l1} color="var(--amber)">
           <PieChart rows={outcomes?.rows} labelKey="case_status" valueKey="Count" />
         </Widget>
@@ -206,13 +206,13 @@ function LcaPanel({ fy }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
         <KPI label="Total LCAs" value={total?.toLocaleString() ?? "—"} color="var(--blue)" />
         <KPI label="Certified" value={`${certPct}%`} color="var(--green)" sub={certRow?.Count?.toLocaleString()} />
         <KPI label="Visa Classes" value={visaClass?.total_rows ?? "—"} color="var(--blue)" />
         <KPI label="Unique Firms" value={firms?.total_rows?.toLocaleString() ?? "—"} color="var(--blue)" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
         <Widget title="Case Outcomes" loading={l1} color="var(--blue)">
           <PieChart rows={outcomes?.rows} labelKey="case_status" valueKey="Count" />
         </Widget>
@@ -241,13 +241,13 @@ function PwPanel({ fy }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
         <KPI label="Total PWDs" value={total?.toLocaleString() ?? "—"} color="var(--green)" />
         <KPI label="OES Usage" value={wageSrc?.rows?.find(r => r.wage_source === "OES")?.Pct ? `${wageSrc.rows.find(r => r.wage_source === "OES").Pct}%` : "—"} color="var(--green)" sub="of all PWDs" />
         <KPI label="Unique Firms" value={firms?.total_rows?.toLocaleString() ?? "—"} color="var(--green)" />
         <KPI label="SOC Codes" value={topSoc?.total_rows?.toLocaleString() ?? "—"} color="var(--green)" sub="suggested" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
         <Widget title="Wage Level Distribution" subtitle="Level I–IV" loading={l1} color="var(--green)">
           <PieChart rows={wageLevels?.rows} labelKey="pw_wage_level" valueKey="Count" />
         </Widget>
@@ -280,7 +280,7 @@ export function OflcDashboard({ onBack }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--bg2)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12, overflowX: "auto" }}>
         <button onClick={onBack} style={{ background: "none", border: "1px solid var(--border)", fontSize: 11, padding: "3px 10px", height: "auto", color: "var(--text3)" }}>← Back</button>
         <div style={{ width: 1, height: 16, background: "var(--border)" }} />
         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Dashboard</span>

@@ -1106,8 +1106,8 @@ export function PermComparer(){
     <button onClick={onClick} style={{fontSize:11,padding:'3px 10px',height:'auto',background:active?'var(--amber-dim)':'var(--bg3)',color:active?'var(--amber)':'var(--text3)',border:active?'1px solid #315f7c44':'1px solid var(--border)',borderRadius:20,fontWeight:active?500:400,cursor:'pointer'}}>{label}</button>
   );
 
-  const grid2={display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,alignItems:'start'};
-  const grid3={display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:16};
+  const grid2={display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:20,alignItems:'start'};
+  const grid3={display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16};
   const cardHeader=(kicker,title,match)=>(
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:14}}>
       <div><div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:4}}>{kicker}</div><div style={{fontSize:14,fontFamily:"'DM Serif Display',serif",color:'var(--text)'}}>{title}</div></div>
@@ -1137,13 +1137,13 @@ export function PermComparer(){
       <div style={{maxWidth:1360,margin:'0 auto'}}>
 
         {/* Hero */}
-        <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:24}}>
+        <div style={{display:'flex',flexWrap:'wrap',alignItems:'flex-end',justifyContent:'space-between',gap:24,marginBottom:24}}>
           <div>
             <div style={{fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text3)',marginBottom:6}}>PERM Labor Certification</div>
             <div style={{fontFamily:"'DM Serif Display',serif",fontSize:'clamp(1.6rem,3vw,2.4rem)',color:'var(--text)',lineHeight:1.1}}>{mode==='audit'?'Recruitment Compliance Review':'Text Comparison Workspace'}</div>
             <div style={{fontSize:13,color:'var(--text3)',marginTop:8,maxWidth:600,lineHeight:1.6}}>{mode==='audit'?'Test each recruitment piece against the PWD under 20 CFR 656 and BALCA — wage floor, geographic area, requirements-not-exceeding-9089, and Notice-of-Filing content.':'Compare job description and requirements language, validate PWD wage positioning.'}</div>
           </div>
-          <div style={{display:'flex',flexWrap:'wrap',justifyContent:'flex-end',gap:10,alignItems:'center',flexShrink:0}}>
+          <div style={{display:'flex',flexWrap:'wrap',justifyContent:'flex-end',gap:10,alignItems:'center',flexShrink:0,maxWidth:'100%'}}>
             <div style={{display:'flex',gap:0,border:'1px solid var(--border)',borderRadius:20,overflow:'hidden'}}>
               {[['diff','Text Diff'],['audit','Recruitment Review']].map(([m,lbl])=>(
                 <button key={m} onClick={()=>setMode(m)} style={{fontSize:11,padding:'5px 14px',border:'none',cursor:'pointer',background:mode===m?'var(--amber-dim)':'transparent',color:mode===m?'var(--amber)':'var(--text3)',fontWeight:mode===m?600:400}}>{lbl}</button>

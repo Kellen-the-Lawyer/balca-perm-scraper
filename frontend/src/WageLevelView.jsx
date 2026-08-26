@@ -269,7 +269,7 @@ export function WageLevelView() {
                   </div>
                 )}
 
-                <div style={{ ...panel, marginTop: 14, padding: 0, overflow: "hidden" }}>
+                <div style={{ ...panel, marginTop: 14, padding: 0, overflowX: "auto", overflowY: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: "var(--bg3)", textAlign: "left" }}>

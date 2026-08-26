@@ -1,0 +1,1663 @@
+{
+  "$defs": {
+    "Address": {
+      "additionalProperties": false,
+      "properties": {
+        "address1": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address1"
+        },
+        "address2": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address2"
+        },
+        "city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "City"
+        },
+        "county": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "County"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        },
+        "postal_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Postal Code"
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "United States",
+          "title": "Country"
+        },
+        "province": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Province"
+        }
+      },
+      "title": "Address",
+      "type": "object"
+    },
+    "BoundingBox": {
+      "additionalProperties": false,
+      "properties": {
+        "x0": {
+          "title": "X0",
+          "type": "number"
+        },
+        "y0": {
+          "title": "Y0",
+          "type": "number"
+        },
+        "x1": {
+          "title": "X1",
+          "type": "number"
+        },
+        "y1": {
+          "title": "Y1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x0",
+        "y0",
+        "x1",
+        "y1"
+      ],
+      "title": "BoundingBox",
+      "type": "object"
+    },
+    "DocumentArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filename"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "page_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Count"
+        },
+        "renderer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Renderer"
+        },
+        "rendering_seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rendering Seed"
+        },
+        "augmentations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Augmentations",
+          "type": "array"
+        }
+      },
+      "title": "DocumentArtifact",
+      "type": "object"
+    },
+    "DocumentMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "title": "Document Id",
+          "type": "string"
+        },
+        "form": {
+          "enum": [
+            "ETA-9141",
+            "ETA-9089"
+          ],
+          "title": "Form",
+          "type": "string"
+        },
+        "form_edition": {
+          "title": "Form Edition",
+          "type": "string"
+        },
+        "stage": {
+          "default": "seed",
+          "enum": [
+            "seed",
+            "generated",
+            "rendered",
+            "reviewed"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "artifact_kind": {
+          "enum": [
+            "flag_draft",
+            "determination",
+            "filed",
+            "certified",
+            "correction",
+            "training_render"
+          ],
+          "title": "Artifact Kind",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "synthetic",
+            "semi_synthetic",
+            "firm_real"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/DocumentArtifact"
+        }
+      },
+      "required": [
+        "document_id",
+        "form",
+        "form_edition",
+        "artifact_kind",
+        "source_type"
+      ],
+      "title": "DocumentMetadata",
+      "type": "object"
+    },
+    "ExpectedComparison": {
+      "additionalProperties": false,
+      "properties": {
+        "comparison_id": {
+          "title": "Comparison Id",
+          "type": "string"
+        },
+        "pwd_path": {
+          "title": "Pwd Path",
+          "type": "string"
+        },
+        "perm_path": {
+          "title": "Perm Path",
+          "type": "string"
+        },
+        "expected": {
+          "enum": [
+            "match",
+            "mismatch",
+            "not_comparable"
+          ],
+          "title": "Expected",
+          "type": "string"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "comparison_id",
+        "pwd_path",
+        "perm_path",
+        "expected",
+        "rule"
+      ],
+      "title": "ExpectedComparison",
+      "type": "object"
+    },
+    "FieldAnnotation": {
+      "additionalProperties": false,
+      "description": "Sidecar metadata keyed by a canonical form-data path.",
+      "properties": {
+        "state": {
+          "default": "present",
+          "enum": [
+            "present",
+            "blank",
+            "not_applicable",
+            "unreadable",
+            "not_found",
+            "conflicting"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/FieldSource"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "review_status": {
+          "default": "unreviewed",
+          "enum": [
+            "unreviewed",
+            "auto_validated",
+            "human_verified",
+            "needs_review"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "FieldAnnotation",
+      "type": "object"
+    },
+    "FieldEvidence": {
+      "additionalProperties": false,
+      "description": "Visual/text grounding added after a form has been rendered or reviewed.",
+      "properties": {
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "bounding_box": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundingBox"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extraction_method": {
+          "enum": [
+            "known_template_geometry",
+            "pdf_text_layer",
+            "ocr",
+            "vlm",
+            "human"
+          ],
+          "title": "Extraction Method",
+          "type": "string"
+        },
+        "quote_verified": {
+          "default": false,
+          "title": "Quote Verified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "page",
+        "extraction_method"
+      ],
+      "title": "FieldEvidence",
+      "type": "object"
+    },
+    "FieldSource": {
+      "additionalProperties": false,
+      "description": "How the ground-truth value for one JSON path was obtained.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "oflc_perm",
+            "oflc_pw",
+            "shared_case_fact",
+            "synthetic_rule",
+            "firm_document",
+            "deterministic_parser",
+            "human_review"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        },
+        "source_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Field"
+        },
+        "generator_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generator Rule"
+        },
+        "transformation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transformation"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "FieldSource",
+      "type": "object"
+    },
+    "PERMDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/DocumentMetadata"
+        },
+        "form_data": {
+          "$ref": "#/$defs/PERMFormData"
+        },
+        "annotations": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldAnnotation"
+          },
+          "title": "Annotations",
+          "type": "object"
+        }
+      },
+      "required": [
+        "metadata",
+        "form_data"
+      ],
+      "title": "PERMDocument",
+      "type": "object"
+    },
+    "PERMFormData": {
+      "additionalProperties": false,
+      "description": "ETA-9089 sections use the existing canonical section names.\n\nSection dictionaries remain extensible while the FLAG selector inventory is\nbeing completed.  Their permitted fields are documented in\n``app/perm_verify/form_9089_schema.json`` and can be made strict once the\nend-to-end FLAG map is certified.",
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/PERMMeta"
+        },
+        "A_employer": {
+          "additionalProperties": true,
+          "title": "A Employer",
+          "type": "object"
+        },
+        "B_poc": {
+          "additionalProperties": true,
+          "title": "B Poc",
+          "type": "object"
+        },
+        "C_attorney_agent": {
+          "additionalProperties": true,
+          "title": "C Attorney Agent",
+          "type": "object"
+        },
+        "D_foreign_worker_flags": {
+          "additionalProperties": true,
+          "title": "D Foreign Worker Flags",
+          "type": "object"
+        },
+        "E_job_wage": {
+          "additionalProperties": true,
+          "title": "E Job Wage",
+          "type": "object"
+        },
+        "F_worksite": {
+          "additionalProperties": true,
+          "title": "F Worksite",
+          "type": "object"
+        },
+        "G_job_info": {
+          "additionalProperties": true,
+          "title": "G Job Info",
+          "type": "object"
+        },
+        "H_recruitment": {
+          "additionalProperties": true,
+          "title": "H Recruitment",
+          "type": "object"
+        },
+        "I_attestations": {
+          "additionalProperties": true,
+          "title": "I Attestations",
+          "type": "object"
+        },
+        "J_preparer": {
+          "additionalProperties": true,
+          "title": "J Preparer",
+          "type": "object"
+        },
+        "appendix_A": {
+          "additionalProperties": true,
+          "title": "Appendix A",
+          "type": "object"
+        },
+        "appendix_B": {
+          "additionalProperties": true,
+          "title": "Appendix B",
+          "type": "object"
+        },
+        "appendix_C": {
+          "additionalProperties": true,
+          "title": "Appendix C",
+          "type": "object"
+        },
+        "appendix_D": {
+          "additionalProperties": true,
+          "title": "Appendix D",
+          "type": "object"
+        }
+      },
+      "title": "PERMFormData",
+      "type": "object"
+    },
+    "PERMMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "perm_case_number": {
+          "anyOf": [
+            {
+              "pattern": "^G-\\d{3}-\\d{5}-\\d{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Perm Case Number"
+        },
+        "case_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Status"
+        },
+        "received_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Received Date"
+        },
+        "decision_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Date"
+        },
+        "filing_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filing Date"
+        }
+      },
+      "title": "PERMMeta",
+      "type": "object"
+    },
+    "PWDDetermination": {
+      "additionalProperties": false,
+      "properties": {
+        "soc_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soc Code"
+        },
+        "soc_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soc Title"
+        },
+        "onet_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Onet Code"
+        },
+        "onet_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Onet Title"
+        },
+        "combination_soc_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Combination Soc Code"
+        },
+        "combination_soc_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Combination Soc Title"
+        },
+        "prevailing_wage": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prevailing Wage"
+        },
+        "alternate_prevailing_wage": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alternate Prevailing Wage"
+        },
+        "wage_unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "Hour",
+                "Week",
+                "Bi-Weekly",
+                "Month",
+                "Year"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wage Unit"
+        },
+        "wage_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wage Level"
+        },
+        "wage_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wage Source"
+        },
+        "survey_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Survey Name"
+        },
+        "bls_area": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bls Area"
+        }
+      },
+      "title": "PWDDetermination",
+      "type": "object"
+    },
+    "PWDDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/DocumentMetadata"
+        },
+        "form_data": {
+          "$ref": "#/$defs/PWDFormData"
+        },
+        "annotations": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldAnnotation"
+          },
+          "title": "Annotations",
+          "type": "object"
+        }
+      },
+      "required": [
+        "metadata",
+        "form_data"
+      ],
+      "title": "PWDDocument",
+      "type": "object"
+    },
+    "PWDEmployer": {
+      "additionalProperties": false,
+      "properties": {
+        "legal_business_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legal Business Name"
+        },
+        "trade_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trade Name"
+        },
+        "fein": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{2}-?\\d{7}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fein"
+        },
+        "naics_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Naics Code"
+        },
+        "address": {
+          "$ref": "#/$defs/Address"
+        }
+      },
+      "title": "PWDEmployer",
+      "type": "object"
+    },
+    "PWDFormData": {
+      "additionalProperties": false,
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/PWDMeta"
+        },
+        "employer": {
+          "$ref": "#/$defs/PWDEmployer"
+        },
+        "requestor_contact": {
+          "additionalProperties": true,
+          "title": "Requestor Contact",
+          "type": "object"
+        },
+        "attorney_agent": {
+          "additionalProperties": true,
+          "title": "Attorney Agent",
+          "type": "object"
+        },
+        "job_offer": {
+          "$ref": "#/$defs/PWDJobOffer"
+        },
+        "primary_requirements": {
+          "$ref": "#/$defs/PWDRequirementSet"
+        },
+        "alternate_requirements_accepted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alternate Requirements Accepted"
+        },
+        "alternate_requirements": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PWDRequirementSet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "determination": {
+          "$ref": "#/$defs/PWDDetermination"
+        }
+      },
+      "title": "PWDFormData",
+      "type": "object"
+    },
+    "PWDJobOffer": {
+      "additionalProperties": false,
+      "properties": {
+        "job_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Title"
+        },
+        "job_duties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Duties"
+        },
+        "worksite": {
+          "$ref": "#/$defs/Address"
+        },
+        "travel_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Travel Required"
+        },
+        "travel_details": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Travel Details"
+        },
+        "telecommuting_allowed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Telecommuting Allowed"
+        },
+        "telecommuting_details": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Telecommuting Details"
+        }
+      },
+      "title": "PWDJobOffer",
+      "type": "object"
+    },
+    "PWDMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "pwd_case_number": {
+          "anyOf": [
+            {
+              "pattern": "^P-\\d{3}-\\d{5}-\\d{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pwd Case Number"
+        },
+        "case_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Status"
+        },
+        "received_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Received Date"
+        },
+        "determination_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Determination Date"
+        },
+        "validity_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity From"
+        },
+        "validity_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validity To"
+        }
+      },
+      "title": "PWDMeta",
+      "type": "object"
+    },
+    "PWDRequirementSet": {
+      "additionalProperties": false,
+      "properties": {
+        "education_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Education Level"
+        },
+        "majors": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Majors"
+        },
+        "second_degree_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Second Degree Required"
+        },
+        "training_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Training Required"
+        },
+        "training_months": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Training Months"
+        },
+        "training_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Training Field"
+        },
+        "experience_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Required"
+        },
+        "experience_months": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Months"
+        },
+        "experience_occupation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Experience Occupation"
+        },
+        "special_requirements_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Special Requirements Required"
+        },
+        "special_requirements_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Special Requirements Text"
+        },
+        "special_requirement_items": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Special Requirement Items",
+          "type": "array"
+        },
+        "foreign_language_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreign Language Required"
+        }
+      },
+      "title": "PWDRequirementSet",
+      "type": "object"
+    },
+    "PrivacyMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": [
+            "public",
+            "synthetic",
+            "confidential_firm"
+          ],
+          "title": "Classification",
+          "type": "string"
+        },
+        "contains_real_person_data": {
+          "title": "Contains Real Person Data",
+          "type": "boolean"
+        },
+        "contains_real_employer_data": {
+          "title": "Contains Real Employer Data",
+          "type": "boolean"
+        },
+        "training_approved": {
+          "title": "Training Approved",
+          "type": "boolean"
+        },
+        "redaction_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Redaction Notes"
+        }
+      },
+      "required": [
+        "classification",
+        "contains_real_person_data",
+        "contains_real_employer_data",
+        "training_approved"
+      ],
+      "title": "PrivacyMetadata",
+      "type": "object"
+    },
+    "SharedCaseFacts": {
+      "additionalProperties": false,
+      "description": "Disclosure facts that describe the case but may not be printed on both forms.",
+      "properties": {
+        "employer_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Employer Name"
+        },
+        "employer_fein": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Employer Fein"
+        },
+        "job_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Title"
+        },
+        "soc_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soc Code"
+        },
+        "soc_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Soc Title"
+        },
+        "worksite_city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worksite City"
+        },
+        "worksite_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worksite State"
+        },
+        "worksite_postal_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worksite Postal Code"
+        }
+      },
+      "title": "SharedCaseFacts",
+      "type": "object"
+    },
+    "SourceReference": {
+      "additionalProperties": false,
+      "description": "One source record used to construct the paired case.",
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "oflc_perm",
+            "oflc_pw",
+            "firm_document",
+            "synthetic_rule",
+            "human_review"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table"
+        },
+        "record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Record Id"
+        },
+        "source_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source File"
+        },
+        "fiscal_year": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fiscal Year"
+        },
+        "public_data": {
+          "default": false,
+          "title": "Public Data",
+          "type": "boolean"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "source_id",
+        "kind"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One linked training case containing a PWD and its ETA-9089.",
+  "properties": {
+    "schema_version": {
+      "const": "casebase.perm-pwd-pair.v1",
+      "default": "casebase.perm-pwd-pair.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "case_id": {
+      "title": "Case Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "random_seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Random Seed"
+    },
+    "lifecycle_stage": {
+      "default": "seed",
+      "enum": [
+        "seed",
+        "generated",
+        "rendered",
+        "reviewed"
+      ],
+      "title": "Lifecycle Stage",
+      "type": "string"
+    },
+    "privacy": {
+      "$ref": "#/$defs/PrivacyMetadata"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceReference"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "shared_case_facts": {
+      "$ref": "#/$defs/SharedCaseFacts"
+    },
+    "shared_fact_annotations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/FieldAnnotation"
+      },
+      "title": "Shared Fact Annotations",
+      "type": "object"
+    },
+    "pwd": {
+      "$ref": "#/$defs/PWDDocument"
+    },
+    "perm": {
+      "$ref": "#/$defs/PERMDocument"
+    },
+    "expected_comparisons": {
+      "items": {
+        "$ref": "#/$defs/ExpectedComparison"
+      },
+      "title": "Expected Comparisons",
+      "type": "array"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    }
+  },
+  "required": [
+    "case_id",
+    "created_at",
+    "privacy",
+    "sources",
+    "pwd",
+    "perm"
+  ],
+  "title": "PermPwdPair",
+  "type": "object"
+}

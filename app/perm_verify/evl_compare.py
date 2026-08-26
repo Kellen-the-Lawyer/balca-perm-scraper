@@ -36,6 +36,15 @@ VLM_MODEL = os.environ.get(
     os.environ.get("AUDIT_VLM_MODEL", "qwen/qwen3-vl-8b"),
 )
 
+# Optional remote backend for PWD parsing ONLY (all three must be set).
+# EVLs contain employee PII and always stay on the local VLM regardless.
+# Example: PWD_LLM_URL=https://api.openai.com/v1/chat/completions
+#          PWD_LLM_MODEL=gpt-5.6-luna
+#          PWD_LLM_API_KEY=<key>
+PWD_LLM_URL = os.environ.get("PWD_LLM_URL", "")
+PWD_LLM_MODEL = os.environ.get("PWD_LLM_MODEL", "")
+PWD_LLM_API_KEY = os.environ.get("PWD_LLM_API_KEY", "")
+
 MAX_PDF_PAGES = 30
 MAX_VISION_PAGES = 12
 MAX_TEXT_CHARS = 80_000
@@ -116,9 +125,22 @@ Return ONLY valid JSON using this exact structure:
 
 Rules:
 - Preserve the actual requirement wording. Do not modernize or summarize it.
-- Split separately listed licenses, technologies, methods, languages, courses,
-  and other skills into separate special_requirements entries, but retain the
-  exact source clause that controls each item.
+- The PWD's own list punctuation defines the atomic unit. Create one
+  special_requirements entry per item that the PWD itself delimits with a
+  semicolon, a numbered item (1., 2., (a), (i)), or a bullet/line item. NEVER
+  split below that floor: commas, "and", and "or" INSIDE one delimited item
+  are part of that single item and must stay together in one entry.
+- Reproduce each delimited item's text verbatim, including every "and" and
+  "or" connector exactly as written. "Python and Java" (both required) and
+  "Python or Java" (either suffices) are legally different requirements;
+  altering, dropping, or splitting these connectors changes the requirement.
+  Do not paraphrase connectors or reorder list members.
+- Example: "Experience must include: SQL; Financial KPIs and P&L statement;
+  e-commerce pricing, assortment, fulfillment, and inventory management
+  strategies" produces exactly three entries: "SQL", "Financial KPIs and P&L
+  statement", and "e-commerce pricing, assortment, fulfillment, and inventory
+  management strategies". Never a separate entry for "assortment" or
+  "fulfillment".
 - Keep qualifications joined by "and" in the same route. Preserve "or" within
   an individual requirement when the PWD itself permits either option.
 - Education and its corresponding experience duration form one qualification
@@ -143,14 +165,23 @@ Rules:
 - Mixed durations must remain separate. Example: a five-year base requirement
   with three years of X and one year of Y produces two separate duration-bound
   requirements (36 months and 12 months).
-- The text field MUST name one atomic item, not repeat the controlling clause.
-  For "experience must include Python and SQL," return two entries whose text
-  values are "Python" and "SQL" and whose source_clause values both preserve
-  the full sentence. For "two years with AWS and one year with Tableau," return
-  text "AWS" with 24 required_months and text "Tableau" with 12 required_months.
+- The text field is the delimited item's own wording, verbatim, without the
+  surrounding controlling clause. For "experience must include: Python and
+  SQL; Kubernetes" return two entries whose text values are "Python and SQL"
+  and "Kubernetes", each with source_clause preserving the full sentence.
+- The ONLY permitted split inside one delimited item is when the PWD assigns
+  distinct explicit durations to distinct items within it: "two years with
+  AWS and one year with Tableau" returns text "AWS" with 24 required_months
+  and text "Tableau" with 12 required_months, because each duration binds its
+  own item.
 - Never return two entries with the same text merely because their durations
   differ. Bind every duration to the specific skill or activity it modifies.
 - A zero or a checked No means null, not a requirement.
+- Conditions of employment are not qualification requirements and must NOT
+  appear in special_requirements: travel percentages or travel obligations,
+  telecommuting/remote/hybrid work arrangements, work schedules or shifts,
+  relocation, on-call duty, and similar terms of the job. Record them in
+  extraction_notes if they appear inside the requirements text.
 - Do not infer requirements from the job duties, SOC title, or wage level.
 - Do not invent text that is unreadable. Record uncertainty in extraction_notes.
 """
@@ -161,13 +192,21 @@ entry represents one atomic skill, activity, license, language, or other item.
 Return the entire corrected JSON object and preserve all other fields.
 
 Rules:
-- text names only the atomic item; source_clause preserves the full wording.
-- "experience must include Python and SQL" becomes separate Python and SQL
-  entries, both some_experience with no required_months.
-- "full term must include X, Y, and Z" becomes separate X, Y, and Z entries,
-  each full_term.
-- "two years with AWS and one year with Tableau" becomes AWS/24 months and
-  Tableau/12 months.
+- The PWD's own list punctuation defines the atomic unit: one entry per item
+  the PWD delimits with a semicolon, numbered item, or bullet/line item. Never
+  split below that floor; commas, "and", and "or" inside one delimited item
+  stay together in one entry.
+- text is the delimited item's wording verbatim, preserving every "and"/"or"
+  connector exactly as written ("Python and Java" requires both; "Python or
+  Java" permits either — these are legally different and must not be altered
+  or split); source_clause preserves the full wording.
+- MERGE entries that are comma or "and"/"or" fragments of a single delimited
+  item back into one entry carrying that item's full verbatim text.
+- "experience must include: Python and SQL; Kubernetes" becomes exactly two
+  entries: "Python and SQL" and "Kubernetes".
+- The only split inside one delimited item is for distinct explicit
+  durations: "two years with AWS and one year with Tableau" becomes AWS/24
+  months and Tableau/12 months.
 - Never duplicate the same full clause as the text for multiple items.
 - Do not invent or infer an item not present in source_clause.
 
@@ -301,27 +340,45 @@ def _json_object(raw: str) -> dict[str, Any]:
     return value
 
 
-def _chat(content: list[dict[str, Any]], max_tokens: int = 7000) -> dict[str, Any]:
-    payload = {
-        "model": VLM_MODEL,
-        "temperature": 0,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": content}],
-    }
+def _chat(content: list[dict[str, Any]], max_tokens: int = 7000,
+          remote: bool = False) -> dict[str, Any]:
+    use_remote = remote and PWD_LLM_URL and PWD_LLM_MODEL and PWD_LLM_API_KEY
+    if use_remote:
+        # OpenAI-compatible remote: newer models reject `temperature` and
+        # `max_tokens`; use defaults and `max_completion_tokens` instead.
+        payload = {
+            "model": PWD_LLM_MODEL,
+            "max_completion_tokens": max_tokens,
+            "messages": [{"role": "user", "content": content}],
+        }
+        url = PWD_LLM_URL
+        headers = {"Content-Type": "application/json",
+                   "Authorization": f"Bearer {PWD_LLM_API_KEY}"}
+    else:
+        payload = {
+            "model": VLM_MODEL,
+            "temperature": 0,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": content}],
+        }
+        url = VLM_URL
+        headers = {"Content-Type": "application/json"}
     request = urllib.request.Request(
-        VLM_URL,
+        url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=600) as response:
             result = json.loads(response.read())
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
-        raise VLMError(f"Cannot reach the local document model at {VLM_URL}: {exc}") from exc
+        where = "the remote PWD model" if use_remote else \
+            f"the local document model at {VLM_URL}"
+        raise VLMError(f"Cannot reach {where}: {exc}") from exc
     try:
         raw = result["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
-        raise VLMError("Local model returned an unexpected response") from exc
+        raise VLMError("The document model returned an unexpected response") from exc
     return _json_object(raw)
 
 
@@ -550,18 +607,58 @@ def _needs_atomic_repair(raw: dict[str, Any]) -> bool:
                 return True
             if text == source and (
                     any(marker in source for marker in controlling)
-                    or re.search(r"[,;]|\s+and\s+", source)):
+                    or ";" in source.rstrip(";")):
+                return True
+        # Over-split detection: two or more entries whose texts are fragments
+        # of the SAME semicolon/bullet/number-delimited segment of a shared
+        # source clause were split below the atomic floor (e.g. "assortment"
+        # and "fulfillment" carved out of one listed item). The only permitted
+        # multi-entry segment is distinct explicit durations (AWS/24 months
+        # and Tableau/12 months from one clause).
+        by_clause: dict[str, list[dict[str, Any]]] = {}
+        for item in route.get("special_requirements") or []:
+            if not isinstance(item, dict):
+                continue
+            # Collapse spaces/tabs but keep newlines so bullet and numbered
+            # list markers survive for segment splitting below.
+            clause = re.sub(
+                r"[^\S\n]+", " ", str(item.get("source_clause") or "")).strip()
+            if clause:
+                by_clause.setdefault(clause.casefold(), []).append(item)
+        for clause, items in by_clause.items():
+            if len(items) < 2:
+                continue
+            segments = [re.sub(r"\s+", " ", seg).strip() for seg in re.split(
+                r";|\n\s*[-•*]\s+|\n\s*(?:\d+|[a-z]|[ivx]+)[.)]\s+",
+                clause) if seg.strip()]
+            seg_hits: dict[int, list[dict[str, Any]]] = {}
+            for item in items:
+                text = re.sub(
+                    r"\s+", " ", str(item.get("text") or "")).strip().casefold()
+                if not text:
+                    continue
+                matched = [i for i, seg in enumerate(segments) if text in seg]
+                if len(matched) == 1:
+                    seg_hits.setdefault(matched[0], []).append(item)
+            for hits in seg_hits.values():
+                if len(hits) < 2:
+                    continue
+                if all(item.get("experience_scope") == "explicit_duration"
+                       and item.get("required_months")
+                       for item in hits):
+                    continue
                 return True
     return False
 
 
-def _ensure_atomic_requirements(raw: dict[str, Any]) -> dict[str, Any]:
+def _ensure_atomic_requirements(raw: dict[str, Any],
+                                remote: bool = False) -> dict[str, Any]:
     if not _needs_atomic_repair(raw):
         return raw
     repaired = _chat([{
         "type": "text",
         "text": ATOMIC_REPAIR_PROMPT + json.dumps(raw, ensure_ascii=False),
-    }])
+    }], remote=remote)
     if _needs_atomic_repair(repaired):
         raise VLMError(
             "A complex PWD experience clause could not be separated into reliable "
@@ -634,7 +731,11 @@ def _effective_alternative(
 def extract_pwd_requirements(path: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     base = extract_9141(path)
     content, _ = _document_content(path, PWD_PROMPT, pwd=True)
-    raw = _ensure_atomic_requirements(_chat(content))
+    # PWDs contain no PII, so a configured remote model is allowed here;
+    # EVL extraction below never sets remote and always stays local.
+    remote = bool(PWD_LLM_URL and PWD_LLM_MODEL and PWD_LLM_API_KEY)
+    raw = _ensure_atomic_requirements(_chat(content, remote=remote),
+                                      remote=remote)
     structured = {
         "job_title": _nullable_text(raw.get("job_title")) or base.get("job_title"),
         "primary": _clean_requirement_set(raw.get("primary")),

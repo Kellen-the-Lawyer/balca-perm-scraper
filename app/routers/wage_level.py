@@ -178,6 +178,27 @@ class DetermineRequest(BaseModel):
     collection_type: str = "alc"
 
 
+@router.get("/api/wage-level/occupations")
+async def wage_level_occupation_search(q: str, limit: int = 12):
+    """Typeahead for the occupation box: SOC-code prefix or title substring."""
+    q = q.strip()
+    if len(q) < 2:
+        return []
+    # soc_occupations is a derived 868-row lookup (DISTINCT soc_code, soc_title
+    # FROM current_oews_wages). Querying the 4.76M-row wage table directly took
+    # ~10s per keystroke; this is ~milliseconds. Rebuild after new OEWS loads:
+    #   DROP TABLE IF EXISTS soc_occupations;
+    #   CREATE TABLE soc_occupations AS
+    #     SELECT DISTINCT soc_code, soc_title FROM current_oews_wages;
+    rows = await database.fetch_all(text("""
+        SELECT soc_code, soc_title
+        FROM soc_occupations
+        WHERE soc_code LIKE :pfx OR soc_title ILIKE :like
+        ORDER BY soc_code
+        LIMIT :lim""").bindparams(pfx=f"{q}%", like=f"%{q}%", lim=limit))
+    return [dict(r) for r in rows]
+
+
 @router.get("/api/wage-level/occupation/{soc}")
 async def wage_level_occupation(soc: str):
     """Prefill data for the UI: zone, zone reference, title, Appendix D info."""

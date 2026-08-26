@@ -16,9 +16,10 @@ from fastapi.staticfiles import StaticFiles
 
 from core import database, ensure_operational_schema
 import kanban as kanban_module
-from routers import (aao, balca, checklists, eb_inventory, extraction, govinfo, ina,
-                     oflc, perm_verify, policy, processing_times, projects, rag, regulations,
-                     search_all, soc_suggest, visa_bulletin, wage_level, wages)
+from routers import (aao, applicant_eval, balca, checklists, eb_inventory, extraction,
+                     govinfo, ina, oflc, perm_verify, policy, processing_times, projects,
+                     rag, regulations, search_all, soc_suggest, visa_bulletin,
+                     wage_level, wages)
 
 
 @asynccontextmanager
@@ -35,7 +36,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 app.include_router(kanban_module.register_routes(database))
 for _r in (balca, projects, aao, regulations, policy, govinfo, search_all, extraction,
            ina, checklists, rag, oflc, visa_bulletin, eb_inventory, wages, wage_level,
-           perm_verify, soc_suggest):
+           perm_verify, soc_suggest, applicant_eval):
     app.include_router(_r.router)
 app.include_router(processing_times.router)
 

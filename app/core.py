@@ -343,6 +343,12 @@ OFLC_TABLES = {
             "wage_per","worksite_city","worksite_state","worksite_postal_code",
             "worksite_bls_area","pwd_number","fw_currently_employed",
             "is_multiple_locations","employer_layoff",
+            # Additional professional recruitment steps (new-form 9089 only;
+            # 'Y'/'N' for FY2024-new-form onward, NULL for legacy-form rows)
+            "used_job_fair","used_emp_website","used_job_search_site",
+            "used_on_campus_recruiting","used_trade_org","used_private_firm",
+            "used_emp_referral","used_campus_placement","used_local_newspaper",
+            "used_radio_ad",
         },
         "numeric_cols": {"wage_from","wage_to","employer_num_payroll","employer_year_commenced"},
         "date_cols":    {"received_date","decision_date","ingested_at"},
