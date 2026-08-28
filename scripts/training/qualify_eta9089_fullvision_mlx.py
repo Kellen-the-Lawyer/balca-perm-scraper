@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from functools import partial
 from pathlib import Path
 
 from mlx.utils import tree_flatten
 
 from train_eta_qwen3_vl_mlx import DEFAULT_MODEL, PortableETADataset
+from train_eta9089_sections_fullvision_mlx import build_optimizer
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +24,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rank", type=int, default=16)
     parser.add_argument("--alpha", type=float, default=16)
     parser.add_argument("--max-length", type=int, default=4096)
+    parser.add_argument("--vision-learning-rate", type=float, default=1e-6)
+    parser.add_argument("--language-learning-rate", type=float, default=2e-5)
     return parser.parse_args()
 
 
@@ -117,6 +121,9 @@ def main() -> None:
     view.config = model.config.__dict__
     loss_fn = partial(vision_language_loss_fn, train_on_completions=True)
     value_and_grad = nn.value_and_grad(model, loss_fn)
+    optimizer = build_optimizer(
+        args.vision_learning_rate, args.language_learning_rate, 0.01
+    )
     model.train()
 
     rows = []
@@ -126,6 +133,7 @@ def main() -> None:
     ):
         record = selected[position]
         mx.reset_peak_memory()
+        started = time.perf_counter()
         loss, gradients = value_and_grad(model, batch)
         token_count = batch["attention_mask"].sum()
 
@@ -149,6 +157,8 @@ def main() -> None:
             for name, value in vision_samples + lora_samples
         }
         mx.eval(loss, token_count, reductions, gradients)
+        optimizer.update(model, gradients)
+        mx.eval(model.state, optimizer.state)
         gradient_max_abs = {name: float(value.item()) for name, value in reductions.items()}
         if not any(value > 0 for name, value in gradient_max_abs.items() if name.startswith("vision_tower.")):
             raise SystemExit(
@@ -163,6 +173,7 @@ def main() -> None:
             "tokens": int(token_count.item()),
             "loss": float(loss.item()),
             "peak_memory_gb": mx.get_peak_memory() / 1e9,
+            "elapsed_seconds": time.perf_counter() - started,
             "sample_gradient_max_abs": gradient_max_abs,
         }
         with args.output.open("a", encoding="utf-8") as stream:

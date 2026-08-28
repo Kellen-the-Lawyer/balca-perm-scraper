@@ -34,58 +34,112 @@ def fields(root: str, *names: str) -> tuple[tuple[str, ...], ...]:
 
 
 SECTION_SPECS = (
-    SectionSpec("A", 1, (0.075, 0.190, 0.930, 0.625), (("A_employer",),)),
-    SectionSpec("B", 1, (0.075, 0.610, 0.930, 0.935), (("B_poc",),)),
-    SectionSpec("C", 2, (0.075, 0.115, 0.930, 0.545), (("C_attorney_agent",),)),
     SectionSpec(
-        "D_E",
-        2,
-        (0.075, 0.525, 0.930, 0.950),
-        (("D_foreign_worker_flags",), ("E_job_wage",)),
-    ),
-    SectionSpec(
-        "F_main",
-        3,
-        (0.075, 0.115, 0.930, 0.570),
+        "A_identity",
+        1,
+        (0.075, 0.190, 0.930, 0.490),
         fields(
-            "F_worksite",
-            "worksite_type",
-            "address1",
-            "address2",
-            "city",
-            "county",
-            "state",
-            "postal_code",
-            "msa_oes_area_code",
-            "msa_oes_area_title",
-            "additional_worksites",
-            "appendix_b_attached",
+            "A_employer", "legal_business_name", "dba", "address1", "address2",
+            "city", "state", "postal_code", "country", "province",
         ),
     ),
     SectionSpec(
-        "F_other_areas",
-        3,
-        (0.075, 0.525, 0.930, 0.945),
-        fields("F_worksite", "other_geographic_areas"),
+        "A_numbers",
+        1,
+        (0.075, 0.455, 0.930, 0.625),
+        fields(
+            "A_employer", "phone", "extension", "fein", "naics_code",
+            "num_employees_in_area", "year_commenced_business",
+            "closely_held_ownership_interest", "familial_relationship",
+        ),
     ),
     SectionSpec(
-        "G_1_5",
-        4,
-        (0.075, 0.115, 0.930, 0.635),
+        "B_identity",
+        1,
+        (0.075, 0.610, 0.930, 0.795),
         fields(
-            "G_job_info",
-            "full_time_35hrs",
-            "live_in_domestic",
-            "live_in_1yr_experience",
-            "live_in_contract_executed",
-            "live_in_contract_copy_provided",
-            "accept_foreign_degree_equivalent",
+            "B_poc", "last_name", "first_name", "middle_name", "job_title",
+            "address1", "address2",
+        ),
+    ),
+    SectionSpec(
+        "B_contact",
+        1,
+        (0.075, 0.755, 0.930, 0.935),
+        fields(
+            "B_poc", "city", "state", "postal_code", "country", "province",
+            "phone", "extension", "email",
+        ),
+    ),
+    SectionSpec(
+        "C_identity",
+        2,
+        (0.075, 0.115, 0.930, 0.350),
+        fields(
+            "C_attorney_agent", "representation_type", "last_name", "first_name",
+            "middle_name", "address1", "address2",
+        ),
+    ),
+    SectionSpec(
+        "C_contact",
+        2,
+        (0.075, 0.315, 0.930, 0.545),
+        fields(
+            "C_attorney_agent", "city", "state", "postal_code", "country",
+            "province", "phone", "extension", "email", "law_firm_name",
+            "law_firm_fein", "state_bar_number", "state_of_good_standing",
+            "highest_court_name",
+        ),
+    ),
+    SectionSpec("D", 2, (0.075, 0.525, 0.930, 0.665), (("D_foreign_worker_flags",),)),
+    SectionSpec(
+        "E",
+        2,
+        (0.075, 0.645, 0.930, 0.950),
+        (("E_job_wage",),),
+    ),
+    SectionSpec(
+        "F_address",
+        3,
+        (0.075, 0.115, 0.930, 0.350),
+        fields(
+            "F_worksite", "worksite_type", "address1", "address2",
+        ),
+    ),
+    SectionSpec(
+        "F_geography",
+        3,
+        (0.075, 0.315, 0.930, 0.475),
+        fields(
+            "F_worksite", "city", "county", "state", "postal_code",
+            "msa_oes_area_code", "msa_oes_area_title",
+        ),
+    ),
+    SectionSpec(
+        "F_additional",
+        3,
+        (0.075, 0.440, 0.930, 0.575),
+        fields("F_worksite", "additional_worksites", "appendix_b_attached"),
+    ),
+    SectionSpec(
+        "G_1_4",
+        4,
+        (0.075, 0.115, 0.930, 0.390),
+        fields(
+            "G_job_info", "full_time_35hrs", "live_in_domestic",
+            "live_in_1yr_experience", "live_in_contract_executed",
+            "live_in_contract_copy_provided", "accept_foreign_degree_equivalent",
             "fw_currently_employed",
-            "fw_qualifies_only_by_alternative_reqs",
-            "kellogg_suitable_combination",
-            "relying_solely_on_experience_with_employer",
-            "experience_substantially_comparable",
-            "employer_paid_training",
+        ),
+    ),
+    SectionSpec(
+        "G_4_5",
+        4,
+        (0.075, 0.340, 0.930, 0.640),
+        fields(
+            "G_job_info", "fw_qualifies_only_by_alternative_reqs",
+            "kellogg_suitable_combination", "relying_solely_on_experience_with_employer",
+            "experience_substantially_comparable", "employer_paid_training",
         ),
     ),
     SectionSpec(
@@ -104,27 +158,27 @@ SECTION_SPECS = (
         ),
     ),
     SectionSpec(
-        "H_a_c",
+        "H_a_b",
         5,
-        (0.075, 0.115, 0.930, 0.670),
+        (0.075, 0.115, 0.930, 0.435),
         fields(
-            "H_recruitment",
-            "supervised_recruitment",
-            "occupation_type",
-            "swa_job_order_start",
-            "swa_job_order_end",
-            "sunday_edition_exists",
-            "ad1_newspaper_name",
-            "ad1_date",
-            "ad2_type",
-            "ad2_name",
-            "ad2_date",
+            "H_recruitment", "supervised_recruitment", "occupation_type",
         ),
     ),
     SectionSpec(
-        "H_d_1_9",
+        "H_c",
         5,
-        (0.075, 0.625, 0.930, 0.945),
+        (0.075, 0.395, 0.930, 0.675),
+        fields(
+            "H_recruitment", "swa_job_order_start", "swa_job_order_end",
+            "sunday_edition_exists", "ad1_newspaper_name", "ad1_date", "ad2_type",
+            "ad2_name", "ad2_date",
+        ),
+    ),
+    SectionSpec(
+        "H_d_1_5",
+        5,
+        (0.075, 0.625, 0.930, 0.855),
         tuple(
             ("H_recruitment", "additional_steps", name)
             for name in (
@@ -133,6 +187,16 @@ SECTION_SPECS = (
                 "job_search_website",
                 "on_campus",
                 "trade_org",
+            )
+        ),
+    ),
+    SectionSpec(
+        "H_d_6_9",
+        5,
+        (0.075, 0.815, 0.930, 0.945),
+        tuple(
+            ("H_recruitment", "additional_steps", name)
+            for name in (
                 "private_firm",
                 "employee_referral",
                 "campus_placement",
@@ -141,15 +205,18 @@ SECTION_SPECS = (
         ),
     ),
     SectionSpec(
-        "H_d10_e",
+        "H_d10",
         6,
-        (0.075, 0.115, 0.930, 0.520),
-        (
-            ("H_recruitment", "additional_steps", "radio_tv"),
-            ("H_recruitment", "notice_of_posting"),
-        ),
+        (0.075, 0.115, 0.930, 0.205),
+        (("H_recruitment", "additional_steps", "radio_tv"),),
     ),
-    SectionSpec("I", 6, (0.075, 0.495, 0.930, 0.930), (("I_attestations",),)),
+    SectionSpec(
+        "H_e",
+        6,
+        (0.075, 0.170, 0.930, 0.520),
+        (("H_recruitment", "notice_of_posting"),),
+    ),
+    SectionSpec("I", 6, (0.075, 0.805, 0.930, 0.930), (("I_attestations",),)),
     SectionSpec("J", 7, (0.075, 0.115, 0.930, 0.335), (("J_preparer",),)),
 )
 
@@ -170,6 +237,11 @@ def load_eta9089(path: Path) -> list[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as stream:
         records = [json.loads(line) for line in stream if line.strip()]
     return [record for record in records if record["task"] == "eta9089"]
+
+
+def has_mojibake(record: dict[str, Any]) -> bool:
+    serialized = json.dumps(record["target"], ensure_ascii=False)
+    return any(marker in serialized for marker in ("â", "Ã", "Â", "ðŸ"))
 
 
 def get_path(value: Any, path: tuple[str, ...]) -> Any:
@@ -290,8 +362,14 @@ def main() -> None:
     output_dir = args.output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    train = load_eta9089(package_root / "data/train.jsonl")
-    validation = load_eta9089(package_root / "data/validation.jsonl")
+    raw_train = load_eta9089(package_root / "data/train.jsonl")
+    raw_validation = load_eta9089(package_root / "data/validation.jsonl")
+    excluded_mojibake = {
+        "train": [row["id"] for row in raw_train if has_mojibake(row)],
+        "validation": [row["id"] for row in raw_validation if has_mojibake(row)],
+    }
+    train = [row for row in raw_train if not has_mojibake(row)]
+    validation = [row for row in raw_validation if not has_mojibake(row)]
     rng = random.Random(args.seed)
     rng.shuffle(train)
     rng.shuffle(validation)
@@ -335,6 +413,7 @@ def main() -> None:
     manifest = {
         "seed": args.seed,
         "section_count_per_form": len(SECTION_SPECS),
+        "excluded_mojibake": excluded_mojibake,
         "groups": {
             name: {
                 "forms": len(rows),
