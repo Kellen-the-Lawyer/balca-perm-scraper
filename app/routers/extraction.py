@@ -26,7 +26,11 @@ async def extract_pwd_endpoint(file: UploadFile = File(...)):
     try:
         result = extract_pwd_from_bytes(pdf_bytes)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Extraction failed: {e}")
+        import logging, traceback
+        logging.getLogger("uvicorn.error").error(
+            "extract-pwd failed for %s:\n%s", file.filename, traceback.format_exc())
+        raise HTTPException(status_code=422,
+                            detail=f"Extraction failed ({type(e).__name__}): {e}")
     return result
 
 

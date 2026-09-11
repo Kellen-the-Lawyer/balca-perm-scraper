@@ -475,7 +475,11 @@ def main() -> None:
     parser.add_argument(
         "--json-output", type=Path, default=ROOT / "output/json/eta_pair_full_5000"
     )
-    parser.add_argument("--watermark", default="TRAINING EXAMPLE - NOT FOR FILING")
+    parser.add_argument(
+        "--watermark",
+        default="",
+        help="Optional visible watermark. Disabled by default for vision-training data.",
+    )
     parser.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
         "--select-only",

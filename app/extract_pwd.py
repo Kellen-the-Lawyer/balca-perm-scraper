@@ -80,11 +80,109 @@ def _split_city_state_zip(raw_city: str, raw_state: str) -> tuple:
 _CHECK = "[\u2718\u2717\u2612\u2611\u2714\u2713x]"
 
 
+def text_is_garbled(pages: list) -> bool:
+    """
+    True when the PDF text layer is unusable: FLAG *draft* prints made via
+    the Windows "Adobe PDF" printer + Distiller embed Type 3 fonts with no
+    ToUnicode map, so pdfplumber yields "(cid:N)" runs or a substitution-
+    cipher of the real text. Issued determinations have a normal text layer.
+    Test: the form's own section labels must be legible somewhere in the doc.
+    """
+    full = "\n".join(pages[:6])
+    if not full.strip():
+        return True
+    if len(re.findall(r"\(cid:\d+\)", full)) > 40:
+        return True
+    anchors = (r"Prevailing Wage", r"Job Title", r"Job duties", r"Employer")
+    return sum(bool(re.search(a, full, re.IGNORECASE)) for a in anchors) < 2
+
+
+def _extract_via_vlm(pdf_bytes: bytes) -> dict:
+    """
+    Vision fallback for garbled/scanned 9141s. Renders the form pages and asks
+    the configured PWD model (remote PWD_LLM_* if set, else the local VLM)
+    for the same schema _extract_from_pages() returns. PWDs carry no employee
+    PII, so the remote model is permitted here (same policy as evl_compare).
+    """
+    import json
+    import os
+    import tempfile
+    from perm_verify import evl_compare as ec
+
+    prompt = """You are reading an ETA-9141 Application for Prevailing Wage
+Determination (it may be a DRAFT "Print Summary" or an issued determination).
+Return ONLY a JSON object with exactly these keys:
+{
+  "jobTitle": string,            // Section F.a (or E.a) item 1, Job Title
+  "city": string,                // Section F.c (or E.c) primary worksite city
+  "stateVal": string,            // 2-letter state code of the primary worksite
+  "travel": "yes"|"no",          // "Will travel be required" checkbox
+  "travelDetail": string,        // travel explanation, "" if none
+  "telecommuteDetail": string,   // any telecommuting/remote-work language, "" if none
+  "jdRef": string,               // full Job Duties text, verbatim, including any addendum
+  "primDeg": string,             // minimum education level exactly as printed (e.g. "Master's", "Bachelor's", "None")
+  "mrRef": string,               // full minimum-requirements text: field of study, experience months, special skills, alternative requirements — verbatim
+  "pwdWage": string,             // determined prevailing wage amount if issued, "" if draft/blank
+  "pwdWageMin": number|null,     // same as pwdWage as a number, else null
+  "pwdWageAlt": number|null,     // wage under the alternative requirements if a second one is printed, else null
+  "wageUnit": "Year"|"Hour"|"Week"|"Bi-Weekly"|"Month"
+}
+Rules: copy text verbatim; never paraphrase, summarize, or split "and"/"or"
+phrases; use "" or null when a field is blank. No prose, no code fences."""
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(pdf_bytes)
+        path = tmp.name
+    try:
+        with pdfplumber.open(path) as pdf:
+            n = len(pdf.pages)
+        urls = ec._render_pdf_pages(path, list(range(min(n, ec.MAX_VISION_PAGES))))
+    finally:
+        os.unlink(path)
+    content = [{"type": "text", "text": prompt}]
+    content += [{"type": "image_url", "image_url": {"url": u}} for u in urls]
+    remote = bool(ec.PWD_LLM_URL and ec.PWD_LLM_MODEL and ec.PWD_LLM_API_KEY)
+    raw = ec._chat(content, max_tokens=6000, remote=remote)
+
+    result = {
+        "jobTitle": "", "city": "", "stateVal": "", "travel": "no",
+        "travelDetail": "", "telecommuteDetail": "", "jdRef": "",
+        "primDeg": "", "mrRef": "", "pwdWage": "",
+        "pwdWageMin": None, "pwdWageAlt": None, "wageUnit": "Year",
+    }
+    for k in result:
+        if k in raw and raw[k] is not None:
+            result[k] = raw[k]
+    result["travel"] = "yes" if str(result["travel"]).lower().startswith("y") else "no"
+    for k in ("jobTitle", "city", "stateVal", "travelDetail", "telecommuteDetail",
+              "jdRef", "primDeg", "mrRef", "pwdWage"):
+        result[k] = _clean(str(result[k]))
+    result["stateVal"] = result["stateVal"].upper()[:2]
+    for k in ("pwdWageMin", "pwdWageAlt"):
+        try:
+            result[k] = float(str(result[k]).replace("$", "").replace(",", "")) \
+                if result[k] not in (None, "") else None
+        except ValueError:
+            result[k] = None
+    if result["pwdWage"] and result["wageUnit"]:
+        rawv = result["pwdWage"].replace("$", "").replace(",", "").strip()
+        try:
+            result["pwdWage"] = "${:,.0f} / {}".format(float(rawv), result["wageUnit"])
+        except ValueError:
+            result["pwdWage"] = f"${rawv} / {result['wageUnit']}"
+    result["extractionMethod"] = "vlm-remote" if remote else "vlm-local"
+    return result
+
+
 def extract_pwd_from_bytes(pdf_bytes: bytes) -> dict:
     """Accept raw PDF bytes (used by FastAPI UploadFile)."""
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         pages = [p.extract_text() or "" for p in pdf.pages]
-    return _extract_from_pages(pages)
+    if text_is_garbled(pages):
+        return _extract_via_vlm(pdf_bytes)
+    result = _extract_from_pages(pages)
+    result["extractionMethod"] = "text"
+    return result
 
 
 def extract_pwd(pdf_path: str) -> dict:
@@ -391,6 +489,7 @@ def _extract_new(pages: list, result: dict):
 
 def _extract_old(pages: list, result: dict):
     body = "\n".join(pages[1:6])  # search across pages 1-5 for robustness
+    p2 = pages[1] if len(pages) > 1 else ""
     p4 = pages[3] if len(pages) > 3 else ""
 
     # ── E.a.1  Job Title ──────────────────────────────────────────────────────

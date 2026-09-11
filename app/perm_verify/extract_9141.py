@@ -266,6 +266,11 @@ def extract(pdf_path):
     # majors / occupation / special-skills text, following addendum pointers
     out["majors_primary"] = _addendum(full, "F.b.1.b")
     out["majors_alternate"] = _addendum(full, "F.c.2.b")
+    # F.b.1.a / F.c.2.a — "If Other degree, specify the U.S. degree".  Where
+    # an employer accepts a foreign equivalent this is the usual place the
+    # "or foreign equivalent" language lands (read by T3-035).
+    out["other_degree_text_primary"] = _addendum(full, "F.b.1.a")
+    out["other_degree_text_alternate"] = _addendum(full, "F.c.2.a")
     out["experience_occupation"] = _addendum(full, "F.b.4.b")
     out["special_skills_text"] = _addendum(full, "F.b.5.a(iv)")
     out["special_skills_text_alternate"] = _addendum(full, "F.c.5.a(iv)")

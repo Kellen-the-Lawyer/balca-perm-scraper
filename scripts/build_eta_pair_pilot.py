@@ -259,7 +259,9 @@ def main() -> None:
         default=ROOT / "output/json/eta_pair_pilot_10",
     )
     parser.add_argument(
-        "--watermark", default="TRAINING EXAMPLE - NOT FOR FILING"
+        "--watermark",
+        default="",
+        help="Optional visible watermark. Disabled by default for vision-training data.",
     )
     parser.add_argument(
         "--dry-run",

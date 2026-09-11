@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from .rules import Flag, RED, YELLOW, _get, _d
+from .rules import Flag, RED, YELLOW, _get, _d, _foreign_degree_profile
 
 DEGREE_RANK = {"None": 0, "High School/GED": 1, "High school/GED": 1,
                "Associate": 2, "Associate's": 2, "Bachelor's": 3,
@@ -30,65 +30,6 @@ def _annual(amount, per):
         except ValueError:
             return None
     return amount * ANNUALIZE.get(per or "Year", 1)
-
-
-def _worker_profile(form, fd):
-    """(highest degree rank, total experience months) from Appendix A.
-
-    Education comes from Appendix A.B, experience from Appendix A.E across all
-    employers listed.  Appendix A.D (special skills) is an attestation and is
-    deliberately not counted as general experience.
-
-    Experience with the petitioner IS counted: G.5 asks whether the employer
-    relies *solely* on experience gained with it, so partial petitioner
-    experience does not disqualify the rest.  The narrow case where that
-    experience is genuinely unusable — G.5 and G.5a both Yes under
-    656.17(i)(3) — is flagged separately by T1-010d.
-
-    Overlapping spans are merged rather than summed, so concurrent positions
-    do not double-count calendar time.
-    """
-    best = 0
-    for edu in _get(form, "appendix_A.education", []) or []:
-        best = max(best, DEGREE_RANK.get(edu.get("degree"), 0))
-
-    spans = []
-    for we in _get(form, "appendix_A.work_experience", []) or []:
-        s, e = _d(we.get("start")), _d(we.get("end"))
-        if s:
-            spans.append([s, e or fd])
-    spans.sort()
-    merged = []
-    for s, e in spans:
-        if merged and s <= merged[-1][1]:
-            merged[-1][1] = max(merged[-1][1], e)
-        else:
-            merged.append([s, e])
-    total = sum(max(0, (e.year - s.year) * 12 + (e.month - s.month))
-                for s, e in merged)
-    return best, total
-
-
-
-def _meets(rank, months, req_degree, req_months):
-    """Does a worker profile satisfy one PWD requirement set?"""
-    if req_degree and rank < DEGREE_RANK.get(req_degree, 0):
-        return False
-    if req_months and months < req_months:
-        return False
-    return True
-
-
-def _requirement_paths(form, pwd, fd):
-    """(meets_primary, meets_alternate, has_alternate) for this worker."""
-    rank, months = _worker_profile(form, fd)
-    has_alt = pwd.get("alternate_reqs_accepted") == "Yes"
-    meets_primary = _meets(rank, months, pwd.get("education_primary"),
-                           pwd.get("experience_months_primary"))
-    meets_alt = has_alt and _meets(rank, months,
-                                   pwd.get("education_alternate"),
-                                   pwd.get("experience_months_alternate"))
-    return meets_primary, meets_alt, has_alt
 
 
 RANK_NAME = {0: "none listed", 1: "High School/GED", 2: "Associate's",
@@ -131,7 +72,9 @@ def _worker_profile_full(form, fd):
                 merged[-1][1] = max(merged[-1][1], e)
             else:
                 merged.append([s, e])
-        return sum(max(0, (e.year - s.year) * 12 + (e.month - s.month))
+        # inclusive of the end month (01/2023-12/2023 = 12 months) —
+        # month/year fields can only be read that way (Kellen 9/10)
+        return sum(max(0, (e.year - s.year) * 12 + (e.month - s.month) + 1)
                    for s, e in merged)
 
     return (best, _merged_months(True), _merged_months(False),
@@ -289,7 +232,7 @@ def _prorated_months(we, fd):
     if not s:
         return 0.0
     e = e or fd
-    months = max(0, (e.year - s.year) * 12 + (e.month - s.month))
+    months = max(0, (e.year - s.year) * 12 + (e.month - s.month) + 1)  # inclusive
     try:
         hours = float(str(we.get("hours_per_week")).replace(",", ""))
     except (TypeError, ValueError):
@@ -297,6 +240,35 @@ def _prorated_months(we, fd):
     ratio = 1.0 if hours >= 35 else max(0.0, hours) / 40.0
     return months * ratio
 
+
+
+def _qualification_paths(form, pwd, fd):
+    """Evaluate the worker's Appendix A profile against each PWD requirement
+    path.  Returns (paths, profile) or None when the PWD states no
+    degree/experience requirement on either path.
+
+    paths: [_eval_path(...) for F.b, and F.c if alternate reqs accepted]
+    profile: (rank, mo_all, mo_ext, n_edu, n_we, has_other)
+
+    Shared by T3-020..022 and the G.4a derived check (T3-031) so the two
+    never disagree on whether a path is met.
+    """
+    req_p_deg = pwd.get("education_primary") or pwd.get("education_required")
+    req_p_mo = pwd.get("experience_months_primary") or \
+        pwd.get("experience_months_required")
+    has_alt = pwd.get("alternate_reqs_accepted") == "Yes"
+    req_a_deg = pwd.get("education_alternate") if has_alt else None
+    req_a_mo = pwd.get("experience_months_alternate") if has_alt else None
+    if not (req_p_deg or req_p_mo or req_a_deg or req_a_mo):
+        return None
+    profile = _worker_profile_full(form, fd)
+    rank, mo_all, mo_ext = profile[:3]
+    paths = [_eval_path(rank, mo_all, mo_ext, req_p_deg, req_p_mo,
+                        "primary (F.b)")]
+    if req_a_deg or req_a_mo:
+        paths.append(_eval_path(rank, mo_all, mo_ext, req_a_deg, req_a_mo,
+                                "alternate (F.c)"))
+    return paths, profile
 
 
 def tier3(form, pwd, filing_date=None):
@@ -484,22 +456,12 @@ def tier3(form, pwd, filing_date=None):
     # report per-path gaps.  Degree strings come from F.b.1.b / F.c.2.b (or
     # addenda) via the 9141 extractor; a PWD may state a degree with no
     # experience requirement, or rely on special skills instead (T3-024).
-    req_p_deg = pwd.get("education_primary") or pwd.get("education_required")
-    req_p_mo = pwd.get("experience_months_primary") or \
-        pwd.get("experience_months_required")
-    has_alt = pwd.get("alternate_reqs_accepted") == "Yes"
-    req_a_deg = pwd.get("education_alternate") if has_alt else None
-    req_a_mo = pwd.get("experience_months_alternate") if has_alt else None
-
-    if req_p_deg or req_p_mo or req_a_deg or req_a_mo:
-        rank, mo_all, mo_ext, n_edu, n_we, has_other = \
-            _worker_profile_full(form, fd)
-        paths = [_eval_path(rank, mo_all, mo_ext, req_p_deg, req_p_mo,
-                            "primary (F.b)")]
-        if req_a_deg or req_a_mo:
-            paths.append(_eval_path(rank, mo_all, mo_ext, req_a_deg,
-                                    req_a_mo, "alternate (F.c)"))
-
+    q = _qualification_paths(form, pwd, fd)
+    if q:
+        paths, (rank, mo_all, mo_ext, n_edu, n_we, has_other) = q
+        req_p_deg = pwd.get("education_primary") or pwd.get("education_required")
+        req_a_deg = (pwd.get("education_alternate")
+                     if pwd.get("alternate_reqs_accepted") == "Yes" else None)
         passing = [p for p in paths if p["passes"]]
         if passing:
             if all(p["exp"] == "employer_dependent" for p in passing):
@@ -694,6 +656,13 @@ def tier3(form, pwd, filing_date=None):
 # data dependency.
 # ---------------------------------------------------------------------------
 
+# "or foreign equivalent", "or its foreign educational equivalent", "foreign
+# degree equivalent", or a bare "or equivalent" / "or the equivalent".
+_FOREIGN_EQUIV_RX = re.compile(
+    r"foreign\s+(?:educational\s+|degree\s+|academic\s+)?equivalen"
+    r"|\bor\s+(?:its\s+|the\s+|an?\s+)?equivalen", re.I)
+
+
 def _appendix_c_items(form):
     return {e.get("section_item")
             for e in (_get(form, "appendix_C.entries", []) or [])}
@@ -722,32 +691,85 @@ def derived_checks(form, pwd, filing_date=None):
     fd = filing_date or date.today()
     appc = _appendix_c_items(form)
 
-    # ---- G.4a: qualifying via primary vs alternate requirements -----------
+    # ---- G.4 / G.4a: current employment + qualification path (Kellen 9/10)
+    # G.4  = foreign worker currently employed by the petitioner.  Almost
+    #        always Yes; No is unusual and gets a YELLOW (T3-030).  No while
+    #        Appendix A.E lists an OPEN span with the petitioner is a
+    #        contradiction (T3-030a RED).  Unanswered G.4 is a T1-001 RED.
+    # G.4a = only if G.4 is Yes.  Expected value is derived from the PWD:
+    #        no F.c alternate set -> N/A; worker meets F.b -> No; worker
+    #        meets only F.c -> Yes.  A worker can meet the F.b DEGREE yet
+    #        qualify only via F.c, so paths are evaluated whole.  Meets-
+    #        neither is owned by T3-020/021 and produces no G.4a flag.
     g4 = _get(form, "G_job_info.fw_currently_employed")
     g4a = _get(form, "G_job_info.fw_qualifies_only_by_alternative_reqs")
-    meets_primary, meets_alt, has_alt = _requirement_paths(form, pwd, fd)
+    sponsor = re.sub(r"[^a-z0-9]", "",
+                     (_get(form, "A_employer.legal_business_name") or "")
+                     .lower())
 
-    if not has_alt:
-        expected_g4a = "N/A"          # no alternate set in F.c
-    elif meets_primary:
-        expected_g4a = "No"           # qualifies on F.b.1 + F.b.4.a
-    elif meets_alt:
-        expected_g4a = "Yes"          # relying on F.c.2 + F.c.4.a
-    else:
-        expected_g4a = None
+    if str(g4) == "No":
+        open_sponsor = [
+            we for we in (_get(form, "appendix_A.work_experience", []) or [])
+            if sponsor and re.sub(r"[^a-z0-9]", "",
+                                  (we.get("employer_name") or "").lower())
+            == sponsor and not _d(we.get("end"))]
+        if open_sponsor:
+            F(Flag(RED, "T3-030a", "G.4",
+                   "G.4 says the foreign worker is not currently employed by "
+                   "the employer, but Appendix A.E lists employment with the "
+                   "petitioner with no end date "
+                   f"({open_sponsor[0].get('job_title') or 'title not listed'}"
+                   f", from {open_sponsor[0].get('start')}). One of the two "
+                   "is wrong.",
+                   "data_check", "ETA-9089 Instructions §G.4; Appendix A.E"))
+        else:
+            F(Flag(YELLOW, "T3-030", "G.4",
+                   "G.4 is answered No — the foreign worker is not currently "
+                   "employed by the petitioner. This is unusual for a PERM "
+                   "sponsorship; confirm it is accurate and that G.4a was "
+                   "correctly left unanswered.",
+                   "data_check", "ETA-9089 Instructions §G.4"))
 
-    if expected_g4a is None:
-        F(Flag(RED, "T3-030", "G.4a",
-               "The foreign worker's Appendix A education and experience meet "
-               "neither the minimum requirements (F.b) nor the alternate "
-               "requirements (F.c) on the PWD.",
-               "regulation", "20 CFR 656.17(i); INA 212(a)(5)(A)"))
-    else:
-        _mismatch(F, "T3-031", "G.4a", expected_g4a, g4a,
-                  "qualification was assessed against the PWD's F.b and F.c "
-                  "requirement sets using Appendix A.B education and "
-                  "Appendix A.E experience.",
-                  "20 CFR 656.17(i); ETA-9089 Instructions §G.4a")
+    if str(g4) == "Yes":
+        has_alt = pwd.get("alternate_reqs_accepted") == "Yes"
+        q = _qualification_paths(form, pwd, fd)
+        expected_g4a, tentative = None, False
+        if not has_alt:
+            expected_g4a = "N/A"
+        elif q:
+            paths = q[0]
+            prim = paths[0]
+            alt = paths[1] if len(paths) > 1 else None
+            if prim["passes"]:
+                expected_g4a = "No"
+            elif alt and alt["passes"]:
+                expected_g4a = "Yes"
+                # a near-miss on F.b can't be resolved from month/year
+                # fields (T3-021) — don't call this RED on the strength of it
+                tentative = prim["deg_ok"] and prim["exp"] == "near_miss"
+            # else: meets neither -> T3-020/021 own it, no G.4a flag
+
+        actual = "N/A" if g4a in (None, "", "N/A", "NA") else str(g4a)
+        if expected_g4a is not None and actual != expected_g4a:
+            why = ("the PWD lists no alternate requirements in F.c, so G.4a "
+                   "does not apply" if expected_g4a == "N/A" else
+                   "qualification was assessed against the PWD's F.b and F.c "
+                   "requirement sets using Appendix A.B education and "
+                   "Appendix A.E experience")
+            if tentative:
+                F(Flag(YELLOW, "T3-031", "G.4a",
+                       f"G.4a is answered '{actual}' but the foreign worker "
+                       f"appears to qualify only through the alternate "
+                       f"requirements — the primary path is short by "
+                       f"{prim['gaps'][0] if prim['gaps'] else 'a few months'}"
+                       f", which month/year date fields cannot resolve. "
+                       f"Verify actual dates; if F.b is not met, G.4a must "
+                       f"be Yes.",
+                       "regulation",
+                       "20 CFR 656.17(i); ETA-9089 Instructions §G.4a"))
+            else:
+                _mismatch(F, "T3-031", "G.4a", expected_g4a, actual, why,
+                          "20 CFR 656.17(i); ETA-9089 Instructions §G.4a")
 
     if str(g4) == "Yes" and str(g4a) == "Yes":
         F(Flag(YELLOW, "T3-032", "G.4/G.4a",
@@ -792,18 +814,67 @@ def derived_checks(form, pwd, filing_date=None):
                "G.8.", "form_instructions",
                "20 CFR 656.17(h)(2); ETA-9089 Instructions Appendix C"))
 
-    # ---- G.10: foreign-equivalency language in the special-skills text ----
-    if str(_get(form, "G_job_info.credentialing_service")) == "Yes":
-        texts = [pwd.get("special_skills_text") or "",
-                 pwd.get("special_skills_text_alternate") or ""]
-        if not any(re.search(r"or\s+foreign\s+equivalent", t, re.I)
-                   for t in texts):
-            F(Flag(YELLOW, "T3-035", "G.10",
-                   "G.10 is Yes (foreign degree accepted via credential "
-                   "evaluation) but neither the F.b.5.a(iv) nor the "
-                   "F.c.5.a(iv) addendum states 'or foreign equivalent' — the "
-                   "PWD does not on its face permit the equivalency.",
-                   "regulation", "20 CFR 656.17(h); 656.40"))
+    # ---- G.3 must MATCH the PWD on foreign-degree equivalency (T3-035) ---
+    # Kellen 9/11: G.3 is a mirror of the PWD, not of the worker.  Language
+    # may sit in the special-skills addenda (F.b/F.c.5.a(iv)), the "Other
+    # degree" text (F.b.1.a / F.c.2.a) or the majors text (F.b.1.b / F.c.2.b).
+    texts = [pwd.get(k) or "" for k in (
+        "special_skills_text", "special_skills_text_alternate",
+        "other_degree_text_primary", "other_degree_text_alternate",
+        "majors_primary", "majors_alternate")]
+    pwd_allows = any(_FOREIGN_EQUIV_RX.search(t) for t in texts)
+    g3 = str(_get(form, "G_job_info.accept_foreign_degree_equivalent"))
+    # YELLOW (Kellen 9/11): ~2/3 of certified PERMs answer G.3 Yes with no
+    # equivalency language on the PWD; DOL is not enforcing this direction.
+    if g3 == "Yes" and not pwd_allows:
+        F(Flag(YELLOW, "T3-035", "G.3",
+               "G.3 says the employer accepts a foreign degree equivalent, but "
+               "nothing on the PWD does — no 'or foreign equivalent' / 'or "
+               "equivalent' language in F.b.1.a/F.c.2.a, F.b.1.b/F.c.2.b, or "
+               "the F.b/F.c.5.a(iv) addenda. G.3 should mirror the PWD: add "
+               "the language to the PWD next time, or answer N/A. Widely "
+               "certified as-is, but a mismatch DOL could act on.",
+               "regulation", "20 CFR 656.17(h); 656.40"))
+    elif pwd_allows and g3 in ("No", "N/A"):
+        F(Flag(RED, "T3-035", "G.3",
+               f"The PWD accepts a foreign degree equivalent but G.3 is "
+               f"answered '{g3}' — the 9089 states a stricter education "
+               f"requirement than the PWD was issued for.",
+               "regulation", "20 CFR 656.17(h); 656.40"))
+
+    # ---- T3-036: is the foreign degree the one relied on? ----------------
+    # Highest degree foreign AND a US degree is listed: if the US degree
+    # meets the PWD degree requirement (either path) the foreign degree is
+    # surplus -> silent.  Otherwise the foreign degree is relied on:
+    # G.3 != Yes -> RED; G.10 == No -> YELLOW.  (No-US-degree case is
+    # T1-011a/c, form-only.)
+    foreign, top, top_is_us, us = _foreign_degree_profile(form)
+    if foreign and us and not top_is_us:
+        req_degs = [d for d in (
+            pwd.get("education_primary") or pwd.get("education_required"),
+            pwd.get("education_alternate")
+            if pwd.get("alternate_reqs_accepted") == "Yes" else None) if d]
+        us_top = max(DEGREE_RANK.get(e.get("degree"), 0) for e in us)
+        us_meets = (not req_degs) or any(
+            us_top >= DEGREE_RANK.get(d, 0) for d in req_degs)
+        if not us_meets:
+            names = ", ".join(f"{e.get('degree')} ({e.get('country')})" for e in foreign)
+            us_names = ", ".join(f"{e.get('degree')} ({e.get('country')})" for e in us)
+            g10 = str(_get(form, "G_job_info.credentialing_service"))
+            if g3 != "Yes":
+                F(Flag(RED, "T3-036", "G.3",
+                       f"The foreign worker's US degree [{us_names}] does not "
+                       f"meet the PWD requirement ({' / '.join(req_degs)}); the "
+                       f"foreign degree [{names}] is the one relied on, but "
+                       f"G.3 is answered '{g3}'.",
+                       "regulation", "20 CFR 656.17(h)(4)(ii); ETA-9089 Instructions §G.3"))
+            if g10 == "No":
+                F(Flag(YELLOW, "T3-036", "G.10",
+                       f"The foreign degree [{names}] is the one that meets the "
+                       f"PWD requirement (the US degree [{us_names}] does not) "
+                       f"but G.10 is No — confirm no credential evaluation is "
+                       f"being relied on.",
+                       "form_instructions", "ETA-9089 Instructions §G.10"))
 
     return flags
 

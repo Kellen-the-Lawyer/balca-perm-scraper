@@ -3678,3 +3678,388 @@ Implication for everything downstream: any prior AAO stat that used
 outcome (sustain rates by form type, firm analysis) was wrong by ~2x on
 Sustained. The aao briefing's Sustained boost now means something.
 Uncommitted: M scripts/ingest/ingest_aao.py (plus all earlier today).
+
+2026-09-09 — ASK AI: EMPLOYER REPRESENTATION TOOLS + MULTI-TURN + LOGGING
+Trigger: "who represents <employer>" failed in Ask AI. Root cause: the attorney
+/firm columns are year-dependent (PERM: agent_firm_name FY2015-18, then
+atty_law_firm + atty_first/last_name FY2020+, with agent_attorney_* and
+atty_ag_* variants by form version; LCA/PWD: law_firm_name +
+agent_attorney_first/last_name; PWD has no attorney data before FY2021) and
+a leading-wildcard ILIKE across 3 tables takes ~15-20 s — too much for the
+generic query_oflc_data tool to get right.
+NEW scripts/sql/mv_employer_representation.sql: matview collapsing all of
+that to (program, visa_class, employer_name, employer_norm, firm, attorney,
+fiscal_year, filings, certified, denied, first_date, last_date). 1.45M rows,
+trigram GIN on employer_norm/lower(firm)/lower(attorney). Lookups ~10 ms.
+Built on BOTH Homebrew :5433 and Docker :5432.
+NEW tools in app/routers/ask_tools.py: get_employer_representation
+(normalized substring match first, similarity()>0.5 fuzzy fallback; if >15
+distinct employers match it returns matched_employers and asks the model to
+narrow instead of blending) and get_firm_clients (inverse: firm/attorney ->
+client book). System prompt in rag.py steers "who represents X" to them.
+Verified: Toyota Motor North America -> Corporate Immigration Partners
+(Sherry Neal) current, Hammond Neal Moore (same attorney) through 2023/24.
+MULTI-TURN /api/ask (rag.py): body now accepts history[] (prior user/
+assistant turns) + conversation_id. Follow-ups are condensed to a standalone
+query (haiku, temp 0; skipped on first turn or when the message has no
+follow-up cues; falls back to raw on any failure) BEFORE embedding; history
+(last 6 turns, assistant answers truncated to 1500 chars, ~6k-token ceiling)
+is passed to the answer model. New stream events: {"type":"condensed"} first,
+{"type":"error"} on failure. Verified: "What about their PERM denials" ->
+"What happened with Toyota Motor North America's 2 denied PERM
+applications..." and the model found both G-100 case numbers; a topic pivot
+("How long are PERMs taking") was left unchanged.
+LOGGING: NEW table ask_chat_log (scripts/sql/ask_chat_log.sql; on both DBs):
+one row per turn — raw/condensed question, timings, chunk_ids, tool_calls
+jsonb, answer, rounds, error. Inserted after the stream finishes; failures
+print and never break the answer. Use it to see what people ask and which
+tools are missing.
+FRONTEND AskView.jsx rewritten as a thread: turns[] state (question,
+condensed, answer, sources, savedRefs, error), composer at bottom, "+ New
+conversation", per-turn Show/Hide sources (latest open), "Searched as:"
+line under condensed follow-ups. Citation popover / save-to-project keyed
+per turn. sessionStorage cache key bumped to askview_cache_v2. Build OK.
+NEW scripts/sql/refresh_oflc_matviews.sh: refreshes mv_wage_yoy,
+mv_lca_soc_filings, mv_soc_titles, mv_employer_representation on both DBs —
+run after any OFLC load.
+Dev server for testing: PYTHONPATH=... ../venv/bin/python -m uvicorn
+api:app --port 8011 from app/ (system python3 lacks venv deps).
+Backups of pre-change files: /tmp/rag.py.bak, /tmp/AskView.jsx.bak.
+NOT synced to casebase-app yet. Kellen to test at localhost:8011, then
+sync-from-dev.sh + docker compose up --build.
+Uncommitted: M app/routers/ask_tools.py, M app/routers/rag.py,
+M frontend/src/AskView.jsx; A scripts/sql/mv_employer_representation.sql,
+A scripts/sql/ask_chat_log.sql, A scripts/sql/refresh_oflc_matviews.sh
+(plus the earlier extraction/evl_compare/govinfo/PermComparer edits).
+
+2026-09-09 (late) — ASK AI: HYBRID RETRIEVAL, RERANKER, UI REDESIGN
+Trigger: "What did BALCA decide in Solar Turbines?" -> "I don't know" (vector
+search returned 26 CFR / 10 CFR solar-energy regs). Root causes: no lexical
+retrieval at all; BALCA rag_chunks.source_label is the DOCKET NUMBER and
+source_id = decisions.id, so a party name never matched a label.
+NEW scripts/sql/rag_fts_index.sql (built on BOTH DBs): GIN tsvector on
+rag_chunks.chunk_text, trgm on lower(source_label), trgm on
+decisions.employer_name, (corpus, source_date).
+HYBRID RETRIEVAL in /api/ask (rag.py): _extract_names() pulls capitalized
+phrases from the (condensed) question minus question/legal stop words ->
+_named_decision_chunks() resolves via decisions.employer_name/case_number to
+the decision's OWN chunks (holding-bearing first; pinned at the top of the
+context, labeled "THIS IS the X decision itself") -> _lexical_chunks() adds
+newest passages from decisions CITING the name. PERF LESSON: never put
+`corpus IN (...)` in the same WHERE as the FTS predicate — planner BitmapANDs
+a 1.1M-row corpus scan (~3 s). Fetch by FTS only, filter corpus in Python
+(48 ms). Same fix applied to the search_decisions tool.
+NEW tool search_decisions (ask_tools.py): name/docket -> matching decisions
++ their own passages + citing passages + coverage note.
+RERANKER (#1): vector over-fetch top_k*4 -> merge with lexical -> Voyage
+rerank-2.5 (API, ~150 ms; Docker has no torch so no local cross-encoder)
+-> + corpus prior from question intent (PERM terms -> balca +.06; I-140/NIW/
+EB terms -> aao +.06; CFR/§ -> regulation; policy manual/FAM -> policy;
+default balca +.02) and -.12 for caption/header/boilerplate chunks ->
+max 3 chunks per source -> top_k. Env: ASK_RERANK=0 disables,
+ASK_RERANK_MODEL. ask_chat_log.model records "| rerank=...".
+Verified: NIW/Dhanasar question -> all AAO NIW decisions; PERM wage question
+-> all BALCA; Solar Turbines -> the decision itself as [1]-[4].
+PROMPT (#2, #9): today's date injected; "do not narrate tool calls"; "don't
+remark on topic changes between turns"; corpus-coverage paragraph (BALCA
+2006+; pre-PERM en banc precedents absent — call search_decisions before
+saying unknown).
+UI REDESIGN (AskView.jsx, after Kellen rejected the first thread layout —
+answer text ran full-width on an ultrawide, You/Answer labels, scroll
+fighting the user): centered 860px column; the QUESTION is the heading of
+each entry (19px/600); answer prose at 14.5px/1.7 in a 72ch measure; one
+provenance line after the answer ("Data from employer representation
+records." + cited-source chips; uncited passages behind a link); composer
+card at the bottom with corpus filters folded into it; "New conversation"
+in the top bar. Scroll policy: the only automatic scroll is on submit
+(question to top of pane, via useLayoutEffect); never follows the stream;
+overflowAnchor:none. Tool usage captured per turn from status events.
+Screenshot trick that works without Chrome MCP: `screencapture -x
+/tmp/screen.png`, crop with sips, DC read_file the PNG.
+STILL OPEN: pre-2006 BALCA en banc ingest (OALJ scrape); citations-graph
+tool; tool result 6000-char truncation; eval set; conversation persistence;
+auth on /api/ask. Nothing synced to casebase-app yet.
+Uncommitted: M app/routers/rag.py, M app/routers/ask_tools.py,
+M frontend/src/AskView.jsx; A scripts/sql/rag_fts_index.sql (plus earlier).
+
+2026-09-10 (early AM) — ASK AI: QUERY PLANNER, VERIFIER, ENTITY INDEX, EVAL HARNESS
+Kellen: "I can't play whack-a-mole finding holes — is there a layer that makes
+Ask AI context-aware?" Built three, all in rag.py / SQL, dev only:
+1. PLANNER (_plan_question): one haiku call per question (replaces the
+   condensation call) returning {standalone, question_type, entities[{text,
+   type: case|employer|law_firm|attorney|classification|cfr|ina|form|term}],
+   corpora[1-3], rewrites[2-4 in the authority's vocabulary], tools[required]}.
+   _retrieve() fans out from it: vector search on standalone + each rewrite
+   (SEQUENTIAL — the local nano embedder deadlocks under asyncio.gather),
+   entity paths, keyword passes, then _rank_chunks with the planner's corpora
+   as priors (outrank the regex intents). Required tools + entities go into
+   the user prompt as hard instructions (fixed "who are firm X's clients").
+   Streams a {"type":"plan"} event. Logged in ask_chat_log.plan (jsonb).
+2. VERIFIER (_verify_sources): for non-tool questions, haiku judges whether
+   the top-12 passages state the answer; if not, one targeted retry with its
+   retry_query (vector + keyword + authority) merged and reranked, and the
+   prompt tells the model the sources were judged thin. Logged in .verify.
+3. ENTITY INDEX (scripts/sql/entity_index.sql, matview, BOTH DBs): 'case'
+   from decisions (PERM-era), ina_cases captions parsed by regex ("In the
+   Matter of: X, Employer"), aao "Matter of X" labels, and precedent_decisions
+   (483, not chunked — lets us say "known precedent, text not in corpus");
+   'cfr' from regulation cfr_citation; 'employer'/'law_firm' spellings from
+   mv_employer_representation. Trigram on norm. _resolve_case() replaces the
+   decisions-only lookup; unresolved names produce a coverage note the model
+   sees. refresh_oflc_matviews.sh now refreshes entity_index too.
+ALSO: _cfr_section_chunks — a cited section ("20 CFR 656.10(c)") is pulled
+directly (all chunks, current edition) and pinned like a named decision;
+search_regulations cfr= filter now matches at section level (labels are
+'20 CFR 656.10', never subsection).
+EVAL: scripts/eval/ask_eval.py + ask_eval_cases.json (20 cases: case
+holdings, codes, terms of art, representation, follow-ups, pivots, stats,
+coverage). Run: python3 -u scripts/eval/ask_eval.py [--only id,id]. Writes
+last_run.json. Baseline (pre-planner) 14/20 (mostly test strictness); with
+planner+verifier 19/20; with entity index + section pinning 20/20 expected
+(solar + cfr_cite re-run pass; full run pending).
+PERF LESSONS (see ways-of-working): FTS index side of a tsquery must be
+only the exact code/cite tokens — OR-ing expansion words matched 300K reg
+chunks (100 s); 3 s asyncio.wait_for on every lexical pass; no
+asyncio.gather around embed_query. Typical turn now: planner ~2 s +
+retrieval 2-8 s + answer 3-7 s.
+CORPUS FACTS: ina_cases = 3,202 INA-era BALCA decisions 1977-2009 (partial;
+Information Industries 1988-INA-82 NOT present, answered via citing cases).
+Policy chunks are labeled "FAM None — None" — ingest metadata gap, open.
+Uncommitted: M app/routers/rag.py, M app/routers/ask_tools.py,
+M scripts/sql/refresh_oflc_matviews.sh, M scripts/sql/ask_chat_log.sql
+(plan/verify columns); A scripts/sql/entity_index.sql,
+A scripts/sql/rag_fts_index_authority.sql, A scripts/eval/*.
+Backups: /tmp/rag.py.bak2..7. Not synced to casebase-app.
+2026-09-10 — POLICY LABELS: 130 9 FAM docs in policy_docs had section/subject NULL
+(filename parser only matched 8 FAM), so 2,727 chunks were labeled "FAM None —
+None". Backfilled from filenames (scripts/sql/fix_policy_labels.sql, run on
+BOTH DBs); rag_chunks.source_label for corpus='policy' now "FAM 9 FAM 402.9 —
+E Visas ...". USCIS_PM volumes still labeled at volume level ("USCIS_PM Volume
+8 — Volume 8") because they were ingested as whole-volume text files; a
+per-part/chapter ingest is the real fix (open).
+
+2026-09-10 (evening) — VERIFIER: T3-030/031 REDESIGN + T3-020 DEDUP (Kellen rulings)
+Kellen spec for G.4/G.4a/G.4b (G.4 = FW currently employed by petitioner;
+G.4a only if G.4 Yes; expected G.4a: no F.c set -> N/A, meets F.b -> No,
+meets only F.c -> Yes; FW can meet the F.b DEGREE yet qualify only via F.c).
+- T3-030 REPURPOSED: was a meets-neither RED duplicating T3-020. Now YELLOW
+  when G.4 = No (unusual; confirm). Meets-neither is owned solely by
+  T3-020/021 — derived check stays silent there.
+- NEW T3-030a RED: G.4 = No but Appendix A.E lists the sponsor with NO end
+  date (assumption: "currently employed" = open span; a closed sponsor span
+  is prior employment and does not contradict G.4=No — widen if Kellen wants).
+- T3-031 now gated on G.4 = Yes and uses the SAME evaluator as T3-020
+  (new shared helper _qualification_paths -> (paths, profile)); blank/""/NA
+  all read as N/A. Understated (expected Yes, answered No) RED; overstated
+  YELLOW (unchanged, Kellen didn't contradict). NEW: if F.b is a near-miss
+  (<=2 mo, deg ok) and F.c passes, T3-031 fires YELLOW "verify dates" instead
+  of RED, consistent with T3-021.
+- T1-010 G.4b branch: RED -> YELLOW per ruling (G.4+G.4a Yes, G.4b blank);
+  now also requires G.4 = Yes. G.4b "I DO NOT ACCEPT" already T4-010 YELLOW.
+  G.4 blank already T1-001 RED. T3-032 (both Yes -> Kellogg review) kept.
+- Removed dead helpers _worker_profile, _meets, _requirement_paths.
+Tests: 13 synthetic G.4 scenarios all as expected; matched pair
+G-100-24345-530692 + P-100-24067-778988 silent on the G.4 family
+(G.4 Yes / G.4a N/A / no F.c). Backups /tmp/rules_tier3.py.bak, rules.py.bak.
+Uncommitted: M app/perm_verify/rules_tier3.py, M app/perm_verify/rules.py.
+
+## Tier 3 review status
+DONE: T3-001, 003(del), 005, 010-016, 020-025, 030-032.
+REMAINING: T3-033/033a (G.7 combination), T3-034/034a (G.8 language),
+T3-035 (G.10 foreign equivalency). Then Tier 4, Tier 5.
+
+2026-09-10 (evening, cont.) — T3-033/034/035 REVIEWED. TIER 3 COMPLETE.
+- T3-033/033a (G.7): confirmed as-is. Signal is PWD Section G.3.d/e — the
+  NPWC's own "other occupations" listing for a combination — NOT a primary
+  vs alternate SOC comparison. Understated RED / overstated YELLOW; 033a
+  separate RED when G.7=No but PWD shows combo and no App C entry.
+- T3-034/034a (G.8): confirmed as-is. F.b/F.c.5.a(ii) checkbox is the
+  record; language typed elsewhere without the box draws a DOL RFI to
+  amend the PWD, so no fallback text scan (Kellen). Parse-miss defaults
+  to No — accepted.
+- T3-035 (G.10): YELLOW -> RED (Kellen). Widened match to module regex
+  _FOREIGN_EQUIV_RX ("foreign [educational|degree|academic] equivalen",
+  "or [its|the|a] equivalen"). Scans special_skills_text(+alt),
+  NEW other_degree_text_primary/alternate (F.b.1.a / F.c.2.a addenda —
+  employer can't REQUIRE a foreign degree but can select Other and write
+  "X or foreign equivalent"), and majors_primary/alternate (F.b.1.b/F.c.2.b).
+  extract_9141.py: added the two other_degree_text_* keys via _addendum.
+Tests: regex 7 cases; T3-035 fires only when no field has the language;
+3 fixtures extract clean (no Other degree on any — populated F.b.1.a
+addendum, populated G.3.d/e, and checked 5.a(ii) all still UNPROVEN in
+real fixtures; need a PWD with each).
+Uncommitted: M rules_tier3.py, M rules.py, M extract_9141.py.
+Backups /tmp/*.bak.
+
+## Verifier review status
+Tier 1 DONE. Tier 2 DONE. Tier 3 DONE (T3-001..035).
+NEXT: Tier 4 (T4-001..011) rule-by-rule, then Tier 5 (T5-001..040;
+T5-012/024/025 already touched). Missing-data sidebar UI still unreviewed.
+
+PLAN (Kellen 9/10): after all tiers are drafted, test the verifier against
+the ~5,000 synthetic 9089/9141 pairs generated from DOL performance data
+for the local model (qwen3-vl-8b QLoRA) training set. Covers the unproven
+extraction paths (Other-degree addenda, G.3.d/e combo, 5.a(ii) language).
+Don't chase individual fixtures before then.
+
+2026-09-10 (late) — TIER 4 STARTED. G.9 REWORK.
+Kellen confirmed as-is: T4-001, 002, 003(retired), 004, 005, 008, 010.
+- T4-006 RETIRED (bare G.9=Yes YELLOW). G.9 now entirely in rules_onet.py.
+- T4-007 rewritten to share the SOC tool's SVP math (imports
+  EDUCATION_SVP_MONTHS + ZONE_SVP_CEILING_MONTHS from app/wage_level_data):
+  combined = experience + training(F.b.3.a/F.c.3.a — ADDED, tool doesn't) +
+  degree-equivalent (HS 0 / AS 12 / BS 24 / MS 48 / PhD-Other 84) vs zone
+  ceiling (1:6 2:12 3:24 4:48 5:120). Evaluated on BOTH F.b and F.c;
+  flags if either exceeds. RED when G.9 No/N/A; T4-007b YELLOW when Yes.
+  NEW T4-007c YELLOW: G.9 Yes but within ceiling (overstated).
+  SKIP all three when PWD wage level is I (Kellen). Zone 5 never exceeds
+  (SOC-tool stance; 120 = SVP 8 ceiling, not a bound) — G.9 Yes on Zone 5
+  gets 007c; Kellen may want that silenced.
+  SOC code: 9089 has no SOC field; PWD G.3 (soc_code, onet_code fallback
+  to soc.00 / max across extensions) controls.
+Tests: 10 synthetic zone/degree/exp/level cases all as expected (DB
+lookups against onet_job_zones live).
+Uncommitted: M rules_onet.py, M rules.py (+ earlier files).
+REMAINING Tier 4: T4-009 (G.12 layoff), T4-011 (travel/roving regex).
+
+2026-09-10 (late, cont.) — TIER 4 COMPLETE.
+- T4-009: G.12 Yes + no App C = T1-011 RED already; T4-009 now YELLOW only
+  when the App C entry EXISTS (notify-and-consider check) — one gap, one flag.
+- T4-011 RETIRED (travel/roving keyword scan). T3-016 covers 9089<->PWD
+  travel consistency; revisit after the 5,000-pair test run (Kellen).
+Matched pair G-100-24345-530692 + P-100-24067-778988 now: T2-002/003/008/
+010/012 (filing-date default) + T3-024 only. 6 RED / 3 YELLOW.
+NOTE: RULES_INVENTORY.md is the stale Phase 1 spec — regenerate from code
+after Tier 5.
+
+## Verifier review status
+Tier 1-4 DONE. NEXT: Tier 5 (T5-001..040; 012/024/025 already touched).
+Then: 5,000-pair batch test; regenerate RULES_INVENTORY.md; Graphite port.
+
+2026-09-10 (late night) — TIER 5 REBUILT. ALL FIVE TIERS DRAFTED.
+Kellen rulings: fine as-is 001, 002, 010, 012, 024, 025, 030, 031, 033.
+RETIRED: 003 (retention letters rare), 023 (no req-number or wage is
+required in web/radio ads — 656.17(e)(1)(ii) only needs the ad text +
+station confirmation), 032 (NOF signer need not be the Section B contact).
+040 -> YELLOW "no recruitment report present" (beneficiary-name check
+dropped; recruitment_report removed from T5-001's RED list).
+STRUCTURAL: old classifier was the BHARGAVA pack (Eightfold, labor.ny.gov,
+NYT, Jobvertise, amNY, iHeart) — blind to any other firm's file.
+app/perm_verify/audit_pack.py REWRITTEN (old at /tmp/audit_pack.py.bak):
+- Generic EVIDENCE CONTRACT per page: {kind, page, readable, dates[],
+  publication, wage_figures[], reference_number, text, notes}. kind =
+  9089 method codes (swa_job_order, sunday_ad, the 10 H.d step codes) +
+  doc kinds (eta_9089, eta_9141, cover_letter, posting_notice,
+  recruitment_report) + other.
+- Two classifiers: VLM (default; AUDIT_CLASSIFIER=vlm; every page
+  rasterized 150dpi -> local qwen3-vl-8b via LM Studio with PAGE_PROMPT
+  returning the contract; text layer passed as a hint; no API cost) and
+  fingerprint (regex table, widened beyond BHARGAVA; automatic fallback
+  when VLM is down or returns junk, with a note in the record).
+- T5-020/021/022 collapsed into one _method() check driven by the 9089's
+  OWN claims (H.c.1 dates, ad1/ad2 dates, every H.d step selected):
+  no evidence of that kind -> RED; unreadable -> T5-050 only; dates
+  cover the 9089 dates -> GREEN; readable but dates don't -> YELLOW (and
+  names any unreadable same-kind page that may cover it).
+- NEW T5-050 YELLOW (Kellen: "flag when the model can't read the ad"):
+  unclassifiable page; method page with no usable date; 9141 copy with no
+  case#/validity (PWD checks skipped); posting notice unread or dates
+  illegible (notice checks skipped).
+- T5-024/025 now iterate all ad-type kinds (RED for swa/employer-site/job
+  site wage mismatch, YELLOW for print/broadcast).
+- T5-033 fires only on has_signature is False (not None/unread).
+Tests: synthetic contract (full pack w/ unreadable page, empty pack),
+fingerprint adapter, VLM record parsing (mocked), VLM-down fallback — all
+as expected. NOT tested on a real pack: none on disk (BHARGAVA only ever
+lived in the chat sandbox). Module is not yet wired to a router.
+Uncommitted tonight: M rules_tier3.py, M rules.py, M rules_onet.py,
+M extract_9141.py, M audit_pack.py (rewrite). Backups /tmp/*.bak.
+
+## Verifier review status
+ALL TIERS DRAFTED (1-5). NEXT:
+1. Batch runner over the ~5,000 synthetic 9089/9141 pairs: full run on the
+   no-AI tiers (1-4 incl. O*NET DB lookups); subset through anything that
+   calls a paid API. Tabulate fire-rate per rule (0% / 100% = bug).
+2. Get real audit packs for Tier 5 (synthetic pairs have no recruitment
+   evidence). Wire audit_pack to a router + PermVerifyView.
+3. Regenerate RULES_INVENTORY.md from code. Then Graphite port.
+
+2026-09-10/11 (overnight) — BATCH RUN vs 5,000 SYNTHETIC PAIRS. FIXES.
+NEW scripts/eval/verify_batch.py: runs verify_data over
+output/json/eta_pair_full_5000_unwatermarked/*/pair.json (9089 AcroForm
+templates are NOT readable by the certified-print extractor; the 9141
+templates barely are) using perm.form_data directly + adapt_pwd() mapping
+pwd.form_data -> extract_9141 dict shape. filing_date = meta.received_date.
+No AI: cite=False, no Tier 5. O*NET via local Postgres. 5,000 cases in
+~40 s, 0 errors. Outputs flags.jsonl / rule_rates.csv / errors.jsonl under
+output/eval/. --sample N --seed S for the AI-inclusive subset later.
+Corpus: 4,410 certified / 434 withdrawn / 92 denied / 64 cert-expired.
+
+FIXES from run 1 (Kellen rulings):
+- MONTH COUNTING INCLUSIVE of end month (01/2023-12/2023 = 12): every
+  T3-021 near-miss was exactly 1-2 months short (2,217 / 1,428 cases).
+  _worker_profile_full and _prorated_months. T3-021 3,645 -> 0; T3-020
+  148 -> 0 (generator builds workers to meet reqs); T3-025 1,295 -> 550.
+- F.a.8 (MSA/OES code) dropped from T1-001 required list (FLAG auto-fills).
+  F.a.5 county stays required; blank in corpus = disclosure-data gap.
+- T1-010c: with G.5 = No, "No" on 5a/5b reads as N/A (223 -> 2 RED).
+- T1-011a REDESIGNED: RED now = foreign highest degree on App A but G.3
+  (accept foreign degree equivalent) != Yes (665 cases = exactly the
+  G.3 N/A/No population). G.10 = No with foreign highest degree is NEW
+  T1-011c YELLOW (3,032). T1-011b unchanged. Kellen: G.3 Yes doesn't need
+  a foreign degree on the 9089, but the reverse must be flagged.
+KEEP AS-IS (Kellen): T3-030 G.4=No YELLOW (17.7% of real cases!); T3-031
+"No instead of N/A" YELLOW (820 — practice is shifting to N/A); T3-035
+RED (21% — DOL not enforcing, still a risk); T3-016 RED (22% — denials
+seen currently; DOL inconsistent; travel may be in E.5 on some).
+OPEN: T2-010 (retain-proof-of-posting reminder, fires 94%) — Kellen asked
+what it is; recommend retiring. Generator gaps: no Appendix C (T1-011
+63%, T3-033a/034a), no county, G.4a=Yes with App A meeting primary (341).
+Kellen: generate fake Appendix C's — useful for tests AND model training.
+Uncommitted: + scripts/eval/verify_batch.py, M rules.py, M rules_tier3.py.
+
+2026-09-11 (early AM) — G.3/G.10 REFINEMENT (Kellen), T2-010 RETIRED.
+- T2-010 retired (fired 94%, flagged nothing wrong).
+- Kellen: a foreign highest degree only matters if it's the degree RELIED
+  ON (e.g. foreign MS listed but a US BS meets a BS requirement -> fine);
+  and G.3 must mirror the PWD, not the worker.
+- rules.py: new _foreign_degree_profile() helper. T1-011a (RED, G.3 != Yes)
+  and T1-011c (YELLOW, G.10 No) now fire ONLY when NO US degree is listed.
+  T1-011b unchanged.
+- rules_tier3.py: NEW T3-036 — highest foreign + a US degree listed that
+  does NOT meet the PWD degree req (either path): G.3 != Yes -> RED,
+  G.10 No -> YELLOW; US degree meets -> silent.
+- T3-035 rewritten to G.3 vs PWD equivalency language (G.10 dropped):
+  PWD allows / G.3 No or N/A -> RED (understates PWD; 5 cases);
+  G.3 Yes / PWD silent -> YELLOW (3,051 = 61% of corpus; "equivalent"
+  genuinely absent from the PWD text in 2,908 of the 4,335 G.3=Yes cases —
+  DOL not enforcing; Kellen accepted YELLOW so REDs stay meaningful).
+- T3-036 and the refined 011a/c can't fire on this corpus: generator writes
+  ONE degree per Appendix A. Generator wishlist: Appendix C, county,
+  multi-degree Appendix A (foreign top + US lower).
+Runs: output/eval/verify_batch_5000_r{2,3,4}. 8-scenario synthetic test
+for the G.3/G.10 family all correct.
+Uncommitted (whole session): rules.py, rules_tier3.py, rules_onet.py,
+extract_9141.py, audit_pack.py (rewrite), + scripts/eval/verify_batch.py.
+NEXT: regenerate RULES_INVENTORY.md from code; AI-inclusive subset run
+(--sample); wire audit_pack router/UI; Graphite port.
+
+2026-09-11 — DEPLOYED non-AI verifier rules to casebase-app (Kellen).
+- rules_onet.py: wage_level_data import now try/except (app.* in dev,
+  top-level in the api/ container) — would have crashed the container.
+- bash sync-from-dev.sh (audit_pack.py excluded by design — Tier 5 is
+  Graphite-only); docker compose up --build -d; casebase-app healthy on
+  :8080. Docker DB already had onet_job_zones (923) / reference (4).
+- Smoke: G-100-23283-420879 via /api/perm-verify/verify-data (filing_date
+  is YYYY-MM-DD on the API) matches dev output exactly.
+- Frontend unchanged this session (dev build clean).
+STATS from r4 (certified vs denied only, withdrawals excluded per Kellen;
+corpus-gap rules T1-001/T1-011/T3-033a/034a set aside): 58% of certified
+have no RED; denied: 17% no RED, mean 1.77 RED vs 0.53. 16/92 denials
+carry no RED (1 fully clean) — audit-side causes the forms can't show.
+Strongest denial lifts: T3-005 97x, T2-003/T2-008/T1-010d/T3-001 ~49x,
+T2-005 24x, T1-009 32x, T1-004 16x, T3-034 13x, T2-002/T2-014 ~10x.
+T3-016 / T4-007 / T1-011a / T3-030 fire 2-3x more on denials but also
+on 9-22% of certified — real risk, not deterministic; levels kept.
+Lift<1 (informational, correctly YELLOW): T2-012, T3-025, T4-007b,
+T3-035, T3-013, T3-012.

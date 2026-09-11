@@ -6,11 +6,12 @@ against O*NET's classification of the occupation.
   T2-014  H.b marked non-professional (1b) but the occupation's Job Zone is
           4-5 (bachelor's-usual) -> professional recruitment steps were
           required. Zone 3 -> YELLOW borderline (T2-015).
-  T4-007  G.9 answered "No" (requirements do NOT exceed SVP) but the PWD's
-          required experience months alone exceed the Job Zone's SVP upper
-          bound. Conservative by design: education is NOT converted to SVP
-          time (that conversion is contested); if experience alone busts the
-          entire SVP range, the requirements exceed SVP a fortiori.
+  T4-007  G.9 answered "No" but PWD requirements (experience + training +
+          education SVP-equivalent, per app/wage_level_data.py, on BOTH the
+          F.b and F.c sets) exceed the Job Zone SVP ceiling -> RED.
+  T4-007b Same excess with G.9 Yes -> YELLOW (Information Industries).
+  T4-007c G.9 Yes but requirements are within the ceiling -> YELLOW.
+          All skipped on a Level I PWD; Zone 5 never "exceeds".
 
 SVP upper bounds in months by Job Zone (O*NET 30.2 svp_range):
   Zone 1-2: SVP < 6.0  -> <= 12 months
@@ -37,7 +38,43 @@ load_dotenv(Path(__file__).parents[2] / ".env")
 DB_URL = os.environ.get(
     "DATABASE_URL", "postgresql://perm@127.0.0.1:5433/perm_decisions")
 
-SVP_UPPER_MONTHS = {1: 12, 2: 12, 3: 24, 4: 48, 5: None}
+# Shared with the Casebase SOC/wage-level tool (app/wage_level_data.py) so
+# the verifier and the tool never disagree on the SVP math.
+try:  # dev layout: app.perm_verify.rules_onet -> app.wage_level_data
+    from app.wage_level_data import EDUCATION_SVP_MONTHS, ZONE_SVP_CEILING_MONTHS
+except ImportError:  # deploy layout: api/ is top-level -> wage_level_data
+    from wage_level_data import EDUCATION_SVP_MONTHS, ZONE_SVP_CEILING_MONTHS
+
+SVP_UPPER_MONTHS = {1: 12, 2: 12, 3: 24, 4: 48, 5: None}   # T2-014/015 only
+
+# 9141 degree strings -> wage_level_data keys
+_DEGREE_KEY = {
+    "none": "none", "high school/ged": "high_school",
+    "associate's": "associates", "bachelor's": "bachelors",
+    "master's": "masters", "doctorate": "doctorate", "other": "professional",
+}
+
+
+def _edu_svp(degree):
+    if not degree:
+        return 0
+    return EDUCATION_SVP_MONTHS.get(_DEGREE_KEY.get(str(degree).lower().replace("\u2019", "'"), "none"), 0)
+
+
+def _svp_paths(pwd):
+    """[(label, degree, exp_mo, train_mo, combined_mo)] for F.b and, if
+    alternate requirements are accepted, F.c."""
+    out = []
+    p_deg = pwd.get("education_primary") or pwd.get("education_required")
+    p_exp = pwd.get("experience_months_primary") or pwd.get("experience_months_required") or 0
+    p_trn = pwd.get("training_months_primary") or 0
+    out.append(("F.b", p_deg, p_exp, p_trn, p_exp + p_trn + _edu_svp(p_deg)))
+    if pwd.get("alternate_reqs_accepted") == "Yes":
+        a_deg = pwd.get("education_alternate")
+        a_exp = pwd.get("experience_months_alternate") or 0
+        a_trn = pwd.get("training_months_alternate") or 0
+        out.append(("F.c", a_deg, a_exp, a_trn, a_exp + a_trn + _edu_svp(a_deg)))
+    return out
 
 
 def _lookup_zone(conn, onet_code, soc_code):
@@ -95,28 +132,61 @@ def onet_checks(form, pwd):
                    f"Confirm bachelor's is not the usual requirement.",
                    "regulation", "20 CFR 656.20; O*NET Job Zones"))
 
-    req_months = (pwd or {}).get("experience_months_required")
+    # ---- G.9: do the job requirements exceed the occupation's SVP? -------
+    # Redesigned 9/10 (Kellen): SVP math shared with the SOC tool —
+    # experience + training + education-equivalent months vs the Job Zone
+    # ceiling, evaluated on BOTH the F.b and F.c requirement sets.  Skipped
+    # when the NPWC issued a Level I wage (DOL already found the
+    # requirements at entry level).  Zone 5 is open-ended (SVP 8+), so
+    # nothing is flagged as exceeding it — same stance as the SOC tool.
+    # T4-006 (bare "G.9 = Yes" YELLOW) was retired into this rule.
+    level = str((pwd or {}).get("pw_oews_level") or "").strip().upper()
+    if level in ("I", "1"):
+        return flags
     g9 = str(_get(form, "G_job_info.exceeds_svp"))
-    bound = SVP_UPPER_MONTHS.get(zone)
-    if req_months and bound is not None and req_months > bound:
+    ceiling = ZONE_SVP_CEILING_MONTHS.get(zone)
+    paths = _svp_paths(pwd or {})
+    over = [p for p in paths if zone != 5 and ceiling and p[4] > ceiling]
+
+    def _narr(p):
+        label, deg, exp, trn, tot = p
+        parts = [f"{exp} mo experience"]
+        if trn:
+            parts.append(f"{trn} mo training")
+        parts.append(f"{_edu_svp(deg)} mo for {deg or 'no degree'}")
+        return f"{label}: " + " + ".join(parts) + f" = {tot} mo"
+
+    detail = "; ".join(_narr(p) for p in paths)
+    if over:
         if g9 in ("No", "N/A", "None"):
             F(Flag(RED, "T4-007", "G.9",
-                   f"G.9 answered '{g9}' but required experience "
-                   f"({req_months} months) alone exceeds the Job Zone {zone} "
-                   f"SVP ceiling ({bound} months) for {matched} — before even "
-                   f"counting the education requirement. Answer G.9 'Yes' with "
-                   f"an Appendix C business-necessity justification, or reduce "
-                   f"the requirements.",
+                   f"G.9 answered '{g9}' but the PWD requirements exceed the "
+                   f"Job Zone {zone} SVP ceiling of {ceiling} months for "
+                   f"{matched} ({detail}). Answer G.9 'Yes' with an Appendix "
+                   f"C business-necessity justification, or reduce the "
+                   f"requirements. (Education-to-SVP conversion: bachelor's "
+                   f"= 24 mo, master's = 48 mo, doctorate/professional = "
+                   f"84 mo — a practitioner convention, not regulatory "
+                   f"text.)",
                    "regulation",
                    "20 CFR 656.17(h)(1); ETA-9089 Instructions §G.9; "
                    "O*NET Job Zone SVP range"))
         else:
             F(Flag(YELLOW, "T4-007b", "G.9",
-                   f"Requirements exceed Job Zone {zone} SVP ceiling "
-                   f"({req_months} > {bound} months) and G.9 is Yes — ensure "
-                   f"the Appendix C business-necessity statement meets the "
-                   f"Information Industries standard.",
+                   f"G.9 is Yes and the PWD requirements exceed the Job Zone "
+                   f"{zone} SVP ceiling of {ceiling} months for {matched} "
+                   f"({detail}) — the Appendix C business-necessity statement "
+                   f"must meet the Information Industries standard.",
                    "balca",
                    "Information Industries, 1988-INA-82 (en banc); "
                    "20 CFR 656.17(h)(1)"))
+    elif g9 == "Yes":
+        F(Flag(YELLOW, "T4-007c", "G.9",
+               f"G.9 is Yes but the PWD requirements are within the Job Zone "
+               f"{zone} SVP " + (f"ceiling of {ceiling} months" if zone != 5
+                                 else "range (Zone 5 is open-ended)") +
+               f" for {matched} ({detail}). Confirm G.9 needs to be Yes — "
+               f"it invites business-necessity scrutiny the employer may "
+               f"not owe.",
+               "regulation", "20 CFR 656.17(h)(1); ETA-9089 Instructions §G.9"))
     return flags

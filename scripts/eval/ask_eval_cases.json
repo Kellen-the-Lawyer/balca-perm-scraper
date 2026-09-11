@@ -1,0 +1,266 @@
+[
+ {
+  "id": "solar",
+  "q": "What did BALCA decide in the Solar Turbines decision?",
+  "must_source": [
+   "2016-PER-00025"
+  ],
+  "must_text": [
+   "reversed",
+   "656.17(i)",
+   "656.17 (i)",
+   "\u00a7 656.17(i)"
+  ],
+  "type": "case_holding",
+  "any_text": true
+ },
+ {
+  "id": "e3_years",
+  "q": "How many years do you get for an E-3?",
+  "must_source": [],
+  "must_text": [
+   "two year",
+   "2 year"
+  ],
+  "any_text": true,
+  "type": "rule",
+  "must_source_any": [
+   "214.2",
+   "655.750",
+   "41.51",
+   "FAM"
+  ]
+ },
+ {
+  "id": "h1b_6yr",
+  "q": "What is the maximum period of stay in H-1B status?",
+  "must_source": [
+   "214.2"
+  ],
+  "must_text": [
+   "six",
+   "6 year",
+   "six-year"
+  ],
+  "any_text": true,
+  "type": "rule"
+ },
+ {
+  "id": "toyota_rep",
+  "q": "Who represents Toyota Motor North America on their immigration filings?",
+  "must_tool": [
+   "get_employer_representation"
+  ],
+  "must_text": [
+   "Sherry Neal",
+   "Corporate Immigration Partners"
+  ],
+  "type": "representation"
+ },
+ {
+  "id": "ford_followup",
+  "q": "What about Ford?",
+  "history": [
+   [
+    "Who represents Toyota Motor North America on their immigration filings?",
+    "Toyota is represented by Corporate Immigration Partners, attorney Sherry Neal."
+   ]
+  ],
+  "must_tool": [
+   "get_employer_representation"
+  ],
+  "must_text": [
+   "Fragomen"
+  ],
+  "type": "followup"
+ },
+ {
+  "id": "substantial_merit",
+  "q": "Has the AAO defined substantial merit?",
+  "must_source_corpus": "aao",
+  "must_text": [
+   "Dhanasar"
+  ],
+  "type": "term_of_art"
+ },
+ {
+  "id": "niw_standard",
+  "q": "What is the standard for an EB-2 national interest waiver after Dhanasar?",
+  "must_source_corpus": "aao",
+  "must_text": [
+   "substantial merit",
+   "well positioned",
+   "well-positioned",
+   "on balance"
+  ],
+  "type": "standard",
+  "any_text": true
+ },
+ {
+  "id": "perm_recruitment",
+  "q": "What recruitment steps are required before filing a PERM application for a professional position?",
+  "must_source": [
+   "656.17"
+  ],
+  "must_text": [
+   "job order",
+   "additional"
+  ],
+  "any_text": false,
+  "type": "rule"
+ },
+ {
+  "id": "business_necessity",
+  "q": "What is the business necessity standard for PERM job requirements?",
+  "must_source": [
+   "656.17"
+  ],
+  "must_text": [
+   "bear a reasonable relationship",
+   "essential to perform"
+  ],
+  "any_text": true,
+  "type": "rule"
+ },
+ {
+  "id": "perm_processing",
+  "q": "How long are PERMs taking to process right now?",
+  "must_tool": [
+   "get_dol_processing_times"
+  ],
+  "must_text": [
+   "days"
+  ],
+  "type": "stat"
+ },
+ {
+  "id": "visa_bulletin",
+  "q": "Is EB-2 India current this month?",
+  "must_tool": [
+   "get_visa_bulletin_current"
+  ],
+  "type": "stat"
+ },
+ {
+  "id": "kellogg",
+  "q": "What is the Kellogg language and when is it required?",
+  "must_text": [
+   "Kellogg",
+   "alternate",
+   "combination of education, training"
+  ],
+  "any_text": true,
+  "type": "case_holding"
+ },
+ {
+  "id": "cfr_cite",
+  "q": "What does 20 CFR 656.10(c) require the employer to attest?",
+  "must_source": [
+   "656.10"
+  ],
+  "must_text": [
+   "prevailing wage",
+   "able to place"
+  ],
+  "any_text": true,
+  "type": "rule"
+ },
+ {
+  "id": "h1b1_lca",
+  "q": "How long is an LCA valid for an H-1B1?",
+  "must_source": [
+   "655.750"
+  ],
+  "must_text": [
+   "three year",
+   "3 year",
+   "two year",
+   "2 year"
+  ],
+  "any_text": true,
+  "type": "rule"
+ },
+ {
+  "id": "firm_clients",
+  "q": "Who are Hammond Neal Moore's biggest clients?",
+  "must_tool": [
+   "get_firm_clients"
+  ],
+  "type": "representation",
+  "must_text": [
+   "filings"
+  ]
+ },
+ {
+  "id": "audit_response",
+  "q": "How many days does an employer have to respond to a PERM audit?",
+  "must_source": [
+   "656.20"
+  ],
+  "must_text": [
+   "30 days",
+   "thirty"
+  ],
+  "any_text": true,
+  "type": "rule"
+ },
+ {
+  "id": "eb1a_criteria",
+  "q": "How many of the ten criteria must an EB-1A petitioner satisfy?",
+  "must_text": [
+   "three",
+   "3 of the 10",
+   "three of the ten"
+  ],
+  "any_text": true,
+  "must_source": [],
+  "type": "rule",
+  "must_source_any": [
+   "204.5",
+   "Extraordinary Ability"
+  ]
+ },
+ {
+  "id": "perm_denials_by_firm",
+  "q": "How many PERM denials did Fragomen have in FY2025?",
+  "must_tool": [
+   "query_oflc_data",
+   "get_firm_clients"
+  ],
+  "any_tool": true,
+  "type": "stat"
+ },
+ {
+  "id": "topic_pivot",
+  "q": "What is the standard for demonstrating specialty occupation?",
+  "history": [
+   [
+    "Who represents Toyota Motor North America?",
+    "Corporate Immigration Partners, Sherry Neal."
+   ]
+  ],
+  "must_text": [
+   "214.2(h)(4)",
+   "specialty occupation"
+  ],
+  "any_text": true,
+  "forbid_text": [
+   "Toyota"
+  ],
+  "type": "followup"
+ },
+ {
+  "id": "info_industries",
+  "q": "What did BALCA hold in Information Industries?",
+  "must_text": [
+   "reasonable relationship",
+   "essential to perform"
+  ],
+  "any_text": true,
+  "must_source_corpus_any": [
+   "ina_cases",
+   "balca"
+  ],
+  "type": "case_holding"
+ }
+]

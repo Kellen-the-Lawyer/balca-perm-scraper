@@ -389,6 +389,12 @@ def _pdf_text(path: str) -> tuple[str, list[str]]:
             raise ValueError(f"Document exceeds the {MAX_PDF_PAGES}-page limit")
         for page in pdf.pages:
             page_text.append(page.extract_text() or "")
+    # FLAG draft prints (Distiller, Type 3 fonts, no ToUnicode) produce a
+    # substitution-cipher text layer. Feeding that to the model as "extracted
+    # text" is worse than nothing; blank it and rely on the page images.
+    from extract_pwd import text_is_garbled
+    if text_is_garbled(page_text):
+        page_text = ["" for _ in page_text]
     return "\n\n".join(page_text)[:MAX_TEXT_CHARS], page_text
 
 

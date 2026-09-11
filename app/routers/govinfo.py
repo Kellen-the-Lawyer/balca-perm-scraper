@@ -26,9 +26,11 @@ async def list_govinfo_docs(
         conditions.append("congress = :congress")
         bind["congress"] = congress
     where = " AND ".join(conditions)
+    # COUNT has no :limit/:offset placeholders; binding them raises ArgumentError
+    count_bind = {k: v for k, v in bind.items() if k not in ("limit", "offset")}
 
     total = await database.fetch_val(
-        text(f"SELECT COUNT(*) FROM govinfo_docs WHERE {where}").bindparams(**bind)
+        text(f"SELECT COUNT(*) FROM govinfo_docs WHERE {where}").bindparams(**count_bind)
     )
     rows = await database.fetch_all(text(f"""
         SELECT id, package_id, collection, collection_label, title,
@@ -81,8 +83,9 @@ async def search_govinfo_docs(
                 'MaxWords=40, MinWords=18, StartSel=<mark>, StopSel=</mark>') AS headline
         """
 
+    count_bind = {k: v for k, v in bind.items() if k not in ("limit", "offset")}
     total = await database.fetch_val(
-        text(f"SELECT COUNT(*) FROM govinfo_docs d WHERE {where}").bindparams(**bind)
+        text(f"SELECT COUNT(*) FROM govinfo_docs d WHERE {where}").bindparams(**count_bind)
     )
     rows = await database.fetch_all(text(f"""
         SELECT d.id, d.package_id, d.collection, d.collection_label, d.title,

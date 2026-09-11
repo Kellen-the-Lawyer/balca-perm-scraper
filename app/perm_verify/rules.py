@@ -104,7 +104,7 @@ REQUIRED_FIELDS = [
     ("F.a.5", "F_worksite.county"),
     ("F.a.6", "F_worksite.state"),
     ("F.a.7", "F_worksite.postal_code"),
-    ("F.a.8", "F_worksite.msa_oes_area_code"),
+    # F.a.8 (MSA/OES area code) removed 9/10: FLAG auto-fills it (Kellen).
     ("G.1", "G_job_info.full_time_35hrs"),
     ("G.2", "G_job_info.live_in_domestic"),
     ("G.4", "G_job_info.fw_currently_employed"),
@@ -210,8 +210,10 @@ def _g5_checks(form):
                    "regulation",
                    "20 CFR 656.17(i)(3); Delitizer Corp. of Newton, 1988-INA-482"))
     elif str(g5) == "No":
+        # 9/10 (Kellen): "No" on 5a/5b with G.5 = No reads as N/A — DOL
+        # certifies No/No routinely.  Only a stray "Yes" is contradictory.
         for item, val in (("G.5a", g5a), ("G.5b", g5b)):
-            if not _is_na(val):
+            if not _is_na(val) and str(val) != "No":
                 F(Flag(RED, "T1-010c", item,
                        f"G.5 is No, so {item} must be N/A; it is answered "
                        f"'{val}'.", "completeness",
@@ -225,17 +227,96 @@ def _g5_checks(form):
     return flags
 
 
-def _g10_checks(form):
-    """T1-011a/b — G.10 (credentialing service) derived from the country of
-    institution on each Appendix A.B education record.
+def _foreign_degree_profile(form):
+    """(foreign_edus, top_rank, top_is_us, us_edus) from Appendix A.B.
 
-    A tie at the highest degree rank counts as US-conferred if any degree at
-    that rank was conferred in the United States.
+    A tie at the highest degree rank counts as US-conferred if any degree
+    at that rank was conferred in the United States.
+    """
+    edus = [e for e in (_get(form, "appendix_A.education", []) or [])
+            if e.get("degree")]
+    foreign = [e for e in edus if e.get("country") and not _is_us(e["country"])]
+    us = [e for e in edus if _is_us(e.get("country"))]
+    if not edus:
+        return [], 0, True, []
+    top = max(DEGREE_RANK.get(e.get("degree"), 0) for e in edus)
+    top_is_us = any(_is_us(e.get("country"))
+                    for e in edus if DEGREE_RANK.get(e.get("degree"), 0) == top)
+    return foreign, top, top_is_us, us
+
+
+def _g10_checks(form):
+    """T1-011a/b/c — foreign degrees on Appendix A.B vs G.3 and G.10,
+    FORM-ONLY.  Kellen 9/11: a foreign highest degree only matters if it is
+    the degree relied on.  With NO US degree listed it plainly is, so:
+      T1-011a RED    G.3 (accept foreign equivalent) != Yes
+      T1-011c YELLOW G.10 (credentialing service) == No
+    With a US degree also listed, whether it satisfies the requirement
+    depends on the PWD — see T3-036 in rules_tier3 (silent here).
+    T1-011b YELLOW: highest degree is US, a lower foreign degree exists, and
+    G.10 is No — confirm the foreign degree is not relied on.
     """
     flags = []
     F = flags.append
-    if str(_get(form, "G_job_info.credentialing_service")) != "No":
+    foreign, top, top_is_us, us = _foreign_degree_profile(form)
+    if not foreign:
         return flags
+    names = ", ".join(f"{e.get('degree')} ({e.get('country')})" for e in foreign)
+    g3 = str(_get(form, "G_job_info.accept_foreign_degree_equivalent"))
+    g10 = str(_get(form, "G_job_info.credentialing_service"))
+    if not top_is_us and not us:
+        if g3 != "Yes":
+            F(Flag(RED, "T1-011a", "G.3",
+                   f"All of the foreign worker's degrees were conferred outside "
+                   f"the United States [{names}] but G.3 is answered '{g3}' — "
+                   f"the employer has not stated that it accepts a foreign "
+                   f"degree equivalent, so the worker does not facially meet "
+                   f"the education requirement.",
+                   "regulation", "20 CFR 656.17(h)(4)(ii); ETA-9089 Instructions §G.3"))
+        if g10 == "No":
+            F(Flag(YELLOW, "T1-011c", "G.10",
+                   f"All of the foreign worker's degrees were conferred outside "
+                   f"the United States [{names}] but G.10 is No — confirm no "
+                   f"credential evaluation is being relied on.",
+                   "form_instructions", "ETA-9089 Instructions §G.10"))
+    elif top_is_us and g10 == "No":
+        F(Flag(YELLOW, "T1-011b", "G.10",
+               f"A lower-level degree was conferred outside the United States "
+               f"[{names}] while the highest degree is US-conferred and G.10 "
+               f"is No. Correct if the worker qualifies on the US degree; "
+               f"confirm the foreign degree is not being relied on.",
+               "form_instructions", "ETA-9089 Instructions §G.10"))
+    return flags
+    top = max(DEGREE_RANK.get(e.get("degree"), 0) for e in edus)
+    top_is_us = any(_is_us(e.get("country"))
+                    for e in edus if DEGREE_RANK.get(e.get("degree"), 0) == top)
+    names = ", ".join(f"{e.get('degree')} ({e.get('country')})" for e in foreign)
+    g3 = str(_get(form, "G_job_info.accept_foreign_degree_equivalent"))
+    g10 = str(_get(form, "G_job_info.credentialing_service"))
+    if not top_is_us:
+        if g3 != "Yes":
+            F(Flag(RED, "T1-011a", "G.3",
+                   f"The foreign worker's highest degree was conferred outside "
+                   f"the United States [{names}] but G.3 is answered '{g3}' — "
+                   f"the employer has not stated that it accepts a foreign "
+                   f"degree equivalent, so the worker does not facially meet "
+                   f"the stated education requirement.",
+                   "regulation", "20 CFR 656.17(h)(4)(ii); ETA-9089 Instructions §G.3"))
+        if g10 == "No":
+            F(Flag(YELLOW, "T1-011c", "G.10",
+                   f"The foreign worker's highest degree was conferred outside "
+                   f"the United States [{names}] but G.10 is No — confirm no "
+                   f"credential evaluation is being relied on; most foreign "
+                   f"degrees are supported by one.",
+                   "form_instructions", "ETA-9089 Instructions §G.10"))
+    elif g10 == "No":
+        F(Flag(YELLOW, "T1-011b", "G.10",
+               f"A lower-level degree was conferred outside the United States "
+               f"[{names}] while the highest degree is US-conferred and G.10 "
+               f"is No. Correct if the worker qualifies on the US degree; "
+               f"confirm the foreign degree is not being relied on.",
+               "form_instructions", "ETA-9089 Instructions §G.10"))
+    return flags
     edus = [e for e in (_get(form, "appendix_A.education", []) or [])
             if e.get("degree")]
     foreign = [e for e in edus if e.get("country") and not _is_us(e["country"])]
@@ -345,11 +426,15 @@ def tier1(form):
         "G_job_info.experience_substantially_comparable")
     dep("G_job_info.relying_solely_on_experience_with_employer", "Yes", "G.5b",
         "G_job_info.employer_paid_training")
-    if str(_get(form, "G_job_info.fw_qualifies_only_by_alternative_reqs")) == "Yes" and \
-       _get(form, "G_job_info.kellogg_suitable_combination") is None:
-        F(Flag(RED, "T1-010", "G.4b",
-               "G.4b (Kellogg suitable-combination statement) must be selected "
-               "when G.4 and G.4a are both Yes.", "completeness",
+    # YELLOW, not RED (Kellen 9/10): a blank G.4b with G.4/G.4a Yes is a
+    # drafting gap to fix, reviewed alongside T4-010 (I DO NOT ACCEPT).
+    if str(_get(form, "G_job_info.fw_currently_employed")) == "Yes" and \
+       str(_get(form, "G_job_info.fw_qualifies_only_by_alternative_reqs")) == "Yes" and \
+       _get(form, "G_job_info.kellogg_suitable_combination") in (None, ""):
+        F(Flag(YELLOW, "T1-010", "G.4b",
+               "G.4 and G.4a are both Yes but G.4b (Kellogg suitable-"
+               "combination statement) is not selected — the employer should "
+               "select 'I ACCEPT'.", "completeness",
                "20 CFR 656.17(a)(1); ETA-9089 Instructions §G.4b"))
 
     # Appendix C matching (T1-011/T1-012)
@@ -606,11 +691,8 @@ def tier2(form, filing_date=None):
         F(Flag(RED, "T2-011", "H.e",
                "Notice options 1c/1d selected without 1b (physical notice).",
                "form_instructions", "ETA-9089 Instructions §H.e note"))
-    if "1b_physical_notice" in notice:
-        F(Flag(YELLOW, "T2-010", "H.e.1b",
-               "Physical notice attested: retain proof of 10 consecutive "
-               "business days' posting in a conspicuous location.",
-               "regulation", "20 CFR 656.10(d)(1)(ii)"))
+    # T2-010 (retain-proof-of-posting reminder) retired 9/11: fired on 94%
+    # of cases and flagged nothing wrong on the form (Kellen).
 
     return flags
 
@@ -648,21 +730,22 @@ def tier4_form_only(form):
                "Foreign language requirement — business necessity per "
                "656.17(h)(2) must be documented.",
                "regulation", "20 CFR 656.17(h)(2)"))
-    if yes("G_job_info.exceeds_svp"):
-        F(Flag(YELLOW, "T4-006", "G.9",
-               "Requirements exceed O*NET SVP — business necessity under the "
-               "Information Industries test.",
-               "balca", "20 CFR 656.17(h)(1); Information Industries, "
-               "1988-INA-82 (en banc)"))
+    # T4-006 retired 9/10: G.9 is handled entirely by T4-007/007b/007c in
+    # rules_onet.py, which do the SVP math instead of echoing the Yes.
     if yes("G_job_info.employer_received_payment"):
         F(Flag(YELLOW, "T4-008", "G.11",
                "Employer received payment for filing — 656.12(b) prohibition "
                "analysis required.",
                "regulation", "20 CFR 656.12(b)"))
-    if yes("G_job_info.layoff_6mo"):
+    # G.12 Yes with NO Appendix C entry is T1-011 RED (Kellen 9/10); this
+    # YELLOW only fires when the entry exists, so one gap gives one flag.
+    if yes("G_job_info.layoff_6mo") and "G.12" in {
+            e.get("section_item")
+            for e in _get(form, "appendix_C.entries", []) or []}:
         F(Flag(YELLOW, "T4-009", "G.12",
                "Layoff in the occupation/related occupation within 6 months — "
-               "notify-and-consider obligations apply.",
+               "confirm the Appendix C entry documents that each laid-off "
+               "U.S. worker was notified and considered (656.17(k)).",
                "regulation", "20 CFR 656.17(k)"))
     if str(_get(form, "G_job_info.kellogg_suitable_combination")) == "I DO NOT ACCEPT":
         F(Flag(YELLOW, "T4-010", "G.4b",
@@ -670,10 +753,7 @@ def tier4_form_only(form):
                "denial risk where alternative requirements are not "
                "substantially equivalent.",
                "balca", "Matter of Francis Kellogg, 1994-INA-465 (en banc)"))
-    geo = str(_get(form, "F_worksite.other_geographic_areas") or "")
-    if re.search(r"travel|roving|various", geo, re.I):
-        F(Flag(YELLOW, "T4-011", "F.c.1",
-               f"Travel/roving language present ('{geo[:80]}') — confirm PWD "
-               f"and recruitment cover the area(s) of employment.",
-               "balca", "20 CFR 656.10; BALCA roving-employee line"))
+    # T4-011 (travel/roving keyword scan on F.c.1) retired 9/10: T3-016
+    # handles 9089<->PWD travel consistency; revisit after the 5,000-pair
+    # test run shows what travel language actually looks like in the wild.
     return flags

@@ -1056,7 +1056,10 @@ export function PermComparer(){
     }
   };
 
-  const clearAll=()=>{setJobTitle('');setCity('');setStateVal('');setTelecommute('no');setTelecommuteText('');setJdRef('');setJdCmp('');setMrRef('');setMrCmp('');setPrimDeg('');setSecDeg('');setTravel('');setPwdWage('');setWageFrom('');setWageTo('');setResults(null);setPwdError('');setExpLetters([]);setShowExpModal(false);setDroppedLetter(null);setPwdData({});setAuditKey(k=>k+1);};
+  // Clears ONLY the comparison-side text boxes and the diff result.
+  // PWD-loaded reference fields (title, location, duties, requirements,
+  // wage, letters) are left intact so the next ad can be pasted and compared.
+  const clearAll=()=>{setJdCmp('');setMrCmp('');setResults(null);setPwdError('');};
 
   const loadPwd=async(file)=>{
     if(!file)return;
@@ -1164,7 +1167,7 @@ export function PermComparer(){
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             {' Verify Experience'}{expLetters.length>0&&<span style={{marginLeft:4,padding:'1px 6px',background:'var(--amber)',color:'var(--bg)',borderRadius:10,fontSize:10,fontWeight:700}}>{expLetters.length}</span>}
           </button>}
-          <button onClick={clearAll} style={{fontSize:11,padding:'5px 14px',height:'auto',background:'var(--bg3)',color:'var(--text3)',border:'1px solid var(--border)',borderRadius:20,cursor:'pointer'}}>Clear All</button>
+          <button onClick={clearAll} style={{fontSize:11,padding:'5px 14px',height:'auto',background:'var(--bg3)',color:'var(--text3)',border:'1px solid var(--border)',borderRadius:20,cursor:'pointer'}} title="Clear the comparison text boxes (keeps PWD fields)">Clear Comparison</button>
             {mode==='diff'&&<button onClick={compare} className="primary" style={{fontSize:12,padding:'7px 18px'}}>Compare Text</button>}
           </div>
         </div>

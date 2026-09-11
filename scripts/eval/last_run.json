@@ -1,0 +1,306 @@
+[
+ {
+  "id": "solar",
+  "ok": true,
+  "problems": [],
+  "secs": 10.3,
+  "tools": [],
+  "condensed": "What did BALCA decide in the Solar Turbines decision?",
+  "cited": [
+   "balca:2016-PER-00025",
+   "balca:2016-PER-00025",
+   "balca:2016-PER-00025",
+   "balca:2016-PER-00025"
+  ],
+  "answer": "BALCA reversed the Certifying Officer's (CO) denial of labor certification in the Solar Turbines case and remanded it for certification. [1][2]\n\nThe employer had filed a PERM application (Form 9089) for a Mechanical Engineer position and listed specific job requirements in Section H, including \"heat transfer, Finite Element Analysis, drafting/CAD (Pro-E), or applied thermodynamics.\" [1] The CO denied the application without an audit, reasoning that because the employer did not specify in Section K of the form that the alien had experience with those particular skills, the employer must not genuinely require them\u2014implying the employer was willing to hire someone without meeting those stated requirements. [1]\n\nBALCA held that the CO erred. [2] The employer had attested in the application that the alien possessed the required experience, and the employer later provided documentary evidence (including academic transcripts, employment letters, and a detailed correspondence table) on reconsideration showing that the alien had obtained the requisite experience through a master's degree with relevant coursework. [3] Since there was no factual dispute about the alien's qualifications, BALCA found no support for the CO's conclusion that the job requirements did not represent the employer's actual minimum requirements under 20 C.F.R. \u00a7 656.17(i). [2]\n\nSignificantly, the board also rejected the CO's reliance on an OFLC Frequently Asked Question (FAQ) issued July 28, 2014, which suggested"
+ },
+ {
+  "id": "e3_years",
+  "ok": true,
+  "problems": [],
+  "secs": 9.0,
+  "tools": [],
+  "condensed": "What is the period of admission (length of stay) for an E-3 visa classification?",
+  "cited": [
+   "policy:FAM None \u2014 None",
+   "uscis_foia:[foia] National Customer Service Center Policies",
+   "uscis_foia:[foia] National Customer Service Center Policies",
+   "regulation:20 CFR Part 655"
+  ],
+  "answer": "An E-3 applicant is admitted for an initial period of up to two years, and extensions of stay may be granted indefinitely in increments of up to two years. [1][2][3]\n\nMore specifically:\n\n**Initial admission:** E-3 applicants are admitted for a two-year period. [1]\n\n**Extensions:** After the initial two-year period, extensions of stay may be granted indefinitely in increments of up to two years, provided the applicant can demonstrate that he or she does not intend to remain or work permanently in the United States. [1][2][3]\n\n**Labor Condition Application (LCA) validity:** The LCA supporting an E-3 position must not exceed 2 years for an initial E-3 LCA, and the visa validity should not exceed the validity period of the LCA, with a maximum 24-month validity period for E-3 visas. [6][1]"
+ },
+ {
+  "id": "h1b_6yr",
+  "ok": true,
+  "problems": [],
+  "secs": 16.3,
+  "tools": [],
+  "condensed": "What is the maximum period of stay in H-1B status?",
+  "cited": [
+   "policy:FAM None \u2014 None",
+   "policy:FAM None \u2014 None",
+   "regulation:8 CFR Part 214",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - Jan272010_03D2101\n            (PDF, )",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - Mar102008_01D2101\n            (PDF, )",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - SEP302015_01D2101\n            (PDF, )"
+  ],
+  "answer": "The maximum period of stay in H-1B status is generally **six years** [1][4][5].\n\n**Initial and Extension Periods**\n\nAn H-1B beneficiary in a specialty occupation or fashion model is typically granted an initial period of admission of up to three years, with an extension of stay authorized for an additional up to three years, for a combined maximum of six years [1][4].\n\n**Exceptions**\n\nThree main exceptions extend the six-year limit:\n\n1. **Department of Defense (DOD) Projects**: An individual participating in a DOD research and development or co-production project may work for a maximum of ten years. H-1B petitions for qualifying DOD workers may be approved for up to five years per petition, with total stay not exceeding ten years [1][4].\n\n2. **American Competitiveness in the 21st Century Act (AC21) \u2013 Immigration Petition Pending**: Under AC21 section 104(c), if an H-1B beneficiary is the beneficiary of an approved employment-based immigrant petition (Forms I-140) but cannot adjust status due to per-country visa number retrogression, USCIS may approve H-1B extensions in unlimited three-year increments beyond the six-year maximum [1][9].\n\n3. **AC21 \u2013 Labor Certification or Immigrant Petition Filed**: AC21 also permits one-year extensions beyond the initial six-year maximum if 365 days or more have elapsed since the filing of a labor certification or immigrant petition on the beneficiary's behalf [1].\n\n**Time Recapture**\n\nTime spent physically outside the United States does not "
+ },
+ {
+  "id": "toyota_rep",
+  "ok": true,
+  "problems": [],
+  "secs": 10.6,
+  "tools": [
+   "get_employer_representation"
+  ],
+  "condensed": "Who represents Toyota Motor North America on their immigration filings?",
+  "cited": [],
+  "answer": "I'll look up Toyota Motor North America's immigration counsel using the representation tool.Per OFLC disclosure data (FY2020\u2013FY2026), **Corporate Immigration Partners, P.C.** represents Toyota Motor North America on their current immigration filings, with attorney **Sherry Neal** serving as counsel of record. This firm has handled:\n\n- 41 LCA (H-1B) filings (39 certified, 0 denied) since August 2023\n- 17 PERM filings (14 certified, 2 denied) since October 2023  \n- 36 prevailing wage determinations since September 2023\n\nPrior representation was through **Hammond Neal Moore, LLC** (also with Sherry Neal), which handled Toyota's filings from 2020 through August 2023 on LCA, PERM, and PWD matters. The transition to Corporate Immigration Partners, P.C. occurred in mid-2023."
+ },
+ {
+  "id": "ford_followup",
+  "ok": true,
+  "problems": [],
+  "secs": 13.8,
+  "tools": [
+   "get_employer_representation"
+  ],
+  "condensed": "Who represents Ford on their immigration filings?",
+  "cited": [],
+  "answer": "I'll look up Ford's immigration counsel representation.The query matched multiple employers containing \"Ford.\" Let me search for the primary Ford Motor Company:Ford Motor Company is represented by Fragomen, Del Rey, Bernsen, & Loewy LLP. Based on the most recent filings (as of June 2026), Ford's current immigration counsel across its programs includes:\n\n**Current counsel (most recent filings):**\n- **LCA (H-1B):** Anne Fox at Fragomen, Del Rey, Bernsen, & Loewy LLP (1,407 filings, last filing June 30, 2026; 1,381 certified, 22 denied)\n- **PERM:** Kevin Miner at Fragomen, Del Rey, Bernsen, & Loewy LLP (10 filings, all certified, last filing June 18, 2026)\n- **PWD:** Arielle Sokil at Fragomen, Del Rey, Bernsen & Loewy LLP (55 filings, last filing June 22, 2026)\n\nThe firm has represented Ford Motor Company for multiple years across all three programs (PERM, LCA, and Prevailing Wage), with various attorneys handling different practice areas. Per OFLC disclosure data (FY2020\u2013FY2026), Ford has filed over 6,900 immigration cases with this firm."
+ },
+ {
+  "id": "substantial_merit",
+  "ok": true,
+  "problems": [],
+  "secs": 29.2,
+  "tools": [
+   "search_decisions"
+  ],
+  "condensed": "Has the AAO defined 'substantial merit' in its decisions?",
+  "cited": [
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - NOV092023_02B5203",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - APR052023_02B5203"
+  ],
+  "answer": "I'll search for AAO decisions that define \"substantial merit.\"Let me search more specifically for AAO guidance on substantial merit in the national interest waiver context.Based on the provided sources, the AAO has not provided an explicit definition of \"substantial merit\" in standalone terms. However, the sources indicate how the AAO discusses substantial merit in the context of national interest waiver adjudications.\n\nAccording to the sources, in national interest waiver cases under the framework established in *Matter of Dhanasar* [7][8], the AAO evaluates whether \"the noncitizen's proposed endeavor has both substantial merit and national importance\" [7][8]. The sources explain that \"[t]he endeavor's merit may be demonstrated in a range of areas such as business, entrepreneurialism, science, technology, culture, health, or education\" [7].\n\nHowever, the sources provided do not contain a formal, detailed definition of what constitutes \"substantial merit\" as a discrete concept. The AAO appears to treat it contextually\u2014as part of the first prong of *Dhanasar*\u2014without articulating a standalone definition. One decision notes that the AAO found \"the record satisfied . . . substantial merit\" of a proposed endeavor [8], but this indicates application of the concept rather than its definition.\n\nTo find a more complete AAO articulation of this term, you would need to consult the full text of *Matter of Dhanasar* (26 I&N Dec. 884 (AAO 2016)), which is cited but not fully reproduced in"
+ },
+ {
+  "id": "niw_standard",
+  "ok": true,
+  "problems": [],
+  "secs": 12.0,
+  "tools": [],
+  "condensed": "What is the standard for an EB-2 national interest waiver after Dhanasar?",
+  "cited": [
+   "aao:Matter of Dhanasar",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - JUL302024_01B5203",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - DEC012021_01B5203",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - JUL262024_05B5203"
+  ],
+  "answer": "The standard for an EB-2 national interest waiver after *Matter of Dhanasar* consists of a three-prong framework that a petitioner must satisfy.\n\n**First Prong: Substantial Merit and National Importance of the Proposed Endeavor**\n\nThe petitioner must demonstrate that the foreign national's proposed endeavor has both substantial merit and national importance [2]. This prong focuses on the specific endeavor the noncitizen proposes to undertake [5]. The endeavor's merit may be demonstrated in a range of areas such as business, entrepreneurialism, science, technology, culture, health, or education [8]. In determining whether the proposed endeavor has national importance, USCIS considers its potential prospective impact [5][8].\n\n**Second Prong: Well-Positioned to Advance the Endeavor**\n\nThe petitioner must establish that the foreign national is well positioned to advance the proposed endeavor [2]. This prong shifts the focus from the endeavor to the noncitizen [8]. To determine whether the noncitizen is well-positioned, USCIS considers factors including but not limited to: the individual's education, skills, knowledge, and record of success in related or similar efforts; a model or plan for future activities; any progress towards achieving the proposed endeavor; and the interest of potential customers, users, investors, or other relevant entities or individuals [5][8].\n\n**Third Prong: Balance of Benefit to the United States**\n\nThe petitioner must demonstrate that, on balance, it w"
+ },
+ {
+  "id": "perm_recruitment",
+  "ok": true,
+  "problems": [],
+  "secs": 12.9,
+  "tools": [],
+  "condensed": "What recruitment steps are required before filing a PERM application for a professional position?",
+  "cited": [
+   "balca:2024-PER-00067",
+   "balca:2008-PER-00004",
+   "balca:2010-PER-00702",
+   "balca:2024-PER-00268",
+   "balca:2020-PER-00129",
+   "balca:2016-PER-00176",
+   "balca:2011-PER-00206",
+   "balca:2011-PER-00534"
+  ],
+  "answer": "For a professional occupation, an employer must conduct mandatory recruitment steps before filing a PERM application under the basic process at 20 C.F.R. \u00a7 656.17(e).\n\n**Mandatory Recruitment Steps**\n\nThe employer must place a job order with the State Workforce Agency (SWA) serving the area of intended employment and publish two print advertisements (typically in newspapers of general circulation or professional journals).[1][6] These mandatory steps must be conducted for at least 30 days, but no more than 180 days, before filing the application.[1][5]\n\n**Additional Recruitment Steps**\n\nIn addition to the two mandatory steps, the employer must conduct three additional recruitment steps selected from the following ten options:[2][6]\n\n1. Job fairs\n2. The employer's website\n3. A job search website other than the employer's\n4. On-campus recruiting\n5. Trade or professional organizations\n6. Private employment firms or placement agencies\n7. Employee referral programs with incentives\n8. Campus placement offices\n9. Local and ethnic newspapers\n10. Radio and television advertisements\n\n[2][6]\n\n**Definition of Professional Occupation**\n\nA professional occupation is defined as \"an occupation for which the attainment of a bachelor's or higher degree is a usual education requirement.\"[2][6] Occupations listed in Appendix A to the Preamble of 20 C.F.R. Part 656 are deemed professional occupations, and an employer cannot avoid this classification by failing to require a degree for the specific"
+ },
+ {
+  "id": "business_necessity",
+  "ok": true,
+  "problems": [],
+  "secs": 9.7,
+  "tools": [],
+  "condensed": "What is the business necessity standard for PERM job requirements?",
+  "cited": [
+   "balca:2013-PER-02147",
+   "balca:2015-PER-00281",
+   "balca:2022-PER-00082",
+   "balca:2008-PER-00167",
+   "balca:2013-PER-03040",
+   "balca:2013-PER-02862"
+  ],
+  "answer": "Under PERM regulations, the business necessity standard governs job requirements that are not normally required for an occupation or that exceed the Specific Vocational Preparation (SVP) level assigned to the occupation. [1][2][3]\n\n## The Two-Prong Test\n\nTo establish business necessity, an employer must satisfy both of the following requirements: [1][3][8]\n\n1. **Reasonable Relationship**: The job duties and requirements must bear a reasonable relationship to the occupation in the context of the employer's business. [1][3][8]\n\n2. **Essential to Performance**: The job requirements must be essential to perform the job in a reasonable manner. [1][3][8]\n\nThis two-prong standard is codified at 20 C.F.R. \u00a7 656.17(h)(1). [1][2][3]\n\n## Burden and Proof\n\nThe burden is on the employer to prove business necessity. [3][8] Bare assertions of business necessity without supporting reasoning or evidence are insufficient to satisfy this burden. [3] The employer must provide actual documentation and explanation demonstrating that a candidate with less than the stated requirements would not possess the essential skills needed to perform the job. [12]\n\n## Historical Foundation\n\nThe business necessity standard was established in the seminal pre-PERM decision *Information Industries, Inc.*, 1988-INA-82 (Feb. 9, 1989) (en banc), and is now codified in the PERM regulations. [3][5] BALCA has consistently applied this standard across multiple decision types and occupations. [8]"
+ },
+ {
+  "id": "perm_processing",
+  "ok": true,
+  "problems": [],
+  "secs": 11.4,
+  "tools": [
+   "get_dol_processing_times"
+  ],
+  "condensed": "How long are PERM labor certifications taking to process right now?",
+  "cited": [],
+  "answer": "Per OFLC disclosure data, PERM labor certifications are currently processing as follows (as of the most recent month, June 2026):\n\n**Median processing time: 398 calendar days** (from receipt date to final determination).\n\nProcessing-time percentiles for June 2026:\n- **25th percentile (fastest quarter):** 384 days\n- **Median:** 398 days\n- **75th percentile:** 410 days\n- **90th percentile (slowest 10%):** 429 days\n\nThis represents the fastest processing in the past 12 months. Earlier in 2026, processing times peaked at a median of 510 days in January. The trend has improved notably since January, with June showing the shortest median time in the past year."
+ },
+ {
+  "id": "visa_bulletin",
+  "ok": true,
+  "problems": [],
+  "secs": 6.3,
+  "tools": [
+   "get_visa_bulletin_current"
+  ],
+  "condensed": "Is EB-2 India current this month?",
+  "cited": [],
+  "answer": "I'll check the current visa bulletin for EB-2 India.No. EB-2 India is **not** current this month (September 2026). Per the Department of State visa bulletin effective September 1, 2026, EB-2 for India is marked unavailable with no priority date shown. This means no EB-2 visa numbers are available for Indian nationals at this time."
+ },
+ {
+  "id": "kellogg",
+  "ok": true,
+  "problems": [],
+  "secs": 16.0,
+  "tools": [
+   "search_decisions"
+  ],
+  "condensed": "What is the Kellogg language and when is it required?",
+  "cited": [
+   "aao:Immigrant Petition for Alien Worker (Professionals and Other Workers) - JUN282013_12B6203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - JAN292013_16B5203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - MAY222013_06B5203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - Jun222012_09B5203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - JUN212013_03B5203\n            (PDF, )",
+   "balca:2013-PER-02573",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - MAR112026_02B5203",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - DEC102014_01B5203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - MAY222013_06B5203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Advanced Degree, Exceptional Ability, National Interest Waiver) - Jul162012_03B5203\n            (PDF, )"
+  ],
+  "answer": "The original Francis Kellogg decision (1994-INA-465, decided Feb. 2, 1998) is not in the corpus as a source document, but the retrieved sources contain extensive later discussion of its holding. Based on those citations, here is what Kellogg language is and when it is required:\n\n## Definition of Kellogg Language\n\n\"Kellogg language\" is a statement on a PERM labor certification indicating that an employer will accept applicants with \"any suitable combination of education, training or experience\" in place of (or in addition to) the primary job requirements. [5][6][10] The statement must appear on the labor certification form to be effective; the exact phrase commonly used is: \"any suitable combination of education, training, or experience is acceptable.\" [5][6]\n\n## When It Is Required\n\nKellogg language is required in the following circumstance: **When an alien does not meet the primary job requirements but only potentially qualifies based on alternative (lesser) job requirements listed by the employer, certification will be denied unless the application states that any suitable combination of education, training, or experience is acceptable.** [6][10][13]\n\nThe rationale is that without such language, an employer's alternative requirements are considered unlawfully tailored to the alien's qualifications. [6][10][15] The regulation codifying this requirement is 20 C.F.R. \u00a7 656.17(h)(4)(ii). [5][6][13]\n\n## Important Limitations and Exceptions\n\nHowever, the requirement has been sign"
+ },
+ {
+  "id": "cfr_cite",
+  "ok": true,
+  "problems": [],
+  "secs": 12.5,
+  "tools": [],
+  "condensed": "What does 20 CFR 656.10(c) require the employer to attest?",
+  "cited": [
+   "regulation:20 CFR Part 656",
+   "regulation:20 CFR Part 656",
+   "regulation:20 CFR Part 656",
+   "balca:2012-PER-01561",
+   "aao:Immigrant Petition for Alien Worker (Professionals and Other Workers) - DEC182012_16B6203\n            (PDF, )"
+  ],
+  "answer": "# What 20 CFR 656.10(c) Requires Employers to Attest\n\nUnder 20 CFR \u00a7 656.10(c), the employer must certify to ten specific conditions of employment on the Application for Permanent Employment Certification under penalty of perjury under 18 U.S.C. \u00a7 1621(2). [1][5] Failure to attest to any of the conditions listed results in a denial of the application. [1]\n\nThe ten attestation requirements are:\n\n(1) The offered wage equals or exceeds the prevailing wage, and the wage paid to the alien will equal or exceed the applicable prevailing wage at the time work begins; [5]\n\n(2) The wage is not based on commissions, bonuses, or other incentives, unless the employer guarantees a prevailing wage paid on a weekly, bi-weekly, or monthly basis that equals or exceeds the prevailing wage; [5]\n\n(3) The employer has enough funds available to pay the offered wage or salary; [5][11]\n\n(4) The employer will be able to place the alien on the payroll on or before the date of the alien's proposed entrance into the United States; [5][11]\n\n(5) The job opportunity does not involve unlawful discrimination by race, creed, color, national origin, age, sex, religion, handicap, or citizenship; [5]\n\n(6) The job opportunity is not vacant because the former occupant is on strike or locked out, or at issue in a labor dispute involving a work stoppage; [5]\n\n(7) The job opportunity's terms, conditions, and occupational environment are not contrary to federal, state, or local law; [5]\n\n(8) The job opportunity has bee"
+ },
+ {
+  "id": "h1b1_lca",
+  "ok": true,
+  "problems": [],
+  "secs": 14.7,
+  "tools": [
+   "search_regulations"
+  ],
+  "condensed": "How long is an LCA (Labor Condition Application) valid for an H-1B1 visa classification?",
+  "cited": [
+   "regulation:20 CFR Part 655"
+  ],
+  "answer": "I'll search the regulations for the specific validity period of LCAs for H-1B1 beneficiaries.The search result is incomplete. Let me retrieve the full text of 20 CFR 655.750 to get the complete answer.Perfect. Based on the sources provided and my search results, here is the answer:\n\nAn LCA for an H-1B1 beneficiary is valid for different periods depending on whether it is an initial LCA or an extension:\n\n**Initial H-1B1 LCA:** An approved initial LCA issued on behalf of an H-1B1 nonimmigrant must not exceed **3 years** for the period of authorized employment. [5]\n\n**H-1B1 Extension LCA:** If the approved LCA is for an extension of an H-1B1, it must not exceed **2 years**. [5]\n\nThe validity period ends on the latest date indicated or the number of years after the employment start date specified above, whichever comes first. [5]"
+ },
+ {
+  "id": "firm_clients",
+  "ok": true,
+  "problems": [],
+  "secs": 9.3,
+  "tools": [
+   "get_firm_clients"
+  ],
+  "condensed": "Who are Hammond Neal Moore's biggest clients?",
+  "cited": [],
+  "answer": "I'll search for information about Hammond Neal Moore's clients.Based on OFLC disclosure data (FY2020\u2013FY2026), Hammond Neal Moore's biggest clients by filing volume are:\n\n1. **Signature Commercial Solutions, LLC** \u2014 257 LCA filings + 74 PWD filings (331 total)\n2. **HCA Management Services LP** \u2014 249 LCA filings\n3. **Morgan Truck Body, LLC** \u2014 245 PERM filings + 72 additional PERM filings (317 total)\n4. **SATYAM-VENTURE ENGINEERING SERVICES PVT. LTD.** \u2014 233 LCA filings\n5. **National Health Corporation** \u2014 209 PWD filings\n6. **Experis US LLC** \u2014 203 LCA filings\n7. **ettain group, Inc.** \u2014 172 LCA filings\n8. **Fifth Third Bank, National Association** \u2014 166 LCA filings\n9. **g2o, LLC** \u2014 135 LCA filings\n10. **Cardinal Logistics Management Corporation** \u2014 120 PERM filings\n\nSignature Commercial Solutions and Morgan Truck Body are Hammond Neal Moore's largest clients overall when combining filings across PERM, LCA, and PWD programs."
+ },
+ {
+  "id": "audit_response",
+  "ok": true,
+  "problems": [],
+  "secs": 11.8,
+  "tools": [],
+  "condensed": "How many days does an employer have to respond to a PERM audit?",
+  "cited": [
+   "balca:2011-PER-02934",
+   "balca:2012-PER-01150",
+   "balca:2012-PER-01946",
+   "balca:2012-PER-03754"
+  ],
+  "answer": "Under 20 C.F.R. \u00a7 656.20(a)(2), an employer must respond to a PERM audit notification within **30 days** from the date of the audit letter. [1][2][3][4]\n\nThe regulation provides that the audit letter will specify a date, 30 days from the date of the audit letter, by which the required documentation must be submitted. [1] If the employer fails to provide the documentation by that specified date, the application is automatically denied. [1]\n\nThe Certifying Officer may, in their discretion, grant one extension of up to 30 additional days. [1]"
+ },
+ {
+  "id": "eb1a_criteria",
+  "ok": true,
+  "problems": [],
+  "secs": 10.8,
+  "tools": [],
+  "condensed": "How many of the ten criteria must an EB-1A petitioner satisfy?",
+  "cited": [
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - May092006_04B2203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - Nov252008_04B2203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - Nov252009_03B2203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - JUN042026_01B2203",
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - SEP082025_03B2203",
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - Feb022009_10B2203\n            (PDF, )",
+   "aao:Immigrant Petition for Alien Worker (Extraordinary Ability) - FEB102026_06B2203"
+  ],
+  "answer": "An EB-1A petitioner must satisfy at least three of the ten criteria listed in 8 C.F.R. \u00a7 204.5(h)(3), unless they can establish a one-time achievement in the form of a major, internationally recognized award. [1][2][3][4][5]\n\nMore specifically, the regulation provides two alternative paths: (1) evidence of a one-time achievement\u2014a major, internationally recognized award\u2014which alone establishes the requisite sustained national or international acclaim; or (2) absent such an award, documentation demonstrating that the beneficiary meets at least three of the ten regulatory criteria at 8 C.F.R. \u00a7 204.5(h)(3)(i)\u2013(x). [4][5][12]\n\nHowever, simply submitting evidence that relates to three criteria is insufficient. The evidence must be evaluated to determine whether it is indicative of or consistent with sustained national or international acclaim. [3][11] After meeting the initial threshold of three qualifying criteria, USCIS then conducts a final merits determination considering the totality of evidence to assess whether the record demonstrates sustained national or international acclaim and establishes that the individual is among the small percentage at the very top of their field of endeavor. [5][12]"
+ },
+ {
+  "id": "perm_denials_by_firm",
+  "ok": true,
+  "problems": [],
+  "secs": 8.6,
+  "tools": [
+   "query_oflc_data"
+  ],
+  "condensed": "How many PERM denials did Fragomen have in FY2025?",
+  "cited": [],
+  "answer": "I'll query the OFLC disclosure data to find Fragomen's PERM denial counts in FY2025.Per OFLC disclosure data (FY2020\u2013FY2026), Fragomen had 58 PERM denials in FY2025."
+ },
+ {
+  "id": "topic_pivot",
+  "ok": true,
+  "problems": [],
+  "secs": 14.5,
+  "tools": [],
+  "condensed": "What is the standard for demonstrating that a position qualifies as a specialty occupation?",
+  "cited": [
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - AUG242015_01D2101\n            (PDF, )",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - OCT042005_61D2101\n            (PDF, )",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - OCT042005_28D2101\n            (PDF, )",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - Jan032012_10D2101\n            (PDF, )",
+   "aao:Petition for a Nonimmigrant Worker (Temporary Worker in a Specialty Occupation or Fashion Model \u2013 H-1B) - JUL072016_04D2101\n            (PDF, )",
+   "aao:Revocation of Approval of Nonimmigrant Visa Petition - Oct082009_01D1101\n            (PDF, )"
+  ],
+  "answer": "# Standard for Demonstrating Specialty Occupation\n\nA position qualifies as a specialty occupation under 8 C.F.R. \u00a7 214.2(h)(4)(ii) when it meets two statutory and regulatory requirements:\n\n**1. Nature of Knowledge Required**\n\nThe occupation must require [2][3] \"the theoretical and practical application of a body of highly specialized knowledge in fields of human endeavor including, but not limited to, architecture, engineering, mathematics, physical sciences, social sciences, medicine and health, education, business specialties, accounting, law, theology, and the arts.\"\n\n**2. Degree Requirement**\n\nThe occupation must require [2][3] \"the attainment of a bachelor's degree or higher in a specific specialty, or its equivalent, as a minimum for entry into the occupation in the United States.\" Critically, USCIS interprets \"degree\" to mean [9] \"not just any baccalaureate or higher degree, but one in a specific specialty that is directly related to the proffered position.\"\n\n**Alternative Criteria**\n\nPursuant to 8 C.F.R. \u00a7 214.2(h)(4)(iii)(A), a position may also qualify if it meets one of four criteria: [4]\n\n(1) A baccalaureate or higher degree is normally the minimum requirement for entry into the particular position;\n\n(2) The degree requirement is common to the industry in parallel positions among similar organizations, or the position is so complex or unique that only a degree-holder can perform it;\n\n(3) The employer normally requires a degree for the position; or\n\n(4) The specifi"
+ },
+ {
+  "id": "info_industries",
+  "ok": true,
+  "problems": [],
+  "secs": 47.2,
+  "tools": [
+   "search_decisions"
+  ],
+  "condensed": "What did BALCA hold in Information Industries?",
+  "cited": [
+   "ina_cases:BALCA INA \u2014 2001-INA-00114",
+   "ina_cases:BALCA INA \u2014 2001-INA-00109",
+   "ina_cases:BALCA INA \u2014 2001-INA-00110"
+  ],
+  "answer": "I'll search for the Information Industries decision and what BALCA held in it.The original *Information Industries* decision (1988-INA-82, Feb. 9, 1989, en banc) is not in the corpus as a source document, but it is extensively cited in later BALCA decisions. Based on those citations and the excerpts you provided, here is what BALCA held:\n\n**The Business Necessity Test for Unduly Restrictive Job Requirements**\n\nIn *Information Industries, Inc.*, 1988-INA-82 (Feb. 9, 1989) (en banc), BALCA established the foundational test for proving business necessity when an employer requires job qualifications that are not standard for the occupation or that exceed the Dictionary of Occupational Titles (DOT) Specific Vocational Preparation (SVP) level.\n\nBALCA held that \"[t]o establish business necessity under \u00a7 656.21(b)(2)(i), an employer must demonstrate that the job requirements bear a reasonable relationship to the occupation in the context of the employer's business and are essential to perform, in a reasonable manner, the job duties as described by the employer.\" [1][2][3]\n\nCritically, BALCA established that an employer cannot satisfy business necessity merely by showing that additional qualifications \"tend to contribute to or enhance the efficiency and quality of the business.\" [1][2][3] Instead, the requirement must be essential to performing the actual job duties themselves. For example, in a chick-sexing case applying this standard, BALCA found that while experience beyond the DOT"
+ }
+]

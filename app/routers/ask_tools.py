@@ -31,6 +31,90 @@ def build_tools_schema() -> list:
     """Anthropic tool schemas. Built at call time so column docs stay in sync."""
     return [
         {
+            "name": "search_decisions",
+            "description": (
+                "Look up a decision by case name, party/employer name, or docket number, and find "
+                "every passage in the BALCA/AAO/older-precedent corpora that discusses it. Use "
+                "whenever a question names a specific case ('Solar Turbines', 'Matter of Dhanasar', "
+                "'2016-PER-00025', 'the Kellogg decision') and the retrieved sources don't contain it. "
+                "Returns matching decisions plus passages from later decisions that cite the case — "
+                "use those to say what the case held even when the original is not in the corpus."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Case/party name or docket number, e.g. 'Solar Turbines'"},
+                    "corpus": {"type": "string", "enum": ["all", "balca", "aao", "ina_cases"]},
+                    "limit": {"type": "integer", "description": "Max passages (default 8, max 20)"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "search_regulations",
+            "description": (
+                "Full-text search of the primary authorities: 8/20/22 CFR (current), the INA, the "
+                "USCIS Policy Manual, the FAM, DOL FAQs, Federal Register final rules, and form "
+                "instructions. Use for any question about a visa classification, form, period of "
+                "stay or validity, filing procedure, eligibility rule, or what a regulation says, "
+                "whenever the retrieved sources don't already contain the answer. Regulations name "
+                "classifications by letter ('E classification', 'treaty alien', 'specialty "
+                "occupation'), so phrase the query the way the rule text would, and set cfr to pin "
+                "a section (e.g. '214.2(e)', '656.17')."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Web-search style terms, e.g. 'treaty alien period of admission extension 2 years'"},
+                    "cfr": {"type": "string", "description": "Optional section filter, e.g. '214.2(e)'"},
+                    "corpus": {"type": "string", "enum": ["all", "regulation", "policy", "ina", "govinfo", "dol_faqs", "final_rules", "form_instructions"]},
+                    "limit": {"type": "integer", "description": "Max passages (default 8, max 20)"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "get_employer_representation",
+            "description": (
+                "Who represents an employer: the law firm(s) and attorney(s) of record on the "
+                "employer's PERM, LCA/H-1B, and Prevailing Wage filings, with filing counts, "
+                "certified/denied counts, and first/last filing dates for each firm+attorney "
+                "combination, ordered most-recent first. ALWAYS use this (not query_oflc_data) "
+                "for 'who represents X', 'who is X's immigration counsel', 'which firm files "
+                "X's H-1Bs/PERMs', or 'did X change law firms'. Handles fuzzy employer-name "
+                "matching across the many spellings in disclosure data. If the result lists "
+                "many matched_employers with no rows, re-run with a more specific name."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "employer": {"type": "string", "description": "Employer name as the user gave it"},
+                    "program": {"type": "string", "enum": ["all", "PERM", "LCA", "PWD"],
+                                "description": "Default all"},
+                    "limit": {"type": "integer", "description": "Max firm/attorney rows (default 25)"},
+                },
+                "required": ["employer"],
+            },
+        },
+        {
+            "name": "get_firm_clients",
+            "description": (
+                "Which employers a law firm or attorney represents, by filing volume, across "
+                "PERM/LCA/PWD, with certified/denied counts and date range. Use for 'who are "
+                "firm Y's clients', 'how many employers does attorney Z represent', 'what does "
+                "Y file'. Matches on firm name OR attorney name (substring, case-insensitive)."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Law firm or attorney name"},
+                    "program": {"type": "string", "enum": ["all", "PERM", "LCA", "PWD"]},
+                    "limit": {"type": "integer", "description": "Max client rows (default 30)"},
+                },
+                "required": ["name"],
+            },
+        },
+        {
             "name": "query_oflc_data",
             "description": (
                 "Run a query against OFLC disclosure data (FY2020-FY2026): "
@@ -299,7 +383,226 @@ async def _run_visa_bulletin_current(inp: dict) -> dict:
     return {"rows": [dict(r) for r in rows]}
 
 
+# ── Representation (mv_employer_representation) ───────────────────────────────
+
+import re as _re
+
+
+def _norm_employer(name: str) -> str:
+    s = _re.sub(r"[^\w\s]", " ", name or "")
+    s = _re.sub(r"\b(inc|llc|corp|corporation|co|ltd|lp|llp|plc|the)\b", " ", s, flags=_re.I)
+    return _re.sub(r"\s+", " ", s).strip().lower()
+
+
+_REP_SELECT = """
+    SELECT program, firm, attorney,
+           SUM(filings)::int AS filings, SUM(certified)::int AS certified, SUM(denied)::int AS denied,
+           MIN(first_date) AS first_date, MAX(last_date) AS last_date,
+           COUNT(DISTINCT employer_name)::int AS employer_name_variants
+    FROM mv_employer_representation
+    WHERE {where}
+    GROUP BY 1,2,3
+    ORDER BY MAX(last_date) DESC NULLS LAST, SUM(filings) DESC
+    LIMIT :lim
+"""
+
+
+async def _run_employer_representation(inp: dict) -> dict:
+    employer = (inp.get("employer") or "").strip()
+    if not employer:
+        raise ValueError("employer is required")
+    q = _norm_employer(employer)
+    if len(q) < 3:
+        raise ValueError("employer name too short")
+    program = (inp.get("program") or "all").upper()
+    limit = min(int(inp.get("limit", 25)), 60)
+    prog_clause = "" if program == "ALL" else " AND program = :prog"
+    params = {"q": f"%{q}%", "lim": limit}
+    if program != "ALL":
+        params["prog"] = program
+
+    # 1. Which employer names match? (substring on normalized name; fuzzy fallback)
+    match_sql = f"""
+        SELECT employer_name, SUM(filings)::int AS filings, MAX(last_date) AS last_date
+        FROM mv_employer_representation
+        WHERE employer_norm ILIKE :q{prog_clause}
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 40"""
+    matches = await database.fetch_all(text(match_sql).bindparams(**{k: v for k, v in params.items() if k != "lim"}))
+    mode = "substring"
+    if not matches:
+        fz = {"qn": q, **({"prog": program} if program != "ALL" else {})}
+        matches = await database.fetch_all(text(f"""
+            SELECT employer_name, SUM(filings)::int AS filings, MAX(last_date) AS last_date
+            FROM mv_employer_representation
+            WHERE similarity(:qn, employer_norm) > 0.5{prog_clause}
+            GROUP BY 1 ORDER BY 2 DESC LIMIT 40""").bindparams(**fz))
+        mode = "fuzzy"
+    if not matches:
+        return {"employer_query": employer, "matched_employers": [], "rows": [],
+                "note": "No employer in OFLC disclosure data matched. Try a shorter or alternate name."}
+
+    names = [m["employer_name"] for m in matches]
+    # 2. Too many distinct employers → ask the model to narrow rather than blending them.
+    if len(names) > 15 and mode == "substring":
+        return {"employer_query": employer, "match_mode": mode,
+                "matched_employers": [dict(m) for m in matches[:20]], "rows": [],
+                "note": "Query matched many distinct employers. Re-run with a more specific employer name, or pick one from matched_employers."}
+
+    where = "employer_name = ANY(:names)" + prog_clause
+    rp = {"names": names, "lim": limit, **({"prog": program} if program != "ALL" else {})}
+    rows = await database.fetch_all(text(_REP_SELECT.format(where=where)).bindparams(**rp))
+    return {
+        "employer_query": employer, "match_mode": mode,
+        "matched_employers": [dict(m) for m in matches],
+        "rows": [dict(r) for r in rows],
+        "source": "OFLC disclosure data: PERM FY2015-FY2026, LCA FY2020-FY2026, PWD FY2021-FY2026 (attorney fields absent before those years)",
+        "note": "Null firm/attorney = employer filed without counsel. Ordered by most recent activity; the top rows are current counsel.",
+    }
+
+
+async def _run_firm_clients(inp: dict) -> dict:
+    name = (inp.get("name") or "").strip()
+    if len(name) < 3:
+        raise ValueError("name is required")
+    program = (inp.get("program") or "all").upper()
+    limit = min(int(inp.get("limit", 30)), 100)
+    prog_clause = "" if program == "ALL" else " AND program = :prog"
+    params = {"q": f"%{name.lower()}%", "lim": limit, **({"prog": program} if program != "ALL" else {})}
+    rows = await database.fetch_all(text(f"""
+        SELECT employer_name, program,
+               SUM(filings)::int AS filings, SUM(certified)::int AS certified, SUM(denied)::int AS denied,
+               MIN(first_date) AS first_date, MAX(last_date) AS last_date,
+               array_agg(DISTINCT attorney) FILTER (WHERE attorney IS NOT NULL) AS attorneys
+        FROM mv_employer_representation
+        WHERE (lower(firm) LIKE :q OR lower(attorney) LIKE :q){prog_clause}
+        GROUP BY 1,2 ORDER BY SUM(filings) DESC LIMIT :lim""").bindparams(**params))
+    tot = await database.fetch_one(text(f"""
+        SELECT COUNT(DISTINCT employer_name)::int AS employers, SUM(filings)::int AS filings,
+               array_agg(DISTINCT firm) FILTER (WHERE firm IS NOT NULL) AS firm_variants
+        FROM mv_employer_representation
+        WHERE (lower(firm) LIKE :q OR lower(attorney) LIKE :q){prog_clause}""").bindparams(
+        **{k: v for k, v in params.items() if k != "lim"}))
+    return {"name_query": name, "summary": dict(tot) if tot else {},
+            "rows": [dict(r) for r in rows],
+            "source": "OFLC disclosure data (PERM/LCA/PWD), matched on firm or attorney name",
+            "note": "Rows are top clients by filing volume; summary gives totals across all matches."}
+
+
+# ── Decision lookup by name / number (lexical) ────────────────────────────────
+
+async def _run_search_decisions(inp: dict) -> dict:
+    q = (inp.get("query") or "").strip()
+    if len(q) < 3:
+        raise ValueError("query is required")
+    corpus = (inp.get("corpus") or "all").lower()
+    limit = min(int(inp.get("limit", 8)), 20)
+    corpora = ["balca", "aao", "ina_cases"] if corpus == "all" else [corpus]
+
+    # 1. BALCA decisions table: employer name or docket number
+    dec_rows = await database.fetch_all(text("""
+        SELECT id, case_number, decision_date, outcome, employer_name, source_url
+        FROM decisions
+        WHERE lower(employer_name) LIKE :q OR case_number ILIKE :q
+        ORDER BY decision_date DESC NULLS LAST LIMIT :lim
+    """).bindparams(q=f"%{q.lower()}%", lim=limit))
+    own_ids = [str(r["id"]) for r in dec_rows[:3]]
+    own_passages = []
+    if own_ids and corpus in ("all", "balca"):
+        own_passages = [dict(r) for r in await database.fetch_all(text("""
+            SELECT source_id, source_label, source_date, source_outcome, chunk_index,
+                   left(chunk_text, 900) AS passage
+            FROM rag_chunks
+            WHERE corpus = 'balca' AND source_id = ANY(:ids)
+            ORDER BY source_id,
+                     ts_rank_cd(to_tsvector('english', chunk_text),
+                                to_tsquery('english', 'hold | held | holding | conclude | reverse | reversed | affirm | affirmed | order | ordered')) DESC
+            LIMIT 6
+        """).bindparams(ids=own_ids))]
+
+    # 2. Passages anywhere in the decision corpora that use the phrase
+    # corpus filtered in Python: a corpus predicate alongside the FTS index is ~3 s (BitmapAnd)
+    raw = await database.fetch_all(text("""
+        SELECT id, corpus, source_id, source_label, source_date, source_outcome,
+               ts_headline('english', chunk_text, phraseto_tsquery('english', :ph),
+                           'MaxWords=70, MinWords=40, StartSel=<<, StopSel=>>') AS snippet,
+               (lower(source_label) LIKE :lbl) AS is_the_decision
+        FROM rag_chunks
+        WHERE to_tsvector('english', chunk_text) @@ phraseto_tsquery('english', :ph)
+        ORDER BY is_the_decision DESC, source_date DESC NULLS LAST
+        LIMIT :lim
+    """).bindparams(ph=q, lbl=f"%{q.lower()}%", lim=limit * 5))
+    chunk_rows = [r for r in raw if r["corpus"] in corpora][:limit]
+    total = await database.fetch_one(text("""
+        SELECT COUNT(*)::int AS n FROM (
+          SELECT 1 FROM rag_chunks
+          WHERE to_tsvector('english', chunk_text) @@ phraseto_tsquery('english', :ph) LIMIT 5000) x
+    """).bindparams(ph=q))
+
+    return {
+        "query": q,
+        "decisions_matching_name_or_number": [{k: v for k, v in dict(r).items() if k != "id"} for r in dec_rows],
+        "passages_from_those_decisions": own_passages,
+        "passages_mentioning": [dict(r) for r in chunk_rows],
+        "total_passages_mentioning": (f"{total['n']}+" if total and total["n"] >= 5000 else (total["n"] if total else 0)),
+        "coverage": "BALCA decisions 2006-present; AAO non-precedent decisions; ina_cases = older BIA/INA precedents. "
+                    "Pre-2006 BALCA precedents are not source documents here — rely on how later decisions describe them.",
+        "note": "passages_from_those_decisions are the matched decision's own text (use these for what it "
+                "held); passages_mentioning are later decisions citing or discussing it. Cite by source_label. "
+                "If decisions_matching_name_or_number is non-empty, the decision IS in the corpus.",
+    }
+
+
+# ── Authority text search (regs, policy manual, FAM, INA, FAQs, forms) ────────
+
+_AUTHORITY = ("regulation", "policy", "ina", "govinfo", "dol_faqs", "final_rules",
+              "form_instructions", "form_instructions_dol", "uscis_checklists", "cbp_ifm")
+
+
+async def _run_search_regulations(inp: dict) -> dict:
+    query = (inp.get("query") or "").strip()
+    if len(query) < 3:
+        raise ValueError("query is required")
+    cfr = (inp.get("cfr") or "").strip()
+    corpus = (inp.get("corpus") or "all").lower()
+    limit = min(int(inp.get("limit", 8)), 20)
+    corpora = list(_AUTHORITY) if corpus == "all" else [corpus]
+    cin = ", ".join(f":c{i}" for i in range(len(corpora)))
+    bind = {"q": query, "lim": limit, **{f"c{i}": c for i, c in enumerate(corpora)}}
+    cfr_clause = ""
+    if cfr:
+        # chunks are labeled at section level ('20 CFR 656.10'); match the section, not the subsection
+        import re as _re2
+        m = _re2.search(r"(\d{3}\.\d+)", cfr)
+        sec = m.group(1) if m else cfr
+        cfr_clause = " AND cfr_citation LIKE :cfr"
+        bind["cfr"] = f"% CFR {sec}"
+    rows = await database.fetch_all(text(f"""
+        SELECT corpus, source_label, cfr_citation, source_date, chunk_index,
+               ts_headline('english', chunk_text, websearch_to_tsquery('english', :q),
+                           'MaxWords=90, MinWords=50, StartSel=<<, StopSel=>>') AS snippet,
+               ts_rank_cd(to_tsvector('english', chunk_text), websearch_to_tsquery('english', :q)) AS rank
+        FROM rag_chunks
+        WHERE corpus IN ({cin})
+          AND to_tsvector('english', chunk_text) @@ websearch_to_tsquery('english', :q){cfr_clause}
+        ORDER BY rank DESC LIMIT :lim
+    """).bindparams(**bind))
+    return {
+        "query": query, "cfr_filter": cfr or None,
+        "passages": [dict(r) for r in rows],
+        "coverage": "8 CFR / 20 CFR / 22 CFR (current editions), INA, USCIS Policy Manual, FAM, DOL FAQs, "
+                    "Federal Register final rules, USCIS/DOL form instructions.",
+        "note": "Plain-word search (AND of terms; use OR / quotes / -term like a web search). Regulations refer "
+                "to classifications by letter ('E classification', 'treaty alien', 'H-1B'), so search the "
+                "regulatory phrasing, and use cfr to pin a section, e.g. cfr='214.2(e)'. Cite passages by "
+                "source_label / cfr_citation.",
+    }
+
+
 _EXECUTORS = {
+    "search_decisions": _run_search_decisions,
+    "search_regulations": _run_search_regulations,
+    "get_employer_representation": _run_employer_representation,
+    "get_firm_clients": _run_firm_clients,
     "query_oflc_data": _run_query_oflc,
     "get_dol_processing_times": _run_dol_processing_times,
     "get_visa_bulletin_current": _run_visa_bulletin_current,
